@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, ExternalLink, Sparkles, X } from 'lucide-react';
 import { authHeaders } from '../lib/auth';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 interface DealFields {
   title: string | null;
