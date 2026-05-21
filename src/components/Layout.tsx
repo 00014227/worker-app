@@ -1,13 +1,23 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { Truck, FileText, Users, Package } from 'lucide-react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Truck, FileText, Users, Package, Sparkles, LogOut } from 'lucide-react';
+import { getUser, clearAuth } from '../lib/auth';
 
 const nav = [
   { to: '/shipments', label: 'Перевозки', icon: Package },
   { to: '/rate-requests', label: 'Запросы ставок', icon: FileText },
   { to: '/contractors', label: 'Подрядчики', icon: Users },
+  { to: '/ai-deal', label: 'Сделка через ИИ', icon: Sparkles },
 ];
 
 export default function Layout() {
+  const navigate = useNavigate();
+  const user = getUser();
+
+  const handleLogout = () => {
+    clearAuth();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f5f6fa' }}>
       <aside style={{ width: 240, background: '#1e2a3a', color: '#fff', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
@@ -20,6 +30,7 @@ export default function Layout() {
             </div>
           </div>
         </div>
+
         <nav style={{ flex: 1, padding: '8px 0' }}>
           {nav.map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -41,8 +52,28 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div style={{ padding: '14px 20px', borderTop: '1px solid #2d3f55', fontSize: 11, color: '#8fa3b8' }}>
-          v1.0 MVP
+
+        {/* User info + logout */}
+        <div style={{ borderTop: '1px solid #2d3f55', padding: '12px 20px' }}>
+          {user && (
+            <div style={{ fontSize: 11, color: '#8fa3b8', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user.name}
+            </div>
+          )}
+          <button
+            onClick={handleLogout}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+              background: 'transparent', border: 'none', color: '#8fa3b8',
+              fontSize: 12, cursor: 'pointer', padding: '4px 0',
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#8fa3b8')}
+          >
+            <LogOut size={13} />
+            Выйти
+          </button>
         </div>
       </aside>
 
