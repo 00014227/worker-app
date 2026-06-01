@@ -1,247 +1,210 @@
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, FileText, ArrowRight, Package, Weight,
-  Calendar, DollarSign, Truck, MapPin, Hash,
-  ClipboardList, MessageSquare, ExternalLink,
+  ChevronLeft, ArrowRight, Package, Weight, Calendar,
+  Truck, MapPin, Hash, MessageSquare, User, Building2,
+  Plane, Train, Layers, RefreshCw, Pencil,
 } from 'lucide-react';
-import {
-  SHIPMENTS, SHIPMENT_STATUS_LABELS, ShipmentStatus, TRANSPORT_LABELS,
-} from '../data/mock';
-import { Button } from '@/components/ui/button';
+import { workerApi, OrderRow } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-const STATUS_COLORS: Record<ShipmentStatus, string> = {
-  new: 'bg-slate-100 text-slate-700 border-slate-200',
-  pending_rates: 'bg-amber-50 text-amber-700 border-amber-200',
-  carrier_assigned: 'bg-blue-50 text-blue-700 border-blue-200',
-  in_transit: 'bg-purple-50 text-purple-700 border-purple-200',
-  delivered: 'bg-green-50 text-green-700 border-green-200',
-  cancelled: 'bg-red-50 text-red-700 border-red-200',
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  'Авто':             <Truck size={14} />,
+  'Авиа':             <Plane size={14} />,
+  'Железнодорожная':  <Train size={14} />,
+  'Мультимодальная':  <Layers size={14} />,
+};
+const TYPE_COLORS: Record<string, string> = {
+  'Авто':             'bg-orange-100 text-orange-700',
+  'Авиа':             'bg-sky-100 text-sky-700',
+  'Железнодорожная':  'bg-violet-100 text-violet-700',
+  'Мультимодальная':  'bg-teal-100 text-teal-700',
 };
 
-const VEHICLE_LABELS: Record<string, string> = {
-  truck: 'Фура (20т)',
-  truck_mega: 'Мега-фура (24т)',
-  isothermal: 'Изотермический',
-  ref: 'Рефрижератор',
-  open: 'Открытый бортовой',
-  tanker: 'Цистерна',
-  container_20: "Контейнер 20'",
-  container_40: "Контейнер 40'",
-  air: 'Авиагрузовой',
-  rail_wagon: 'Ж/Д вагон',
-};
+function statusColor(s: string | null) {
+  if (!s) return 'bg-blue-50 text-blue-700';
+  const l = s.toLowerCase();
+  if (l.includes('завершен') || l.includes('доставлен')) return 'bg-green-50 text-green-700';
+  if (l.includes('отмен')) return 'bg-red-50 text-red-700';
+  return 'bg-blue-50 text-blue-700';
+}
 
-const CARGO_LABELS: Record<string, string> = {
-  general: 'Генеральный',
-  bulk: 'Насыпной',
-  liquid: 'Жидкий',
-  oversized: 'Негабаритный',
-  dangerous: 'Опасный (ADR)',
-  refrigerated: 'Рефрижераторный',
-};
-
-const LOADING_LABELS: Record<string, string> = {
-  rear: 'Задняя',
-  side: 'Боковая',
-  top: 'Верхняя',
-  any: 'Любой',
-};
-
-export default function ShipmentDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const shipment = SHIPMENTS.find(s => s.id === id);
-
-  if (!shipment) {
-    return (
-      <div className="text-center py-24 text-muted-foreground">
-        <Package size={40} className="mx-auto mb-3 opacity-30" />
-        <p>Перевозка не найдена</p>
-        <Button variant="link" onClick={() => navigate('/shipments')}>← Назад к списку</Button>
-      </div>
-    );
-  }
-
-  const canRequest = shipment.status === 'new' || shipment.status === 'pending_rates';
-
+function Field({ label, value, mono }: { label: string; value?: string | number | null; mono?: boolean }) {
+  if (!value && value !== 0) return null;
   return (
-    <div className="max-w-3xl mx-auto pb-10">
-      {/* Back + header */}
-      <div className="mb-6">
-        <button
-          onClick={() => navigate('/shipments')}
-          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-3"
-        >
-          <ChevronLeft size={14} /> Перевозки
-        </button>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold font-mono">{shipment.orderNumber}</h1>
-              <span className={cn(
-                'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border',
-                STATUS_COLORS[shipment.status]
-              )}>
-                {SHIPMENT_STATUS_LABELS[shipment.status]}
-              </span>
-            </div>
-            <p className="text-muted-foreground text-sm">
-              Клиент: <span className="font-medium text-foreground">{shipment.client}</span>
-              <span className="mx-2 text-border">·</span>
-              Создано {shipment.createdAt}
-            </p>
-          </div>
-          {canRequest && (
-            <Button onClick={() => navigate(`/rate-requests/new?shipmentId=${shipment.id}`)}>
-              <FileText size={14} /> Запросить ставки
-            </Button>
-          )}
-          {shipment.rateRequestId && (
-            <Button variant="outline" onClick={() => navigate(`/rate-requests/${shipment.rateRequestId}`)}>
-              <ExternalLink size={14} /> Открыть запрос
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {/* Route card */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <MapPin size={14} className="text-primary" /> Маршрут
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4">
-              <div className="flex-1 p-4 rounded-lg bg-muted/40 border">
-                <p className="text-xs text-muted-foreground mb-0.5">Отправление</p>
-                <p className="font-semibold text-lg">{shipment.fromCity}</p>
-                {shipment.fromIndex && <p className="text-xs text-muted-foreground">{shipment.fromIndex}</p>}
-                <p className="text-sm text-muted-foreground">{shipment.fromCountry}</p>
-              </div>
-              <ArrowRight size={20} className="text-muted-foreground shrink-0" />
-              <div className="flex-1 p-4 rounded-lg bg-muted/40 border">
-                <p className="text-xs text-muted-foreground mb-0.5">Назначение</p>
-                <p className="font-semibold text-lg">{shipment.toCity}</p>
-                {shipment.toIndex && <p className="text-xs text-muted-foreground">{shipment.toIndex}</p>}
-                <p className="text-sm text-muted-foreground">{shipment.toCountry}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Cargo + Vehicle */}
-        <div className="grid grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Package size={14} className="text-primary" /> Груз
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <DetailRow icon={<Weight size={13} />} label="Вес брутто">
-                {shipment.weightKg.toLocaleString()} кг
-              </DetailRow>
-              {shipment.cargoValueUsd && (
-                <DetailRow icon={<DollarSign size={13} />} label="Стоимость">
-                  {shipment.cargoValueUsd.toLocaleString()} {shipment.currency}
-                </DetailRow>
-              )}
-              <DetailRow icon={<ClipboardList size={13} />} label="Тип груза">
-                {CARGO_LABELS[shipment.cargoType] ?? shipment.cargoType}
-              </DetailRow>
-              <DetailRow icon={<Calendar size={13} />} label="Дата погрузки">
-                {shipment.loadingDate}
-              </DetailRow>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Truck size={14} className="text-primary" /> Транспорт
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <DetailRow icon={<Truck size={13} />} label="Вид ТС">
-                {VEHICLE_LABELS[shipment.vehicleType] ?? shipment.vehicleType}
-              </DetailRow>
-              <DetailRow icon={<Hash size={13} />} label="Кол-во ТС">
-                {shipment.vehicleCount} шт.
-              </DetailRow>
-              {shipment.loadingMethod && (
-                <DetailRow icon={<Package size={13} />} label="Погрузка">
-                  {LOADING_LABELS[shipment.loadingMethod] ?? shipment.loadingMethod}
-                </DetailRow>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Customs + conditions */}
-        {(shipment.incoterms || shipment.exportCustoms || shipment.importCustoms ||
-          shipment.hsCodes?.length || shipment.specialConditions || shipment.comment) && (
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <ClipboardList size={14} className="text-primary" /> Условия и таможня
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {shipment.incoterms && (
-                <DetailRow icon={<Hash size={13} />} label="Инкотермс">{shipment.incoterms}</DetailRow>
-              )}
-              {shipment.exportCustoms && (
-                <DetailRow icon={<MapPin size={13} />} label="Экспорт. ТО">{shipment.exportCustoms}</DetailRow>
-              )}
-              {shipment.importCustoms && (
-                <DetailRow icon={<MapPin size={13} />} label="Импорт. ТО">{shipment.importCustoms}</DetailRow>
-              )}
-              {shipment.hsCodes && shipment.hsCodes.length > 0 && (
-                <div className="flex items-start gap-2 text-sm">
-                  <Hash size={13} className="mt-0.5 text-muted-foreground shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Коды ТНВЭД</p>
-                    <div className="flex flex-wrap gap-1">
-                      {shipment.hsCodes.map(c => (
-                        <Badge key={c} variant="outline" className="text-xs font-normal">{c}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {shipment.specialConditions && (
-                <DetailRow icon={<MessageSquare size={13} />} label="Особые условия">
-                  {shipment.specialConditions}
-                </DetailRow>
-              )}
-              {shipment.comment && (
-                <DetailRow icon={<MessageSquare size={13} />} label="Комментарий">
-                  {shipment.comment}
-                </DetailRow>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={cn('text-sm mt-0.5 font-medium', mono && 'font-mono')}>{value}</p>
     </div>
   );
 }
 
-function DetailRow({
-  icon, label, children,
-}: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-2 text-sm">
-      <span className="mt-0.5 text-muted-foreground shrink-0">{icon}</span>
-      <div className="flex-1 min-w-0 flex items-baseline justify-between gap-2">
-        <span className="text-muted-foreground shrink-0">{label}</span>
-        <span className="font-medium text-right">{children}</span>
+export default function ShipmentDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [order, setOrder] = useState<OrderRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    if (!id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const order = await workerApi.orders.get(id);
+      setOrder(order);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [id]);
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
+      <RefreshCw size={16} className="animate-spin mr-2" /> Загрузка...
+    </div>
+  );
+
+  if (error || !order) return (
+    <div className="space-y-4">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <ChevronLeft size={16} /> Назад
+      </button>
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {error ?? 'Перевозка не найдена'}
       </div>
+    </div>
+  );
+
+  const o = order;
+
+  return (
+    <div className="space-y-5 max-w-5xl">
+      {/* Back + header */}
+      <div className="flex items-start justify-between">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronLeft size={16} /> Назад
+        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={load} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <RefreshCw size={12} /> Обновить
+          </button>
+          <button
+            onClick={() => navigate(`/shipments/${id}/edit`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted transition-colors"
+          >
+            <Pencil size={12} /> Редактировать
+          </button>
+        </div>
+      </div>
+
+      {/* Title */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="font-mono text-2xl font-bold">{o.number}</h1>
+        <span className={cn('px-3 py-1 rounded-full text-sm font-medium', statusColor(o.status))}>
+          {o.status ?? 'Открытые'}
+        </span>
+        {o.transportationType && (
+          <span className={cn('flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium', TYPE_COLORS[o.transportationType] ?? 'bg-slate-100 text-slate-600')}>
+            {TYPE_ICONS[o.transportationType]}
+            {o.transportationType}
+          </span>
+        )}
+        {o.postingDate && (
+          <span className="text-sm text-muted-foreground">от {o.postingDate}</span>
+        )}
+      </div>
+
+      {/* Route banner */}
+      {(o.departure || o.destination) && (
+        <div className="flex items-center gap-3 rounded-xl border bg-gradient-to-r from-muted/40 to-muted/10 px-5 py-4">
+          <div className="flex-1 text-center">
+            <p className="text-lg font-semibold">{o.departure ?? '—'}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Отправление</p>
+            {o.departureDateActual && <p className="text-xs text-green-600 mt-1">факт: {o.departureDateActual}</p>}
+            {!o.departureDateActual && o.departureDatePlan && <p className="text-xs text-muted-foreground mt-1">план: {o.departureDatePlan}</p>}
+          </div>
+          <div className="text-muted-foreground">
+            <ArrowRight size={20} />
+          </div>
+          <div className="flex-1 text-center">
+            <p className="text-lg font-semibold">{o.destination ?? '—'}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Назначение</p>
+            {o.arrivalDateActual && <p className="text-xs text-green-600 mt-1">факт: {o.arrivalDateActual}</p>}
+            {!o.arrivalDateActual && o.arrivalDatePlan && <p className="text-xs text-muted-foreground mt-1">план: {o.arrivalDatePlan}</p>}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Client & responsible */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2"><Building2 size={14} /> Клиент</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Field label="Плательщик" value={o.payer?.name} />
+            <Field label="Клиент" value={o.customer?.name} />
+            {o.clientOrderNumber && <Field label="Номер заказа клиента" value={o.clientOrderNumber} mono />}
+            {o.department && <Field label="Подразделение" value={o.department} />}
+          </CardContent>
+        </Card>
+
+        {/* Responsible */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2"><User size={14} /> Ответственные</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Field label="Ответственный" value={o.responsible?.name} />
+            <Field label="Ключевой аккаунт-менеджер" value={o.keyAccountManager?.name} />
+          </CardContent>
+        </Card>
+
+        {/* Cargo */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2"><Package size={14} /> Груз и транспорт</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {o.declaredWeight > 0 && <Field label="Заявленный вес, кг" value={o.declaredWeight.toLocaleString('ru-RU')} />}
+            {o.actualWeight > 0 && <Field label="Фактический вес, кг" value={o.actualWeight.toLocaleString('ru-RU')} />}
+            {o.vehicleCount > 0 && <Field label="Кол-во ТС" value={o.vehicleCount} />}
+            <Field label="Номера ТС" value={o.vehicleNumbers} mono />
+          </CardContent>
+        </Card>
+
+        {/* Tracking */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2"><MapPin size={14} /> Отслеживание</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Field label="Текущее местоположение" value={o.currentLocation} />
+            <Field label="Трек-номер / накладная" value={o.waybillNumber} mono />
+            {o.tracingComment && <Field label="Комментарий трейсинга" value={o.tracingComment} />}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Comments */}
+      {o.comment && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2"><MessageSquare size={14} /> Комментарий</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{o.comment}</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

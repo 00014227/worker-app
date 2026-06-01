@@ -5,6 +5,7 @@ export interface WorkerUser {
   id: string;
   name: string;
   bitrix24Id: number | null;
+  isAdmin: boolean;
 }
 
 export function getToken(): string | null {

@@ -11,5 +11,12 @@ export default defineConfig({
   },
   server: {
     port: 3001,
+    proxy: {
+      '/api': {
+        target: 'https://165-245-217-29.nip.io',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 });

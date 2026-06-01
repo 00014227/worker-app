@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Truck, Loader2 } from 'lucide-react';
 import { saveAuth } from '../lib/auth';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
-
 export default function LoginPage() {
   const navigate = useNavigate();
   const [login, setLogin]       = useState('');
@@ -17,7 +15,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/worker/auth/login`, {
+      const res = await fetch('/api/worker/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login, password }),
@@ -25,7 +23,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message?.message ?? data?.message ?? 'Ошибка входа');
       saveAuth(data.accessToken, data.employee);
-      navigate('/shipments', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ошибка входа');
     } finally {

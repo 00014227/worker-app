@@ -7,10 +7,13 @@ import RateRequestsPage from './pages/RateRequestsPage';
 import NewRateRequestPage from './pages/NewRateRequestPage';
 import RateRequestDetailPage from './pages/RateRequestDetailPage';
 import PublicRatePage from './pages/PublicRatePage';
+import DashboardPage from './pages/DashboardPage';
 import ShipmentsPage from './pages/ShipmentsPage';
 import NewShipmentPage from './pages/NewShipmentPage';
 import ShipmentDetailPage from './pages/ShipmentDetailPage';
+import EditShipmentPage from './pages/EditShipmentPage';
 import AiDealPage from './pages/AiDealPage';
+import MapPage from './pages/MapPage';
 
 export default function App() {
   return (
@@ -19,14 +22,17 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/rate/:token" element={<PublicRatePage />} />
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Navigate to="/shipments" replace />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/shipments" element={<ShipmentsPage />} />
           <Route path="/shipments/new" element={<NewShipmentPage />} />
           <Route path="/shipments/:id" element={<ShipmentDetailPage />} />
+          <Route path="/shipments/:id/edit" element={<EditShipmentPage />} />
           <Route path="/rate-requests" element={<RateRequestsPage />} />
           <Route path="/rate-requests/new" element={<NewRateRequestPage />} />
           <Route path="/rate-requests/:id" element={<RateRequestDetailPage />} />
           <Route path="/contractors" element={<ContractorsPage />} />
+          <Route path="/map" element={<MapPage />} />
           <Route path="/ai-deal" element={<AiDealPage />} />
         </Route>
       </Routes>
