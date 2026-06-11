@@ -1,12 +1,15 @@
-import { useState, useRef, useCallback } from 'react';
-import { Upload, FileText, Loader2, CheckCircle2, ExternalLink, Sparkles, X } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Upload, FileText, Loader2, CheckCircle2, ExternalLink, Sparkles, X, Search } from 'lucide-react';
 import { authHeaders } from '../lib/auth';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
+interface CompanyOption { id: number; title: string; }
+
 interface DealFields {
   title: string | null;
   company: string | null;
+  companyId: number | null;
   contact: string | null;
   isUrgent: boolean;
   transportationType: string | null;
@@ -101,7 +104,7 @@ const FIELD_GROUPS: Array<{
 ];
 
 const EMPTY_FIELDS: DealFields = {
-  title: null, company: null, contact: null, isUrgent: false,
+  title: null, company: null, companyId: null, contact: null, isUrgent: false,
   transportationType: null, requestType: null, managerRate: null,
   netCostFromContractor: null, netCostBreakdown: null, incoterms: null,
   mode: null, departureCountry: null, departureAddress: null,
@@ -112,6 +115,123 @@ const EMPTY_FIELDS: DealFields = {
   transportationUnit: null, transportationUnitCount: null,
   validityOfRates: null, transitTime: null, features: null,
 };
+
+function CompanySearchField({
+  value, companyId, onChange,
+}: {
+  value: string | null;
+  companyId: number | null;
+  onChange: (company: string | null, companyId: number | null) => void;
+}) {
+  const [query, setQuery] = useState(value ?? '');
+  const [options, setOptions] = useState<CompanyOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Sync external value changes (e.g. after AI parse)
+  useEffect(() => { setQuery(value ?? ''); }, [value]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Auto-search when AI populates the field (no companyId yet)
+  useEffect(() => {
+    if (value && !companyId) {
+      searchBitrix(value);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function searchBitrix(q: string) {
+    if (!q.trim()) { setOptions([]); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/ai-deal/companies/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+      if (res.ok) setOptions(await res.json());
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const q = e.target.value;
+    setQuery(q);
+    onChange(q || null, null); // clear companyId when user types
+    setOpen(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => searchBitrix(q), 350);
+  }
+
+  function handleSelect(opt: CompanyOption) {
+    setQuery(opt.title);
+    onChange(opt.title, opt.id);
+    setOptions([]);
+    setOpen(false);
+  }
+
+  const isLinked = !!companyId;
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <div style={{ position: 'relative' }}>
+        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: isLinked ? '#22c55e' : '#8fa3b8', flexShrink: 0 }} />
+        <input
+          type="text"
+          value={query}
+          onChange={handleInput}
+          onFocus={() => { if (query && options.length) setOpen(true); else if (query) searchBitrix(query); }}
+          placeholder="Название компании, телефон или e-mail"
+          style={{
+            width: '100%', padding: '8px 36px 8px 30px', fontSize: 13,
+            border: `1.5px solid ${isLinked ? '#22c55e' : '#e5e9f2'}`,
+            borderRadius: 8, fontFamily: 'inherit', color: '#1e2a3a',
+            outline: 'none', boxSizing: 'border-box',
+            background: isLinked ? '#f0fdf4' : '#fff',
+          }}
+        />
+        {loading && <Loader2 size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#8fa3b8', animation: 'spin 1s linear infinite' }} />}
+        {isLinked && !loading && <CheckCircle2 size={13} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#22c55e' }} />}
+      </div>
+      {open && options.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+          background: '#fff', border: '1.5px solid #e5e9f2', borderRadius: 8,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.10)', marginTop: 4, overflow: 'hidden',
+        }}>
+          {options.map((opt) => (
+            <div
+              key={opt.id}
+              onMouseDown={() => handleSelect(opt)}
+              style={{
+                padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: '#1e2a3a',
+                borderBottom: '1px solid #f0f2f7',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#f7f9fc')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#fff')}
+            >
+              {opt.title}
+            </div>
+          ))}
+        </div>
+      )}
+      {isLinked && (
+        <div style={{ fontSize: 11, color: '#22c55e', marginTop: 3 }}>
+          Компания привязана · ID {companyId}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AiDealPage() {
   const [step, setStep] = useState<Step>('input');
@@ -339,7 +459,15 @@ export default function AiDealPage() {
                       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7a99', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         {label}
                       </label>
-                      {type === 'textarea' ? (
+                      {key === 'company' ? (
+                        <CompanySearchField
+                          value={fields.company}
+                          companyId={fields.companyId}
+                          onChange={(company, companyId) => {
+                            setFields((prev) => ({ ...prev, company, companyId }));
+                          }}
+                        />
+                      ) : type === 'textarea' ? (
                         <textarea
                           value={(val as string) ?? ''}
                           onChange={(e) => updateField(key, e.target.value || null)}

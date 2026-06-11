@@ -2,7 +2,7 @@ import { useId } from 'react';
 import {
   Truck, Plane, Train, Ship, Plus, Trash2,
   Package, MapPin, FileText, Hash, User, MessageSquare,
-  Layers, ClipboardList, Boxes, BarChart2, ArrowDown,
+  Layers, ClipboardList, Boxes, BarChart2, ArrowDown, Building2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,19 @@ const LEG_TYPES = [
 
 export const STATUSES = ['В работе', 'В пути', 'На таможне', 'Задержка', 'Доставлен', 'Завершена', 'Отменена'];
 
+export const OFFICES = [
+  'Ташкент',
+  'Москва',
+  'Алматы',
+  'Бишкек',
+  'Душанбе',
+  'Ашхабад',
+  'Баку',
+  'Тбилиси',
+  'Минск',
+  'Новосибирск',
+];
+
 export interface Leg {
   id: string;
   type: string;
@@ -46,6 +59,7 @@ export interface Leg {
   waybillNumber: string;
   vehicleNumbers: string;
   notes: string;
+  officeName: string;
 }
 
 export interface ShipmentFormData {
@@ -112,6 +126,7 @@ function newLeg(prefillDeparture = ''): Leg {
     waybillNumber: '',
     vehicleNumbers: '',
     notes: '',
+    officeName: '',
   };
 }
 
@@ -158,7 +173,15 @@ function LegEditor({ leg, index, total, onChange, onDelete }: {
     <div className="rounded-xl border bg-muted/20 overflow-hidden">
       {/* Leg header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b">
-        <span className="text-xs font-semibold text-muted-foreground">Этап {index + 1}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-muted-foreground">Этап {index + 1}</span>
+          {leg.officeName && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              <Building2 size={10} />
+              {leg.officeName}
+            </span>
+          )}
+        </div>
         {total > 1 && (
           <button onClick={onDelete} className="text-muted-foreground hover:text-red-500 transition-colors">
             <Trash2 size={13} />
@@ -187,6 +210,33 @@ function LegEditor({ leg, index, total, onChange, onDelete }: {
             );
           })}
         </div>
+
+        {/* Office */}
+        <Field label="Ответственный офис">
+          <div className="flex flex-wrap gap-1.5">
+            {OFFICES.map(office => (
+              <button
+                key={office}
+                type="button"
+                onClick={() => set('officeName', leg.officeName === office ? '' : office)}
+                className={cn(
+                  'px-2.5 py-1 rounded-lg border text-xs font-medium transition-all',
+                  leg.officeName === office
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground',
+                )}
+              >
+                {office}
+              </button>
+            ))}
+            <Input
+              className="h-7 w-28 text-xs"
+              placeholder="Другой..."
+              value={OFFICES.includes(leg.officeName) ? '' : leg.officeName}
+              onChange={e => set('officeName', e.target.value)}
+            />
+          </div>
+        </Field>
 
         {/* Route */}
         <div className="grid grid-cols-2 gap-3">
