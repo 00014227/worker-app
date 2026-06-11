@@ -45,6 +45,19 @@ interface DealFields {
 type Step = 'input' | 'parsing' | 'review' | 'creating' | 'done';
 
 // ── Field groups matching Bitrix24 sections ──────────────────────────────────
+const TRANSPORTATION_TYPE_OPTIONS = [
+  'Авиа',
+  'FTL',
+  'LTL',
+  'Ж/Д',
+  'Мультимодальная',
+  'LCL',
+  'Складская логистика',
+  'Таможенное оформление',
+  'Кодовая',
+  'Курьерские услуги',
+];
+
 const FIELD_GROUPS: Array<{
   title: string;
   fields: Array<{ key: keyof DealFields; label: string; type?: 'textarea' | 'checkbox' | 'select' }>;
@@ -56,7 +69,7 @@ const FIELD_GROUPS: Array<{
       { key: 'company', label: 'Компания' },
       { key: 'contact', label: 'Контакт' },
       { key: 'isUrgent', label: 'Срочно?', type: 'checkbox' },
-      { key: 'transportationType', label: 'Тип перевозки' },
+      { key: 'transportationType', label: 'Тип перевозки', type: 'select' },
       { key: 'requestType', label: 'Тип запроса' },
       { key: 'managerRate', label: 'Ставка менеджера' },
       { key: 'netCostFromContractor', label: 'Стоимость нетто от подрядчика' },
@@ -264,6 +277,15 @@ export default function AiDealPage() {
       const res = await fetch(`${API_URL}/api/ai-deal/parse`, { method: 'POST', headers: authHeaders(), body: formData });
       if (!res.ok) throw new Error(await res.text());
       const data: DealFields = await res.json();
+      // Normalize transportationType to match dropdown options
+      if (data.transportationType) {
+        const raw = data.transportationType.toLowerCase().trim();
+        const match = TRANSPORTATION_TYPE_OPTIONS.find((o) => o.toLowerCase() === raw)
+          ?? TRANSPORTATION_TYPE_OPTIONS.find((o) => raw.includes(o.toLowerCase()))
+          ?? TRANSPORTATION_TYPE_OPTIONS.find((o) => o.toLowerCase().includes(raw));
+        data.transportationType = match ?? data.transportationType;
+      }
+      data.companyId = null;
       setFields(data);
       setStep('review');
     } catch (e: unknown) {
@@ -467,6 +489,17 @@ export default function AiDealPage() {
                             setFields((prev) => ({ ...prev, company, companyId }));
                           }}
                         />
+                      ) : type === 'select' && key === 'transportationType' ? (
+                        <select
+                          value={(val as string) ?? ''}
+                          onChange={(e) => updateField(key, e.target.value || null)}
+                          style={{ width: '100%', padding: '8px 10px', fontSize: 13, border: '1.5px solid #e5e9f2', borderRadius: 8, fontFamily: 'inherit', color: (val as string) ? '#1e2a3a' : '#8fa3b8', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
+                        >
+                          <option value="">— не выбрано —</option>
+                          {TRANSPORTATION_TYPE_OPTIONS.map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
                       ) : type === 'textarea' ? (
                         <textarea
                           value={(val as string) ?? ''}
