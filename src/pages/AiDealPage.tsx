@@ -285,7 +285,6 @@ export default function AiDealPage() {
           ?? TRANSPORTATION_TYPE_OPTIONS.find((o) => o.toLowerCase().includes(raw));
         data.transportationType = match ?? data.transportationType;
       }
-      data.companyId = null;
       setFields(data);
       setStep('review');
     } catch (e: unknown) {
