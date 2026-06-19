@@ -82,7 +82,160 @@ export interface OrderQuery {
   limit?: number;
 }
 
-// ── API calls ─────────────────────────────────────────────────────────────────
+// ── Tariff Types ────────────────────────────────────────────────────────────
+
+export interface Location {
+  id: string;
+  name: string;
+  aliases: string[];
+  country: string | null;
+  locType: string | null;
+  code: string | null;
+}
+
+export interface Tariff {
+  id: string;
+  transportType: string;
+  currency: string;
+  ratePerKg: string | null;
+  ratePerCbm: string | null;
+  ratePerContainer: string | null;
+  minCost: string | null;
+  validFrom: string;
+  validUntil: string;
+  sourceType: string;
+  notes: string | null;
+  isActive: boolean;
+  departure: Location;
+  destination: Location;
+}
+
+export interface TariffUploadRow {
+  id: string;
+  rowIndex: number;
+  departure: string | null;
+  destination: string | null;
+  departureId: string | null;
+  destinationId: string | null;
+  departureLocation: Location | null;
+  destinationLocation: Location | null;
+  transportType: string | null;
+  currency: string | null;
+  ratePerKg: string | null;
+  ratePerCbm: string | null;
+  ratePerContainer: string | null;
+  minCost: string | null;
+  validFrom: string | null;
+  validUntil: string | null;
+  notes: string | null;
+  rowStatus: 'ok' | 'warning' | 'error';
+  errorMessage: string | null;
+  isEdited: boolean;
+}
+
+export interface TariffUploadBatch {
+  id: string;
+  fileName: string;
+  sourceType: string;
+  status: string;
+  totalRows: number;
+  errorCount: number;
+  createdAt: string;
+  committedAt: string | null;
+  rows: TariffUploadRow[];
+}
+
+// ── Tariff API Functions ─────────────────────────────────────────────────────
+
+export async function uploadTariffFile(
+  file: File,
+  sourceType: 'indicative' | 'b24',
+): Promise<{ batchId: string; status: string; rowCount: number; errorCount: number; warnings: string[] }> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('sourceType', sourceType);
+  const res = await fetch('/api/worker/tariffs/uploads', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function getTariffBatch(batchId: string): Promise<TariffUploadBatch> {
+  const res = await fetch(`/api/worker/tariffs/uploads/${batchId}`, {
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function updateTariffRow(
+  batchId: string,
+  rowId: string,
+  data: Partial<{
+    departure: string;
+    destination: string;
+    transportType: string;
+    currency: string;
+    ratePerKg: number | null;
+    ratePerCbm: number | null;
+    ratePerContainer: number | null;
+    minCost: number | null;
+    validFrom: string;
+    validUntil: string;
+    notes: string | null;
+  }>,
+): Promise<TariffUploadRow> {
+  const res = await fetch(`/api/worker/tariffs/uploads/${batchId}/rows/${rowId}`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function commitTariffBatch(batchId: string): Promise<{ committed: number; skipped: number; errors: string[] }> {
+  const res = await fetch(`/api/worker/tariffs/uploads/${batchId}/commit`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function listTariffs(params: {
+  departure?: string;
+  destination?: string;
+  transportType?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{ items: Tariff[]; total: number; page: number; limit: number; pages: number }> {
+  const q = new URLSearchParams();
+  if (params.departure) q.set('departure', params.departure);
+  if (params.destination) q.set('destination', params.destination);
+  if (params.transportType) q.set('transportType', params.transportType);
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  const res = await fetch(`/api/worker/tariffs?${q}`, {
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function listLocations(search?: string): Promise<Location[]> {
+  const q = search ? `?search=${encodeURIComponent(search)}` : '';
+  const res = await fetch(`/api/worker/tariffs/locations${q}`, {
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ── Legacy API calls (orders) ─────────────────────────────────────────────────
 
 export const workerApi = {
   orders: {
