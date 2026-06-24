@@ -2,7 +2,9 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, ExternalLink, Sparkles, X, Search } from 'lucide-react';
 import { authHeaders } from '../lib/auth';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+// Empty default → relative `/api` requests go through the Vite dev proxy
+// (and same-origin in production), avoiding the cross-origin CORS failure.
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 interface CompanyOption { id: number; title: string; }
 
@@ -19,6 +21,7 @@ interface DealFields {
   netCostBreakdown: string | null;
   incoterms: string | null;
   mode: string | null;
+  direction: string | null;
   departureCountry: string | null;
   departureAddress: string | null;
   destinationCountry: string | null;
@@ -80,7 +83,8 @@ const FIELD_GROUPS: Array<{
     title: 'Маршрут',
     fields: [
       { key: 'incoterms', label: 'Incoterms / Условия перевозки' },
-      { key: 'mode', label: 'Mode / Режим' },
+      { key: 'direction', label: 'Mode / Режим (Импорт/Экспорт)' },
+      { key: 'mode', label: 'Тип загрузки (FCL/FTL/LCL)' },
       { key: 'departureCountry', label: 'Departure country / Страна отправления' },
       { key: 'departureAddress', label: 'Departure address / Адрес отправления' },
       { key: 'destinationCountry', label: 'Destination country / Страна назначения' },
@@ -120,7 +124,7 @@ const EMPTY_FIELDS: DealFields = {
   title: null, company: null, companyId: null, contact: null, isUrgent: false,
   transportationType: null, requestType: null, managerRate: null,
   netCostFromContractor: null, netCostBreakdown: null, incoterms: null,
-  mode: null, departureCountry: null, departureAddress: null,
+  mode: null, direction: null, departureCountry: null, departureAddress: null,
   destinationCountry: null, destinationAddress: null, cargoDescription: null,
   numberOfPlaces: null, weight: null, dimensions: null, volume: null,
   temperatureRegime: null, packingInfo: null, hsCode: null, customsPlace: null,
