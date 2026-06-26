@@ -14,8 +14,7 @@ import ShipmentDetailPage from './pages/ShipmentDetailPage';
 import EditShipmentPage from './pages/EditShipmentPage';
 import AiDealPage from './pages/AiDealPage';
 import MapPage from './pages/MapPage';
-import TariffsPage from './pages/TariffsPage';
-import TariffUploadPage from './pages/TariffUploadPage';
+import TariffSourcesPage from './pages/TariffSourcesPage';
 
 export default function App() {
   return (
@@ -36,8 +35,7 @@ export default function App() {
           <Route path="/contractors" element={<ContractorsPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/ai-deal" element={<AiDealPage />} />
-          <Route path="/tariffs" element={<TariffsPage />} />
-          <Route path="/tariffs/upload" element={<TariffUploadPage />} />
+          <Route path="/tariff-sources" element={<TariffSourcesPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

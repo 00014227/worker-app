@@ -235,6 +235,65 @@ export async function listLocations(search?: string): Promise<Location[]> {
   return res.json();
 }
 
+// ── Tariff sources (raw price sheets for AI pricing) ──────────────────────────
+
+export interface TariffSource {
+  id: string;
+  name: string;
+  office: string;
+  category: string;
+  transportTypes: string[];
+  fileName: string;
+  validFrom: string | null;
+  validUntil: string | null;
+  isActive: boolean;
+  uploadedBy: string;
+  createdAt: string;
+}
+
+export async function uploadTariffSource(
+  file: File,
+  meta: {
+    name: string;
+    office: string;
+    category: string;
+    transportTypes: string[];
+    validFrom?: string;
+    validUntil?: string;
+  },
+): Promise<TariffSource> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('name', meta.name);
+  form.append('office', meta.office);
+  form.append('category', meta.category);
+  form.append('transportTypes', meta.transportTypes.join(','));
+  if (meta.validFrom) form.append('validFrom', meta.validFrom);
+  if (meta.validUntil) form.append('validUntil', meta.validUntil);
+  const res = await fetch('/api/worker/tariffs/sources', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export function listTariffSources(): Promise<TariffSource[]> {
+  return req<TariffSource[]>('/worker/tariffs/sources');
+}
+
+export function setTariffSourceActive(id: string, isActive: boolean): Promise<TariffSource> {
+  return req<TariffSource>(`/worker/tariffs/sources/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isActive }),
+  });
+}
+
+export function deleteTariffSource(id: string): Promise<TariffSource> {
+  return req<TariffSource>(`/worker/tariffs/sources/${id}`, { method: 'DELETE' });
+}
+
 // ── Legacy API calls (orders) ─────────────────────────────────────────────────
 
 export const workerApi = {
