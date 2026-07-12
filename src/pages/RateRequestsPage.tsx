@@ -1,105 +1,126 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MapPin, Calendar, MessageSquare, CheckCircle2, Clock } from 'lucide-react';
-import { RATE_REQUESTS, TRANSPORT_LABELS, CONTRACTORS } from '../data/mock';
+import { Plus, MapPin, Calendar, CheckCircle2, Clock, RefreshCw, FileText } from 'lucide-react';
+import { tenderApi, TenderListRow, TenderStatus, TENDER_MODE_LABELS } from '../lib/api';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
-const statusConfig = {
-  open: { label: 'Открыт', color: '#10b981', bg: '#ecfdf5' },
-  closed: { label: 'Закрыт', color: '#6b7280', bg: '#f3f4f6' },
+const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
+  draft:      { label: 'Черновик',    cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+  sent:       { label: 'Отправлен',   cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  collecting: { label: 'Сбор ставок', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  decided:    { label: 'Выбран',      cls: 'bg-green-50 text-green-700 border-green-200' },
+  cancelled:  { label: 'Отменён',     cls: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 export default function RateRequestsPage() {
   const navigate = useNavigate();
+  const [rows, setRows] = useState<TenderListRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    tenderApi.tenders
+      .list()
+      .then(setRows)
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Запросы ставок</h1>
-          <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 14 }}>{RATE_REQUESTS.length} активных запроса</p>
+          <h1 className="text-xl font-bold">Запросы ставок</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {loading ? 'Загрузка…' : `${rows.length} тендеров`}
+          </p>
         </div>
-        <button onClick={() => navigate('/rate-requests/new')} style={btnPrimary}>
-          <Plus size={16} /> Новый запрос
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={load}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+          >
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={() => navigate('/rate-requests/new')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus size={13} /> Новый запрос
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {RATE_REQUESTS.map(r => {
-          const status = statusConfig[r.status];
-          const contractors = CONTRACTORS.filter(c => r.invitedContractors.includes(c.id));
-          const responded = r.responses.length;
-          const hasWinner = !!r.winnerId;
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
 
-          return (
-            <div
-              key={r.id}
-              onClick={() => navigate(`/rate-requests/${r.id}`)}
-              style={{
-                background: '#fff', borderRadius: 10, padding: '16px 20px',
-                cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-                border: '1px solid #e5e9f0', transition: 'box-shadow 0.15s',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  {/* Route */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <MapPin size={15} color="#3b82f6" />
-                    <span style={{ fontWeight: 600, fontSize: 15 }}>{r.from}</span>
-                    <span style={{ color: '#9ca3af' }}>→</span>
-                    <span style={{ fontWeight: 600, fontSize: 15 }}>{r.to}</span>
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 12, fontSize: 12, fontWeight: 500,
-                      background: '#eff6ff', color: '#3b82f6',
-                    }}>
-                      {TRANSPORT_LABELS[r.transportType]}
+      {!loading && rows.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center text-sm text-muted-foreground">
+            <FileText size={28} className="mx-auto mb-2 opacity-30" />
+            Тендеров пока нет
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {rows.map((r) => {
+            const st = STATUS[r.status];
+            const responded = r._count.replies;
+            const invited = r._count.invites;
+            return (
+              <Card
+                key={r.id}
+                size="sm"
+                className="cursor-pointer transition-shadow hover:ring-foreground/20"
+                onClick={() => navigate(`/rate-requests/${r.id}`)}
+              >
+                <CardContent className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <MapPin size={14} className="text-primary shrink-0" />
+                      <span className="font-semibold text-sm">{r.origin}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="font-semibold text-sm">{r.destination}</span>
+                      {r.mode && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          {TENDER_MODE_LABELS[r.mode]}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                      {r.loadingDate && (
+                        <span className="flex items-center gap-1">
+                          <Calendar size={11} /> {new Date(r.loadingDate).toLocaleDateString('ru-RU')}
+                        </span>
+                      )}
+                      {r.weightKg && <span>{Number(r.weightKg).toLocaleString('ru-RU')} кг</span>}
+                      {r.cargo && <span className="truncate max-w-[220px]">{r.cargo}</span>}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', st.cls)}>
+                      {st.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      {r.status === 'decided' ? (
+                        <><CheckCircle2 size={12} className="text-green-600" /> Победитель выбран</>
+                      ) : (
+                        <><Clock size={12} /> {responded}/{invited} ответов</>
+                      )}
                     </span>
                   </div>
-
-                  {/* Meta */}
-                  <div style={{ display: 'flex', gap: 20, fontSize: 13, color: '#6b7280' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Calendar size={12} /> Погрузка: {r.loadingDate}
-                    </span>
-                    <span>{r.weight.toLocaleString()} кг · {r.volume} м³</span>
-                    {r.comment && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <MessageSquare size={12} /> {r.comment.slice(0, 40)}…
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right side */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, marginLeft: 20 }}>
-                  <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, background: status.bg, color: status.color }}>
-                    {status.label}
-                  </span>
-                  <div style={{ fontSize: 13, color: '#6b7280', textAlign: 'right' }}>
-                    {hasWinner ? (
-                      <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <CheckCircle2 size={13} /> Победитель выбран
-                      </span>
-                    ) : (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Clock size={13} /> {responded}/{r.invitedContractors.length} ответов
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#9ca3af' }}>
-                    {contractors.map(c => c.name).join(', ')}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
-
-const btnPrimary: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 6,
-  background: '#3b82f6', color: '#fff', border: 'none',
-  borderRadius: 8, padding: '9px 16px', fontSize: 14, fontWeight: 500, cursor: 'pointer',
-};

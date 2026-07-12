@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Truck, FileText, Users, Package, Sparkles, LogOut,
-  LayoutDashboard, Shield, User, Map, Database,
+  LayoutDashboard, Shield, User, Map, Database, Send,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 
@@ -11,6 +11,7 @@ const nav = [
   { to: '/map',           label: 'Карта',            icon: Map },
   { to: '/rate-requests', label: 'Запросы ставок',   icon: FileText },
   { to: '/contractors',   label: 'Подрядчики',       icon: Users },
+  { to: '/telegram-accounts', label: 'Telegram',     icon: Send },
   { to: '/tariff-sources',label: 'Тарифы',            icon: Database },
   { to: '/ai-deal',       label: 'Сделка через ИИ',  icon: Sparkles },
 ];

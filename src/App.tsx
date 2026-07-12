@@ -6,7 +6,7 @@ import ContractorsPage from './pages/ContractorsPage';
 import RateRequestsPage from './pages/RateRequestsPage';
 import NewRateRequestPage from './pages/NewRateRequestPage';
 import RateRequestDetailPage from './pages/RateRequestDetailPage';
-import PublicRatePage from './pages/PublicRatePage';
+import TelegramAccountsPage from './pages/TelegramAccountsPage';
 import DashboardPage from './pages/DashboardPage';
 import ShipmentsPage from './pages/ShipmentsPage';
 import NewShipmentPage from './pages/NewShipmentPage';
@@ -21,7 +21,6 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/rate/:token" element={<PublicRatePage />} />
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -33,6 +32,7 @@ export default function App() {
           <Route path="/rate-requests/new" element={<NewRateRequestPage />} />
           <Route path="/rate-requests/:id" element={<RateRequestDetailPage />} />
           <Route path="/contractors" element={<ContractorsPage />} />
+          <Route path="/telegram-accounts" element={<TelegramAccountsPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/ai-deal" element={<AiDealPage />} />
           <Route path="/tariff-sources" element={<TariffSourcesPage />} />

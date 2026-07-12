@@ -317,3 +317,198 @@ export const workerApi = {
     },
   },
 };
+
+// ── Contractor tenders (выбор подрядчика) ─────────────────────────────────────
+
+export type TenderMode = 'auto' | 'rail' | 'air' | 'sea';
+export const TENDER_MODE_LABELS: Record<TenderMode, string> = {
+  auto: 'Авто', rail: 'Ж/Д', air: 'Авиа', sea: 'Море',
+};
+
+export type TenderStatus = 'draft' | 'sent' | 'collecting' | 'decided' | 'cancelled';
+export type DeliveryStatus = 'pending' | 'sent' | 'error';
+
+export interface SupplierRow {
+  id: string;
+  name: string;
+  country: string | null;
+  telegramUsername: string | null;
+  telegramBound: boolean;
+  telegramAccountId: string | null;
+  avgResponseTimeSec: number | null;
+  responseRate: number | null;
+  lastReplyAt: string | null;
+}
+
+export interface CreateSupplierInput {
+  name: string;
+  telegramUsername?: string;
+  telegramUserId?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+  inn?: string;
+  code?: string;
+}
+
+export interface TenderInviteRow {
+  id: string;
+  supplierId: string;
+  telegramAccountId: string | null;
+  channel: string;
+  sentAt: string | null;
+  deliveryStatus: DeliveryStatus;
+  errorMessage: string | null;
+  reminderCount: number;
+  supplier: { id: string; name: string; telegramUsername: string | null };
+  telegramAccount: { id: string; label: string; phone: string } | null;
+}
+
+export interface TenderReplyRow {
+  id: string;
+  supplierId: string;
+  rawText: string;
+  receivedAt: string;
+  accepted: boolean | null;
+  amount: string | null;
+  currency: string | null;
+  transitDays: number | null;
+  conditions: string | null;
+  aiConfidence: string | null;
+  rank: number | null;
+  isSelected: boolean;
+  supplier: { id: string; name: string };
+}
+
+export interface TenderDetail {
+  id: string;
+  orderId: string | null;
+  origin: string;
+  destination: string;
+  mode: TenderMode | null;
+  cargo: string | null;
+  weightKg: string | null;
+  loadingDate: string | null;
+  conditions: string | null;
+  currency: string | null;
+  status: TenderStatus;
+  recommendedSupplierId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  invites: TenderInviteRow[];
+  replies: TenderReplyRow[];
+}
+
+export interface TenderListRow {
+  id: string;
+  origin: string;
+  destination: string;
+  mode: TenderMode | null;
+  cargo: string | null;
+  weightKg: string | null;
+  loadingDate: string | null;
+  status: TenderStatus;
+  recommendedSupplierId: string | null;
+  createdAt: string;
+  _count: { invites: number; replies: number };
+}
+
+export interface CreateTenderInput {
+  origin: string;
+  destination: string;
+  mode?: TenderMode;
+  cargo?: string;
+  weightKg?: number;
+  loadingDate?: string;
+  conditions?: string;
+  currency?: string;
+  orderId?: string;
+  supplierIds?: string[];
+}
+
+export interface TelegramMessageRow {
+  id: string;
+  accountId: string;
+  supplierId: string | null;
+  tenderId: string | null;
+  direction: 'outgoing' | 'incoming';
+  telegramMessageId: string | null;
+  text: string;
+  status: string | null;
+  createdAt: string;
+}
+
+export interface TelegramAccountRow {
+  id: string;
+  label: string;
+  phone: string;
+  status: 'active' | 'cooldown' | 'blocked' | 'loggedout';
+  dailySentCount: number;
+  lastSentAt: string | null;
+  floodWaitUntil: string | null;
+  createdAt: string;
+}
+
+export const tenderApi = {
+  suppliers: {
+    list(search?: string): Promise<SupplierRow[]> {
+      const q = search ? `?search=${encodeURIComponent(search)}` : '';
+      return req<SupplierRow[]>(`/worker/suppliers${q}`);
+    },
+    create(input: CreateSupplierInput): Promise<SupplierRow> {
+      return req<SupplierRow>('/worker/suppliers', { method: 'POST', body: JSON.stringify(input) });
+    },
+    bindTelegram(id: string, telegramUsername: string, telegramAccountId?: string) {
+      return req(`/worker/suppliers/${id}/telegram`, {
+        method: 'POST',
+        body: JSON.stringify({ telegramUsername, telegramAccountId }),
+      });
+    },
+  },
+  tenders: {
+    list(): Promise<TenderListRow[]> {
+      return req<TenderListRow[]>('/worker/tenders');
+    },
+    get(id: string): Promise<TenderDetail> {
+      return req<TenderDetail>(`/worker/tenders/${id}`);
+    },
+    create(input: CreateTenderInput): Promise<TenderDetail> {
+      return req<TenderDetail>('/worker/tenders', { method: 'POST', body: JSON.stringify(input) });
+    },
+    send(id: string, supplierIds?: string[]): Promise<TenderDetail> {
+      return req<TenderDetail>(`/worker/tenders/${id}/send`, {
+        method: 'POST',
+        body: JSON.stringify(supplierIds ? { supplierIds } : {}),
+      });
+    },
+    select(id: string, supplierId: string): Promise<TenderDetail> {
+      return req<TenderDetail>(`/worker/tenders/${id}/select`, {
+        method: 'POST',
+        body: JSON.stringify({ supplierId }),
+      });
+    },
+    messages(id: string): Promise<TelegramMessageRow[]> {
+      return req<TelegramMessageRow[]>(`/worker/tenders/${id}/messages`);
+    },
+  },
+  telegramAccounts: {
+    list(): Promise<TelegramAccountRow[]> {
+      return req<TelegramAccountRow[]>('/worker/telegram-accounts');
+    },
+    create(input: { label: string; phone: string; apiId: number; apiHash: string }) {
+      return req<TelegramAccountRow>('/worker/telegram-accounts', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+    sendCode(id: string): Promise<{ ok: boolean }> {
+      return req(`/worker/telegram-accounts/${id}/send-code`, { method: 'POST' });
+    },
+    verify(id: string, code: string): Promise<{ ok: boolean }> {
+      return req(`/worker/telegram-accounts/${id}/verify`, {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      });
+    },
+  },
+};
