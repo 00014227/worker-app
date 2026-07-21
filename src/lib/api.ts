@@ -318,6 +318,30 @@ export const workerApi = {
   },
 };
 
+// ── Клиенты: рассылка отчёта по перевозкам ────────────────────────────────────
+
+export interface CustomerRow {
+  id: string;
+  name: string;
+  inn: string | null;
+  reportEmails: string | null;
+  reportsEnabled: boolean;
+  activeOrders: number;
+}
+
+export const customersApi = {
+  list(search?: string): Promise<CustomerRow[]> {
+    const q = search ? `?search=${encodeURIComponent(search)}` : '';
+    return req<CustomerRow[]>(`/worker/customers${q}`);
+  },
+  updateReports(id: string, patch: { reportEmails?: string; reportsEnabled?: boolean }) {
+    return req<Pick<CustomerRow, 'id' | 'name' | 'reportEmails' | 'reportsEnabled'>>(
+      `/worker/customers/${id}/reports`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+  },
+};
+
 // ── Contractor tenders (выбор подрядчика) ─────────────────────────────────────
 
 export type TenderMode = 'auto' | 'rail' | 'air' | 'sea';
@@ -328,10 +352,17 @@ export const TENDER_MODE_LABELS: Record<TenderMode, string> = {
 export type TenderStatus = 'draft' | 'sent' | 'collecting' | 'decided' | 'cancelled';
 export type DeliveryStatus = 'pending' | 'sent' | 'error';
 
+export type ContactChannel = 'telegram' | 'email' | 'both';
+export const CONTACT_CHANNEL_LABELS: Record<ContactChannel, string> = {
+  telegram: 'Telegram', email: 'Почта', both: 'Оба',
+};
+
 export interface SupplierRow {
   id: string;
   name: string;
   country: string | null;
+  email: string | null;
+  contactChannel: ContactChannel;
   telegramUsername: string | null;
   telegramBound: boolean;
   telegramAccountId: string | null;
@@ -342,6 +373,7 @@ export interface SupplierRow {
 
 export interface CreateSupplierInput {
   name: string;
+  contactChannel?: ContactChannel;
   telegramUsername?: string;
   telegramUserId?: string;
   country?: string;
@@ -384,12 +416,28 @@ export interface TenderDetail {
   id: string;
   orderId: string | null;
   origin: string;
+  originIndex: string | null;
+  originCountry: string | null;
   destination: string;
+  destinationIndex: string | null;
+  destinationCountry: string | null;
   mode: TenderMode | null;
   cargo: string | null;
+  cargoType: string | null;
+  hazardClass: string | null;
+  temperatureRegime: string | null;
+  vehicleCount: number | null;
+  vehicleType: string | null;
+  hsCodes: string | null;
+  loadingMethod: string | null;
   weightKg: string | null;
   loadingDate: string | null;
+  exportCustoms: string | null;
+  importCustoms: string | null;
+  incoterms: string | null;
+  cargoValue: string | null;
   conditions: string | null;
+  comment: string | null;
   currency: string | null;
   status: TenderStatus;
   recommendedSupplierId: string | null;
@@ -413,27 +461,57 @@ export interface TenderListRow {
   _count: { invites: number; replies: number };
 }
 
+export const CARGO_TYPES = ['генеральный', 'температурный', 'опасный', 'акцизный'] as const;
+export type CargoType = (typeof CARGO_TYPES)[number];
+
+/** Кузова. REF — только для температурного груза. */
+export const VEHICLE_TYPES = [
+  '10 т. тент', '10 т. box', '10 т. ISO', '10 т. тент 90м3',
+  '120м3 сцепка', 'box trailer 90 м3', 'ISO 90 м3', 'Мега',
+] as const;
+export const REF_VEHICLE_TYPE = 'REF 90 м3';
+
+export const LOADING_METHODS = ['задняя', 'верхняя', 'боковая'] as const;
+
+export const INCOTERMS = [
+  'EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP',
+] as const;
+
 export interface CreateTenderInput {
   origin: string;
+  originIndex?: string;
+  originCountry?: string;
   destination: string;
+  destinationIndex?: string;
+  destinationCountry?: string;
+  loadingDate: string;
+  cargoType: CargoType;
+  hazardClass?: string;
+  temperatureRegime?: string;
+  vehicleCount: number;
+  vehicleType: string;
+  hsCodes: string;
+  loadingMethod?: string;
+  weightKg: number;
+  exportCustoms: string;
+  importCustoms: string;
+  incoterms: string;
+  cargoValue?: number;
+  conditions?: string;
+  comment?: string;
   mode?: TenderMode;
   cargo?: string;
-  weightKg?: number;
-  loadingDate?: string;
-  conditions?: string;
   currency?: string;
   orderId?: string;
   supplierIds?: string[];
 }
 
-export interface TelegramMessageRow {
+export interface ConversationMessage {
   id: string;
-  accountId: string;
-  supplierId: string | null;
-  tenderId: string | null;
+  channel: 'telegram' | 'email';
   direction: 'outgoing' | 'incoming';
-  telegramMessageId: string | null;
   text: string;
+  subject: string | null;
   status: string | null;
   createdAt: string;
 }
@@ -458,11 +536,11 @@ export const tenderApi = {
     create(input: CreateSupplierInput): Promise<SupplierRow> {
       return req<SupplierRow>('/worker/suppliers', { method: 'POST', body: JSON.stringify(input) });
     },
-    bindTelegram(id: string, telegramUsername: string, telegramAccountId?: string) {
-      return req(`/worker/suppliers/${id}/telegram`, {
-        method: 'POST',
-        body: JSON.stringify({ telegramUsername, telegramAccountId }),
-      });
+    update(
+      id: string,
+      patch: { telegramUsername?: string; telegramAccountId?: string; contactChannel?: ContactChannel; email?: string },
+    ) {
+      return req(`/worker/suppliers/${id}/telegram`, { method: 'POST', body: JSON.stringify(patch) });
     },
   },
   tenders: {
@@ -487,8 +565,8 @@ export const tenderApi = {
         body: JSON.stringify({ supplierId }),
       });
     },
-    messages(id: string): Promise<TelegramMessageRow[]> {
-      return req<TelegramMessageRow[]>(`/worker/tenders/${id}/messages`);
+    messages(id: string): Promise<ConversationMessage[]> {
+      return req<ConversationMessage[]>(`/worker/tenders/${id}/messages`);
     },
   },
   telegramAccounts: {

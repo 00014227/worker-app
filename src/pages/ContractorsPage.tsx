@@ -1,10 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus } from 'lucide-react';
-import { tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput } from '../lib/api';
+import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail } from 'lucide-react';
+import {
+  tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput,
+  ContactChannel, CONTACT_CHANNEL_LABELS,
+} from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+
+const CHANNELS: ContactChannel[] = ['telegram', 'email', 'both'];
+
+/** Small segmented channel selector reused by create + bind panels. */
+function ChannelSelect({ value, onChange }: { value: ContactChannel; onChange: (c: ContactChannel) => void }) {
+  return (
+    <div className="flex gap-2">
+      {CHANNELS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          className={cn(
+            'flex-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all',
+            value === c ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted/50',
+          )}
+        >
+          {CONTACT_CHANNEL_LABELS[c]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function slaLabel(s: SupplierRow): string | null {
   if (s.responseRate == null && s.avgResponseTimeSec == null) return null;
@@ -81,17 +107,14 @@ export default function ContractorsPage() {
                     <div className="font-medium text-sm truncate">{c.name}</div>
                     <div className="text-xs text-muted-foreground">{c.country ?? '—'}</div>
                   </div>
-                  {c.telegramBound ? (
-                    <span className="shrink-0 inline-flex items-center gap-1 text-xs text-green-600"><Check size={11} /> TG</span>
-                  ) : c.telegramUsername ? (
-                    <span className="shrink-0 inline-flex items-center gap-1 text-xs text-blue-600"><Send size={11} /> привязан</span>
-                  ) : (
-                    <span className="shrink-0 text-xs text-amber-600">нет TG</span>
-                  )}
+                  <span className="shrink-0 px-1.5 py-0.5 rounded bg-muted text-xs text-muted-foreground">
+                    {CONTACT_CHANNEL_LABELS[c.contactChannel] ?? c.contactChannel}
+                  </span>
                 </div>
-                {(c.telegramUsername || sla) && (
+                {(c.telegramUsername || c.email || sla) && (
                   <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
                     {c.telegramUsername && <div className="flex items-center gap-1 text-blue-600"><Send size={11} /> @{c.telegramUsername.replace('@', '')}</div>}
+                    {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}
                     {sla && <div className="flex items-center gap-1"><Zap size={11} /> {sla}</div>}
                   </div>
                 )}
@@ -137,7 +160,7 @@ function CreateSupplierPanel({
   onClose: () => void;
   onCreated: (s: SupplierRow) => void;
 }) {
-  const [form, setForm] = useState<CreateSupplierInput>({ name: '' });
+  const [form, setForm] = useState<CreateSupplierInput>({ name: '', contactChannel: 'telegram' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,7 +172,7 @@ function CreateSupplierPanel({
     setError(null);
     try {
       // Trim empties so the backend stores nulls, not blank strings.
-      const payload: CreateSupplierInput = { name: form.name.trim() };
+      const payload: CreateSupplierInput = { name: form.name.trim(), contactChannel: form.contactChannel };
       (['telegramUsername', 'telegramUserId', 'country', 'phone', 'email', 'inn', 'code'] as const)
         .forEach((k) => { if (form[k]?.trim()) payload[k] = form[k]!.trim(); });
       const created = await tenderApi.suppliers.create(payload);
@@ -172,6 +195,12 @@ function CreateSupplierPanel({
           <div className="space-y-1.5">
             <Label>Название *</Label>
             <Input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="ТрансЛогист ООО" />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Канал связи</Label>
+            <ChannelSelect value={form.contactChannel ?? 'telegram'} onChange={(c) => set({ contactChannel: c })} />
+            <p className="text-xs text-muted-foreground">По этому каналу пойдёт рассылка тендеров. Для «Почта» заполните email, для Telegram — @username.</p>
           </div>
 
           <div className="space-y-1.5">
@@ -233,17 +262,29 @@ function BindPanel({
   onSaved: (s: Partial<SupplierRow> & { id: string }) => void;
 }) {
   const [username, setUsername] = useState(supplier.telegramUsername ?? '');
+  const [email, setEmail] = useState(supplier.email ?? '');
+  const [channel, setChannel] = useState<ContactChannel>(supplier.contactChannel ?? 'telegram');
   const [accountId, setAccountId] = useState(supplier.telegramAccountId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
-    if (!username.trim()) return;
     setSaving(true);
     setError(null);
     try {
-      await tenderApi.suppliers.bindTelegram(supplier.id, username.trim(), accountId || undefined);
-      onSaved({ id: supplier.id, telegramUsername: username.trim().replace('@', ''), telegramAccountId: accountId || null });
+      await tenderApi.suppliers.update(supplier.id, {
+        telegramUsername: username.trim() || undefined,
+        email: email.trim() || undefined,
+        contactChannel: channel,
+        telegramAccountId: accountId || undefined,
+      });
+      onSaved({
+        id: supplier.id,
+        telegramUsername: username.trim().replace('@', '') || null,
+        email: email.trim() || null,
+        contactChannel: channel,
+        telegramAccountId: accountId || null,
+      });
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
@@ -273,13 +314,23 @@ function BindPanel({
 
         <div className="space-y-3">
           <div className="space-y-1.5">
+            <Label>Канал связи</Label>
+            <ChannelSelect value={channel} onChange={setChannel} />
+          </div>
+
+          <div className="space-y-1.5">
             <Label>Telegram @username</Label>
             <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@contractor" />
             <p className="text-xs text-muted-foreground">Нужно для первого контакта. Дальше система запомнит подрядчика по его ID.</p>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Аккаунт рассылки (необязательно)</Label>
+            <Label>Email</Label>
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mail@company.com" />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Аккаунт рассылки Telegram (необязательно)</Label>
             <select
               value={accountId}
               onChange={(e) => setAccountId(e.target.value)}
@@ -294,7 +345,7 @@ function BindPanel({
 
           <button
             onClick={save}
-            disabled={!username.trim() || saving}
+            disabled={saving}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
           >
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Сохранить

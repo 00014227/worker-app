@@ -2,11 +2,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import {
   ArrowLeft, Trophy, CheckCircle2, Send, Loader2, MapPin, Calendar,
-  MessageSquare, AlertTriangle, Clock, Sparkles, X,
+  MessageSquare, AlertTriangle, Clock, Sparkles, X, Mail,
 } from 'lucide-react';
 import {
   tenderApi, TenderDetail, TenderStatus, DeliveryStatus,
-  TelegramMessageRow, TENDER_MODE_LABELS,
+  ConversationMessage, TENDER_MODE_LABELS,
 } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,10 @@ const DELIVERY: Record<DeliveryStatus, { label: string; cls: string }> = {
   error:   { label: 'Ошибка',     cls: 'text-red-600' },
 };
 
+const CHANNEL_LABEL: Record<string, string> = {
+  telegram: 'TG', email: 'Почта', both: 'TG+Почта',
+};
+
 function money(amount: string | null, currency: string | null) {
   if (amount == null) return '—';
   return `${Number(amount).toLocaleString('ru-RU')} ${currency ?? ''}`.trim();
@@ -40,7 +44,7 @@ export default function RateRequestDetailPage() {
   const [sending, setSending] = useState(false);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   const [showMessages, setShowMessages] = useState(false);
-  const [messages, setMessages] = useState<TelegramMessageRow[]>([]);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -126,11 +130,21 @@ export default function RateRequestDetailPage() {
                 )}
                 <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', st.cls)}>{st.label}</span>
               </div>
-              <div className="flex gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+              <div className="flex gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground flex-wrap">
                 {tender.loadingDate && <span className="flex items-center gap-1"><Calendar size={11} /> Погрузка: {new Date(tender.loadingDate).toLocaleDateString('ru-RU')}</span>}
-                {tender.weightKg && <span>{Number(tender.weightKg).toLocaleString('ru-RU')} кг</span>}
-                {tender.cargo && <span>{tender.cargo}</span>}
+                {tender.weightKg && <span>⚖️ {Number(tender.weightKg).toLocaleString('ru-RU')} кг</span>}
+                {tender.cargoType && <span>📦 {tender.cargoType}{tender.cargo ? ` — ${tender.cargo}` : ''}</span>}
+                {tender.hazardClass && <span className="text-red-600">☣️ {tender.hazardClass}</span>}
+                {tender.temperatureRegime && <span className="text-sky-600">🌡 {tender.temperatureRegime}</span>}
+                {tender.vehicleType && <span>🚚 {tender.vehicleType}{tender.vehicleCount ? ` × ${tender.vehicleCount}` : ''}</span>}
+                {tender.loadingMethod && <span>↕️ {tender.loadingMethod}</span>}
+                {tender.hsCodes && <span>🔢 ТНВЭД: {tender.hsCodes}</span>}
+                {tender.incoterms && <span>📑 {tender.incoterms}</span>}
+                {tender.cargoValue && <span>💰 {Number(tender.cargoValue).toLocaleString('ru-RU')} {tender.currency ?? ''}</span>}
+                {tender.exportCustoms && <span>🛃 экспорт: {tender.exportCustoms}</span>}
+                {tender.importCustoms && <span>🛃 импорт: {tender.importCustoms}</span>}
                 {tender.conditions && <span className="flex items-center gap-1"><MessageSquare size={11} /> {tender.conditions}</span>}
+                {tender.comment && <span className="flex items-center gap-1"><MessageSquare size={11} /> {tender.comment}</span>}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -171,6 +185,7 @@ export default function RateRequestDetailPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0 text-xs">
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{CHANNEL_LABEL[inv.channel] ?? inv.channel}</span>
                     {inv.telegramAccount && <span className="text-muted-foreground hidden sm:inline">{inv.telegramAccount.phone}</span>}
                     {inv.reminderCount > 0 && <span className="text-amber-600 flex items-center gap-1"><Clock size={11} /> {inv.reminderCount}</span>}
                     <span className={cn('font-medium', d.cls)}>{d.label}</span>
@@ -259,7 +274,7 @@ export default function RateRequestDetailPage() {
         <div className="fixed inset-0 z-50 bg-black/30 flex justify-end" onClick={() => setShowMessages(false)}>
           <div className="w-full max-w-md h-full bg-background shadow-xl p-5 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-sm">Переписка в Telegram</h2>
+              <h2 className="font-semibold text-sm">Переписка</h2>
               <button onClick={() => setShowMessages(false)} className="text-muted-foreground hover:text-foreground"><X size={18} /></button>
             </div>
             <div className="space-y-2">
@@ -274,6 +289,12 @@ export default function RateRequestDetailPage() {
                       m.direction === 'outgoing' ? 'bg-primary/10 ml-auto' : 'bg-muted',
                     )}
                   >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      {m.channel === 'email'
+                        ? <Mail size={11} className="text-muted-foreground" />
+                        : <Send size={11} className="text-muted-foreground" />}
+                      {m.subject && <span className="text-[10px] text-muted-foreground truncate">{m.subject}</span>}
+                    </div>
                     <div className="whitespace-pre-wrap break-words">{m.text}</div>
                     <div className="text-[10px] text-muted-foreground mt-1">
                       {new Date(m.createdAt).toLocaleString('ru-RU')}

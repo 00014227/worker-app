@@ -7,6 +7,7 @@ import RateRequestsPage from './pages/RateRequestsPage';
 import NewRateRequestPage from './pages/NewRateRequestPage';
 import RateRequestDetailPage from './pages/RateRequestDetailPage';
 import TelegramAccountsPage from './pages/TelegramAccountsPage';
+import CustomersPage from './pages/CustomersPage';
 import DashboardPage from './pages/DashboardPage';
 import ShipmentsPage from './pages/ShipmentsPage';
 import NewShipmentPage from './pages/NewShipmentPage';
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/rate-requests/new" element={<NewRateRequestPage />} />
           <Route path="/rate-requests/:id" element={<RateRequestDetailPage />} />
           <Route path="/contractors" element={<ContractorsPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
           <Route path="/telegram-accounts" element={<TelegramAccountsPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/ai-deal" element={<AiDealPage />} />
