@@ -140,6 +140,11 @@ export default function RateRequestDetailPage() {
                 {tender.loadingMethod && <span>↕️ {tender.loadingMethod}</span>}
                 {tender.hsCodes && <span>🔢 ТНВЭД: {tender.hsCodes}</span>}
                 {tender.incoterms && <span>📑 {tender.incoterms}</span>}
+                {tender.bidDeadline && (
+                  <span className={cn(new Date(tender.bidDeadline) < new Date() && 'text-red-600')}>
+                    ⏳ приём ставок до: {new Date(tender.bidDeadline).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
                 {tender.cargoValue && <span>💰 {Number(tender.cargoValue).toLocaleString('ru-RU')} {tender.currency ?? ''}</span>}
                 {tender.exportCustoms && <span>🛃 экспорт: {tender.exportCustoms}</span>}
                 {tender.importCustoms && <span>🛃 импорт: {tender.importCustoms}</span>}
@@ -236,6 +241,11 @@ export default function RateRequestDetailPage() {
                             <span className="font-medium">{r.supplier.name}</span>
                             {recommended && !decided && <Sparkles size={12} className="text-violet-500" />}
                             {r.isSelected && <Trophy size={12} className="text-green-600" />}
+                            {r.isLate && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                после дедлайна
+                              </span>
+                            )}
                           </div>
                           {r.accepted === false && <span className="text-xs text-red-500">отказ</span>}
                         </td>

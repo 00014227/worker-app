@@ -409,6 +409,8 @@ export interface TenderReplyRow {
   aiConfidence: string | null;
   rank: number | null;
   isSelected: boolean;
+  /** Ставка пришла после дедлайна подачи. */
+  isLate: boolean;
   supplier: { id: string; name: string };
 }
 
@@ -436,6 +438,7 @@ export interface TenderDetail {
   importCustoms: string | null;
   incoterms: string | null;
   cargoValue: string | null;
+  bidDeadline: string | null;
   conditions: string | null;
   comment: string | null;
   currency: string | null;
@@ -497,6 +500,8 @@ export interface CreateTenderInput {
   importCustoms: string;
   incoterms: string;
   cargoValue?: number;
+  /** ISO instant — форма конвертирует локальное время пикера в ISO. */
+  bidDeadline?: string;
   conditions?: string;
   comment?: string;
   mode?: TenderMode;

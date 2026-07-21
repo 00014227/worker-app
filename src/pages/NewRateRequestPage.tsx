@@ -20,6 +20,8 @@ type FormState = Omit<CreateTenderInput, 'weightKg' | 'vehicleCount' | 'cargoVal
   weightKg: string;
   vehicleCount: string;
   cargoValue: string;
+  /** Значение <input type="datetime-local"> — местное время без зоны. */
+  bidDeadline: string;
 };
 
 const emptyForm: FormState = {
@@ -32,7 +34,7 @@ const emptyForm: FormState = {
   hsCodes: '', loadingMethod: '',
   weightKg: '',
   exportCustoms: '', importCustoms: '',
-  incoterms: '', cargoValue: '',
+  incoterms: '', cargoValue: '', bidDeadline: '',
   conditions: '', comment: '',
   mode: undefined, cargo: '', currency: 'USD',
 };
@@ -46,7 +48,9 @@ export default function NewRateRequestPage() {
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       // Loading date is intentionally not restored — it's almost always different.
-      if (saved) return { ...emptyForm, ...JSON.parse(saved), loadingDate: '' };
+      // Dates are deliberately not restored — they're almost always different,
+      // and a stale one would silently go out to contractors.
+      if (saved) return { ...emptyForm, ...JSON.parse(saved), loadingDate: '', bidDeadline: '' };
     } catch { /* corrupted draft — start clean */ }
     return emptyForm;
   });
@@ -136,6 +140,9 @@ export default function NewRateRequestPage() {
         weightKg: Number(form.weightKg),
         vehicleCount: Number(form.vehicleCount),
         cargoValue: form.cargoValue ? Number(form.cargoValue) : undefined,
+        // datetime-local has no timezone: parse it as the manager's local time and
+        // send a real instant, otherwise the server (UTC) would shift it by hours.
+        bidDeadline: form.bidDeadline ? new Date(form.bidDeadline).toISOString() : undefined,
         loadingMethod: form.loadingMethod || undefined,
         supplierIds: selected.size ? [...selected] : undefined,
       };
@@ -348,7 +355,13 @@ export default function NewRateRequestPage() {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Дедлайн подачи ставки</Label>
+              <Input type="datetime-local" value={form.bidDeadline}
+                onChange={(e) => set({ bidDeadline: e.target.value })} />
+              <p className="text-xs text-muted-foreground">До какого момента ждём ставку от подрядчика.</p>
+            </div>
             <div className="space-y-1.5">
               <Label>Особые условия</Label>
               <Input value={form.conditions ?? ''} onChange={(e) => set({ conditions: e.target.value })} placeholder="Груз на палетах, растентовка…" />
