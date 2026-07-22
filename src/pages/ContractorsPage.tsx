@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail } from 'lucide-react';
+import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail, Globe } from 'lucide-react';
 import {
   tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput,
   ContactChannel, CONTACT_CHANNEL_LABELS,
@@ -10,6 +10,41 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 const CHANNELS: ContactChannel[] = ['telegram', 'email', 'both'];
+const MODES: { value: string; label: string }[] = [
+  { value: 'auto', label: 'Авто' },
+  { value: 'rail', label: 'Ж/Д' },
+  { value: 'air', label: 'Авиа' },
+  { value: 'sea', label: 'Море' },
+];
+const MODE_LABEL: Record<string, string> = Object.fromEntries(MODES.map((m) => [m.value, m.label]));
+
+/** «Россия, Казахстан» ⇄ ['Россия','Казахстан'] — ввод через запятую, как у ТНВЭД. */
+const parseList = (s: string) => s.split(',').map((v) => v.trim()).filter(Boolean);
+
+/** Переключатели видов транспорта — общие для формы создания и редактирования. */
+function ModePicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const toggle = (m: string) =>
+    onChange(value.includes(m) ? value.filter((v) => v !== m) : [...value, m]);
+  return (
+    <div className="flex gap-2 flex-wrap">
+      {MODES.map((m) => (
+        <button
+          key={m.value}
+          type="button"
+          onClick={() => toggle(m.value)}
+          className={cn(
+            'px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
+            value.includes(m.value)
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'border-border text-muted-foreground hover:bg-muted/50',
+          )}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** Small segmented channel selector reused by create + bind panels. */
 function ChannelSelect({ value, onChange }: { value: ContactChannel; onChange: (c: ContactChannel) => void }) {
@@ -111,13 +146,19 @@ export default function ContractorsPage() {
                     {CONTACT_CHANNEL_LABELS[c.contactChannel] ?? c.contactChannel}
                   </span>
                 </div>
-                {(c.telegramUsername || c.email || sla) && (
-                  <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
-                    {c.telegramUsername && <div className="flex items-center gap-1 text-blue-600"><Send size={11} /> @{c.telegramUsername.replace('@', '')}</div>}
-                    {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}
-                    {sla && <div className="flex items-center gap-1"><Zap size={11} /> {sla}</div>}
+                <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
+                  {/* Направления показываем всегда: пустые сразу видно — такие не подберутся автоматически */}
+                  <div className={cn('flex items-start gap-1', c.directions.length === 0 && 'text-amber-600')}>
+                    <Globe size={11} className="mt-0.5 shrink-0" />
+                    <span className="truncate">
+                      {c.directions.length > 0 ? c.directions.join(', ') : 'направления не заданы'}
+                      {c.transportModes.length > 0 && ` · ${c.transportModes.map((m) => MODE_LABEL[m] ?? m).join('/')}`}
+                    </span>
                   </div>
-                )}
+                  {c.telegramUsername && <div className="flex items-center gap-1 text-blue-600"><Send size={11} /> @{c.telegramUsername.replace('@', '')}</div>}
+                  {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}
+                  {sla && <div className="flex items-center gap-1"><Zap size={11} /> {sla}</div>}
+                </div>
               </CardContent>
             </Card>
           );
@@ -161,6 +202,8 @@ function CreateSupplierPanel({
   onCreated: (s: SupplierRow) => void;
 }) {
   const [form, setForm] = useState<CreateSupplierInput>({ name: '', contactChannel: 'telegram' });
+  const [directions, setDirections] = useState('');
+  const [modes, setModes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -172,7 +215,12 @@ function CreateSupplierPanel({
     setError(null);
     try {
       // Trim empties so the backend stores nulls, not blank strings.
-      const payload: CreateSupplierInput = { name: form.name.trim(), contactChannel: form.contactChannel };
+      const payload: CreateSupplierInput = {
+        name: form.name.trim(),
+        contactChannel: form.contactChannel,
+        directions: parseList(directions),
+        transportModes: modes,
+      };
       (['telegramUsername', 'telegramUserId', 'country', 'phone', 'email', 'inn', 'code'] as const)
         .forEach((k) => { if (form[k]?.trim()) payload[k] = form[k]!.trim(); });
       const created = await tenderApi.suppliers.create(payload);
@@ -201,6 +249,19 @@ function CreateSupplierPanel({
             <Label>Канал связи</Label>
             <ChannelSelect value={form.contactChannel ?? 'telegram'} onChange={(c) => set({ contactChannel: c })} />
             <p className="text-xs text-muted-foreground">По этому каналу пойдёт рассылка тендеров. Для «Почта» заполните email, для Telegram — @username.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Направления (страны)</Label>
+            <Input value={directions} onChange={(e) => setDirections(e.target.value)} placeholder="Россия, Казахстан, Узбекистан" />
+            <p className="text-xs text-muted-foreground">
+              Через запятую. По ним запрос будет автоматически подбирать подрядчиков под маршрут.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Виды транспорта</Label>
+            <ModePicker value={modes} onChange={setModes} />
           </div>
 
           <div className="space-y-1.5">
@@ -264,6 +325,8 @@ function BindPanel({
   const [username, setUsername] = useState(supplier.telegramUsername ?? '');
   const [email, setEmail] = useState(supplier.email ?? '');
   const [channel, setChannel] = useState<ContactChannel>(supplier.contactChannel ?? 'telegram');
+  const [directions, setDirections] = useState((supplier.directions ?? []).join(', '));
+  const [modes, setModes] = useState<string[]>(supplier.transportModes ?? []);
   const [accountId, setAccountId] = useState(supplier.telegramAccountId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -272,10 +335,13 @@ function BindPanel({
     setSaving(true);
     setError(null);
     try {
+      const dirs = parseList(directions);
       await tenderApi.suppliers.update(supplier.id, {
         telegramUsername: username.trim() || undefined,
         email: email.trim() || undefined,
         contactChannel: channel,
+        directions: dirs,
+        transportModes: modes,
         telegramAccountId: accountId || undefined,
       });
       onSaved({
@@ -283,6 +349,8 @@ function BindPanel({
         telegramUsername: username.trim().replace('@', '') || null,
         email: email.trim() || null,
         contactChannel: channel,
+        directions: dirs,
+        transportModes: modes,
         telegramAccountId: accountId || null,
       });
     } catch (e) {
@@ -316,6 +384,17 @@ function BindPanel({
           <div className="space-y-1.5">
             <Label>Канал связи</Label>
             <ChannelSelect value={channel} onChange={setChannel} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Направления (страны)</Label>
+            <Input value={directions} onChange={(e) => setDirections(e.target.value)} placeholder="Россия, Казахстан, Узбекистан" />
+            <p className="text-xs text-muted-foreground">Через запятую — для автоподбора под маршрут запроса.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Виды транспорта</Label>
+            <ModePicker value={modes} onChange={setModes} />
           </div>
 
           <div className="space-y-1.5">

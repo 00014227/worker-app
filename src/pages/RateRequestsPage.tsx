@@ -96,7 +96,8 @@ export default function RateRequestsPage() {
                     <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground flex-wrap">
                       {r.loadingDate && (
                         <span className="flex items-center gap-1">
-                          <Calendar size={11} /> {new Date(r.loadingDate).toLocaleDateString('ru-RU')}
+                          {/* Дата погрузки — @db.Date (UTC-полночь): без timeZone съезжает на день назад */}
+                          <Calendar size={11} /> {new Date(r.loadingDate).toLocaleDateString('ru-RU', { timeZone: 'UTC' })}
                         </span>
                       )}
                       {r.weightKg && <span>{Number(r.weightKg).toLocaleString('ru-RU')} кг</span>}

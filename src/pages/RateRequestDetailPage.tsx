@@ -131,7 +131,8 @@ export default function RateRequestDetailPage() {
                 <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', st.cls)}>{st.label}</span>
               </div>
               <div className="flex gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground flex-wrap">
-                {tender.loadingDate && <span className="flex items-center gap-1"><Calendar size={11} /> Погрузка: {new Date(tender.loadingDate).toLocaleDateString('ru-RU')}</span>}
+                {/* Дата погрузки — @db.Date (UTC-полночь): без timeZone съезжает на день назад */}
+                {tender.loadingDate && <span className="flex items-center gap-1"><Calendar size={11} /> Погрузка: {new Date(tender.loadingDate).toLocaleDateString('ru-RU', { timeZone: 'UTC' })}</span>}
                 {tender.weightKg && <span>⚖️ {Number(tender.weightKg).toLocaleString('ru-RU')} кг</span>}
                 {tender.cargoType && <span>📦 {tender.cargoType}{tender.cargo ? ` — ${tender.cargo}` : ''}</span>}
                 {tender.hazardClass && <span className="text-red-600">☣️ {tender.hazardClass}</span>}

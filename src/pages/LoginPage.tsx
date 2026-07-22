@@ -1,7 +1,8 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { saveAuth } from '../lib/auth';
+import { Logo } from '../components/Logo';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -32,71 +33,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#f5f6fa',
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 12, padding: '40px 48px', width: 380,
-        boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-      }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
-          <div style={{ background: '#1e2a3a', borderRadius: 8, padding: '6px 8px', display: 'flex' }}>
-            <Truck size={20} color="#4f9cf9" />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#1e2a3a' }}>TransAsia</div>
-            <div style={{ fontSize: 11, color: '#8fa3b8' }}>Кабинет сотрудника</div>
-          </div>
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-[380px] max-w-full rounded-2xl bg-card p-10 shadow-[0_18px_50px_rgba(12,48,120,0.12)] ring-1 ring-border">
+        {/* Logo — на светлом фоне в оригинальных фирменных цветах */}
+        <div className="mb-8">
+          <Logo className="w-full h-auto" />
+          <div className="text-[11px] text-muted-foreground mt-2">Кабинет сотрудника</div>
         </div>
 
-        <h2 style={{ margin: '0 0 24px', fontSize: 20, fontWeight: 700, color: '#1e2a3a' }}>
-          Вход
-        </h2>
+        <h2 className="m-0 mb-6 text-xl font-bold text-foreground">Вход</h2>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-              Email
-            </label>
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Email</label>
             <input
               type="email"
               value={login}
               onChange={e => setLogin(e.target.value)}
               placeholder="name@transasia.co"
               required
-              style={{
-                width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-                border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14,
-                outline: 'none', color: '#1e2a3a',
-              }}
+              className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/40 transition"
             />
           </div>
 
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-              Пароль
-            </label>
+          <div className="mb-6">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Пароль</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              style={{
-                width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-                border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14,
-                outline: 'none', color: '#1e2a3a',
-              }}
+              className="w-full box-border px-3 py-2.5 rounded-lg border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/40 transition"
             />
           </div>
 
           {error && (
-            <div style={{
-              background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
-              padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#dc2626',
-            }}>
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-[13px] text-destructive">
               {error}
             </div>
           )}
@@ -104,19 +77,13 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            style={{
-              width: '100%', padding: '11px', background: loading ? '#94a3b8' : '#4f9cf9',
-              color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Вход...</> : 'Войти'}
+            {loading ? <><Loader2 size={16} className="animate-spin" /> Вход...</> : 'Войти'}
           </button>
         </form>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
     </div>
   );
 }

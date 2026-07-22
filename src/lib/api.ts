@@ -9,7 +9,15 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.message ?? `HTTP ${res.status}`);
+    // NestJS отдаёт message массивом при ошибках валидации DTO и объектом в
+    // отдельных случаях — без нормализации в UI прилетало «[object Object]».
+    const raw = body?.message ?? body?.error;
+    const message = Array.isArray(raw)
+      ? raw.join('; ')
+      : typeof raw === 'string'
+        ? raw
+        : `Ошибка ${res.status}`;
+    throw new Error(message);
   }
   return res.json();
 }
@@ -366,6 +374,10 @@ export interface SupplierRow {
   telegramUsername: string | null;
   telegramBound: boolean;
   telegramAccountId: string | null;
+  /** Страны, которые возит подрядчик — основа автоподбора. Пусто = не задано. */
+  directions: string[];
+  /** Виды транспорта (auto|rail|air|sea). Пусто = не задано. */
+  transportModes: string[];
   avgResponseTimeSec: number | null;
   responseRate: number | null;
   lastReplyAt: string | null;
@@ -374,6 +386,8 @@ export interface SupplierRow {
 export interface CreateSupplierInput {
   name: string;
   contactChannel?: ContactChannel;
+  directions?: string[];
+  transportModes?: string[];
   telegramUsername?: string;
   telegramUserId?: string;
   country?: string;
@@ -543,9 +557,16 @@ export const tenderApi = {
     },
     update(
       id: string,
-      patch: { telegramUsername?: string; telegramAccountId?: string; contactChannel?: ContactChannel; email?: string },
+      patch: {
+        telegramUsername?: string; telegramAccountId?: string; contactChannel?: ContactChannel;
+        email?: string; directions?: string[]; transportModes?: string[];
+      },
     ) {
       return req(`/worker/suppliers/${id}/telegram`, { method: 'POST', body: JSON.stringify(patch) });
+    },
+    /** Страна по названию города (справочник пунктов) — для автозаполнения формы. */
+    resolveCountry(city: string): Promise<{ country: string | null }> {
+      return req<{ country: string | null }>(`/worker/suppliers/resolve-country?city=${encodeURIComponent(city)}`);
     },
   },
   tenders: {

@@ -1,30 +1,41 @@
 @import 'leaflet/dist/leaflet.css';
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Фирменная палитра Транс-Азия — те же значения, что в клиентском ЛК (lk2),
+ * переведённые в HSL-тройки, которых ждёт tailwind.config (hsl(var(--x))).
+ * ВАЖНО: этот блок вне @layer, поэтому он перебивает oklch-набор из
+ * shadcn/tailwind.css ниже — правится именно он.
+ */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
-  --radius: 0.5rem;
+  --background: 222.9 46.7% 97.1%;           /* #f4f6fb */
+  --foreground: 217.6 68% 14.7%;             /* #0c1f3f */
+  --card: 0 0% 100%;                         /* #ffffff */
+  --card-foreground: 217.6 68% 14.7%;        /* #0c1f3f */
+  --primary: 220 81.8% 25.9%;                /* #0c3078 — фирменный синий */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 221.1 48.7% 92.4%;            /* #e2e8f5 */
+  --secondary-foreground: 220 81.8% 25.9%;
+  --muted: 221.5 35.1% 92.7%;                /* #e6eaf3 */
+  --muted-foreground: 217.7 19.1% 44.1%;     /* #5b6b86 */
+  /* accent в shadcn — это фон при наведении/фокусе (например, в Select),
+     поэтому здесь мягкий синий тинт, а не фирменный оранжевый. */
+  --accent: 221.1 48.7% 92.4%;               /* #e2e8f5 */
+  --accent-foreground: 220 81.8% 25.9%;
+  --destructive: 3.6 76.4% 43.1%;            /* #c2241a */
+  --destructive-foreground: 0 0% 100%;
+  --border: 221.1 32.2% 88.4%;               /* синий 12% на фоне */
+  --input: 221.1 32.2% 88.4%;
+  --ring: 220 29.6% 72.2%;
+  /* Фирменный акцент — для точечных выделений (логотип, активные метки). */
+  --brand: 8.5 86.5% 53.5%;                  /* #ef3f22 */
+  /* Скругления заметно крупнее, как в ЛК. */
+  --radius: 1rem;
 }
 
 *,
@@ -35,10 +46,15 @@
 
 body {
   margin: 0;
-  background-color: hsl(var(--background));
+  min-height: 100vh;
+  /* Фирменная подложка ЛК: мягкие блики синего и оранжевого по верхним углам. */
+  background:
+    radial-gradient(circle at top left, rgba(12, 48, 120, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(239, 63, 34, 0.1), transparent 24%),
+    linear-gradient(180deg, #f7f9fd 0%, #eaeef7 100%);
+  background-attachment: fixed;
   color: hsl(var(--foreground));
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: 'Inter Variable', Inter, 'Arial', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -46,7 +62,7 @@ body {
 @layer base {
   .theme {
     --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
+    --font-sans: 'Inter Variable', Inter, sans-serif;
   }
   :root {
     --background: oklch(1 0 0);

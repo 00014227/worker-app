@@ -1,74 +1,112 @@
-import { Contractor, TransportType } from '../data/mock';
+import { SupplierRow, TenderMode, TENDER_MODE_LABELS } from './api';
 
-export type MatchReason = 'route' | 'transport' | 'both';
+/**
+ * Подбор подрядчиков под маршрут запроса.
+ *
+ * `full`    — подрядчик возит обе страны маршрута и подходит по виду транспорта;
+ *             такие отмечаются автоматически.
+ * `partial` — покрыта только одна из стран (или направления не заданы, но конфликта нет).
+ * `none`    — подрядчик явно возит другое: направления/транспорт заданы и не подходят.
+ *
+ * Незаполненные данные никогда не дают `none` — иначе подрядчики, которым ещё не
+ * проставили направления, молча выпали бы из подбора.
+ */
+export type MatchType = 'full' | 'partial' | 'none';
 
-export interface MatchedContractor {
-  contractor: Contractor;
-  score: number;       // 0-100
+export interface MatchedSupplier {
+  supplier: SupplierRow;
+  score: number;
+  matchType: MatchType;
   reasons: string[];
-  matchType: 'auto' | 'partial' | 'manual';
 }
 
-/** Map vehicleType string → TransportType */
-export function vehicleToTransportType(vehicleType: string): TransportType {
-  if (['container_20', 'container_40'].includes(vehicleType)) return 'sea';
-  if (vehicleType === 'air') return 'air';
-  if (vehicleType === 'rail_wagon') return 'rail';
-  return 'auto';
+export interface MatchParams {
+  originCountry?: string;
+  destinationCountry?: string;
+  mode?: TenderMode;
 }
 
-export function matchContractors(params: {
-  fromCountry: string;
-  toCountry: string;
-  vehicleType: string;
-  transportMode?: TransportType;
-}, contractors: Contractor[]): MatchedContractor[] {
-  const transport = params.transportMode ?? vehicleToTransportType(params.vehicleType);
-  const from = params.fromCountry.trim().toLowerCase();
-  const to = params.toCountry.trim().toLowerCase();
+/** Порядок вывода: подходящие → нейтральные → заведомо неподходящие. */
+const RANK: Record<MatchType, number> = { full: 0, partial: 1, none: 2 };
 
-  return contractors
-    .map(c => {
+/**
+ * Страны сравниваем по нормализованному виду: в справочнике они капсом
+ * («РОССИЯ»), у подрядчика — как ввёл менеджер («Россия», « россия »).
+ */
+function norm(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ').replace(/ё/g, 'е');
+}
+
+function covers(directions: string[], country?: string): boolean {
+  if (!country?.trim() || directions.length === 0) return false;
+  const target = norm(country);
+  return directions.some((d) => {
+    const v = norm(d);
+    // Терпим расхождения вида «Россия» ↔ «Российская Федерация».
+    return v === target || v.includes(target) || target.includes(v);
+  });
+}
+
+export function matchSuppliers(params: MatchParams, suppliers: SupplierRow[]): MatchedSupplier[] {
+  const { originCountry, destinationCountry, mode } = params;
+  const routeKnown = !!(originCountry?.trim() || destinationCountry?.trim());
+
+  return suppliers
+    .map((supplier): MatchedSupplier => {
       const reasons: string[] = [];
       let score = 0;
 
-      // Transport type match
-      const supportsTransport = c.transportTypes.includes(transport);
-      if (supportsTransport) {
-        score += 40;
-        reasons.push(`Перевозит: ${transport === 'auto' ? 'Авто' : transport === 'rail' ? 'Ж/Д' : transport === 'air' ? 'Авиа' : 'Море'}`);
-      }
+      const hasDirections = supplier.directions.length > 0;
+      const coversFrom = covers(supplier.directions, originCountry);
+      const coversTo = covers(supplier.directions, destinationCountry);
 
-      // Route match
-      const cRoutes = c.routes.map(r => r.toLowerCase());
-      const coversFrom = from && cRoutes.some(r => r.includes(from) || from.includes(r));
-      const coversTo = to && cRoutes.some(r => r.includes(to) || to.includes(r));
+      const hasModes = supplier.transportModes.length > 0;
+      const modeConflict = !!mode && hasModes && !supplier.transportModes.includes(mode);
+      const modeOk = !modeConflict;
 
       if (coversFrom && coversTo) {
-        score += 50;
-        reasons.push(`Маршрут: ${params.fromCountry} ↔ ${params.toCountry}`);
-      } else if (coversFrom) {
-        score += 20;
-        reasons.push(`Покрывает: ${params.fromCountry}`);
-      } else if (coversTo) {
-        score += 20;
-        reasons.push(`Покрывает: ${params.toCountry}`);
+        score += 60;
+        reasons.push(`Возит ${originCountry} → ${destinationCountry}`);
+      } else if (coversFrom || coversTo) {
+        score += 25;
+        reasons.push(`Возит ${coversFrom ? originCountry : destinationCountry}`);
       }
 
-      // Rating bonus
-      score += Math.round(c.rating * 2);
+      if (mode && hasModes && !modeConflict) {
+        score += 20;
+        reasons.push(TENDER_MODE_LABELS[mode]);
+      }
 
-      // Determine match type
-      let matchType: MatchedContractor['matchType'];
-      if (supportsTransport && coversFrom && coversTo) {
-        matchType = 'auto';
-      } else if (supportsTransport || coversFrom || coversTo) {
+      // Небольшой бонус за надёжность — при прочих равных выше тот, кто отвечает.
+      if (supplier.responseRate != null) score += Math.round(supplier.responseRate / 10);
+
+      let matchType: MatchType;
+      if (modeConflict) {
+        matchType = 'none';
+        reasons.length = 0;
+        reasons.push('Другой вид транспорта');
+      } else if (routeKnown && hasDirections && !coversFrom && !coversTo) {
+        matchType = 'none';
+        reasons.length = 0;
+        reasons.push('Не возит это направление');
+      } else if (coversFrom && coversTo && modeOk) {
+        matchType = 'full';
+      } else if (coversFrom || coversTo) {
         matchType = 'partial';
       } else {
-        matchType = 'manual';
+        // Направления не заполнены — подрядчик остаётся доступным вручную.
+        matchType = 'partial';
+        if (!hasDirections) reasons.push('Направления не заданы');
       }
 
-      return { contractor: c, score, reasons, matchType };
+      return { supplier, score, matchType, reasons };
     })
-    .sort((a, b) => b.score - a.score);
+    // Сначала по типу совпадения, потом по баллам: иначе подрядчик с высоким
+    // score, но заведомо неподходящий (`none`), всплывал бы выше нейтральных.
+    .sort(
+      (a, b) =>
+        RANK[a.matchType] - RANK[b.matchType] ||
+        b.score - a.score ||
+        a.supplier.name.localeCompare(b.supplier.name),
+    );
 }

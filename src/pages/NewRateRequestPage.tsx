@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Send as SendIcon, Check, Loader2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search, Send as SendIcon, Check, Loader2, RotateCcw, Wand2 } from 'lucide-react';
+import { matchSuppliers } from '../lib/contractor-matcher';
 import {
   tenderApi, SupplierRow, TenderMode, TENDER_MODE_LABELS, CreateTenderInput,
   CONTACT_CHANNEL_LABELS, CARGO_TYPES, CargoType, VEHICLE_TYPES, REF_VEHICLE_TYPE,
@@ -56,10 +57,16 @@ export default function NewRateRequestPage() {
   });
   const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** Кого менеджер снял вручную — автоподбор их больше не возвращает. */
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  /** Кого отметил именно автоподбор — только их он вправе снимать при смене маршрута. */
+  const autoPicked = useRef<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
+  /** Шаг 1 — параметры запроса, шаг 2 — подбор подрядчиков. */
+  const [step, setStep] = useState<'form' | 'suppliers'>('form');
 
   useEffect(() => {
     tenderApi.suppliers.list().then(setSuppliers).catch((e) => setError((e as Error).message));
@@ -77,6 +84,22 @@ export default function NewRateRequestPage() {
 
   const set = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
+  /**
+   * Подставляет страну по городу из справочника пунктов — без неё автоподбор
+   * по направлению просто не с чем сопоставлять. Уже введённую страну не трогаем.
+   */
+  const fillCountry = async (city: string, field: 'originCountry' | 'destinationCountry') => {
+    if (!city.trim()) return;
+    const current = field === 'originCountry' ? form.originCountry : form.destinationCountry;
+    if (current?.trim()) return;
+    try {
+      const { country } = await tenderApi.suppliers.resolveCountry(city);
+      if (country) setForm((f) => (f[field]?.trim() ? f : { ...f, [field]: country }));
+    } catch {
+      /* справочник недоступен — менеджер введёт страну руками */
+    }
+  };
+
   const setCargoType = (cargoType: CargoType) => {
     setForm((f) => ({
       ...f,
@@ -92,21 +115,63 @@ export default function NewRateRequestPage() {
     }));
   };
 
+  // Подбор по маршруту: пересчитывается на лету, подходящие идут первыми.
+  const matched = useMemo(
+    () =>
+      matchSuppliers(
+        {
+          originCountry: form.originCountry,
+          destinationCountry: form.destinationCountry,
+          mode: form.mode,
+        },
+        suppliers,
+      ),
+    [suppliers, form.originCountry, form.destinationCountry, form.mode],
+  );
+
+  const fullMatchIds = useMemo(
+    () => matched.filter((m) => m.matchType === 'full').map((m) => m.supplier.id),
+    [matched],
+  );
+
+  // Автоотметка: ставим галочки на полных совпадениях, но не трогаем то, что
+  // менеджер выбрал сам, и не возвращаем снятых вручную.
+  useEffect(() => {
+    const full = new Set(fullMatchIds.filter((id) => !dismissed.has(id)));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of autoPicked.current) if (!full.has(id)) next.delete(id);
+      for (const id of full) next.add(id);
+      return next;
+    });
+    autoPicked.current = full;
+  }, [fullMatchIds, dismissed]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return suppliers;
-    return suppliers.filter(
-      (s) => s.name.toLowerCase().includes(q) || (s.telegramUsername ?? '').toLowerCase().includes(q),
+    if (!q) return matched;
+    return matched.filter(
+      (m) =>
+        m.supplier.name.toLowerCase().includes(q) ||
+        (m.supplier.telegramUsername ?? '').toLowerCase().includes(q),
     );
-  }, [suppliers, search]);
+  }, [matched, search]);
 
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+    // Ручное снятие запоминаем, иначе следующий пересчёт вернёт галочку обратно.
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      if (selected.has(id)) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
 
   const missing = useMemo(() => {
     const m: string[] = [];
@@ -126,10 +191,30 @@ export default function NewRateRequestPage() {
     return m;
   }, [form, isHazard, isTemp]);
 
-  const submit = async () => {
+  /** Переход ко второму шагу — только на заполненной форме. */
+  const goToSuppliers = () => {
     setTouched(true);
     if (missing.length) {
       setError(`Заполните обязательные поля: ${missing.join(', ')}`);
+      return;
+    }
+    setError(null);
+    setStep('suppliers');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const backToForm = () => {
+    setError(null);
+    setStep('form');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const submit = async () => {
+    setTouched(true);
+    if (missing.length) {
+      // Поля правятся на первом шаге — возвращаем туда, иначе ошибку негде исправить.
+      setError(`Заполните обязательные поля: ${missing.join(', ')}`);
+      setStep('form');
       return;
     }
     setSaving(true);
@@ -164,19 +249,55 @@ export default function NewRateRequestPage() {
           <ArrowLeft size={13} /> К запросам
         </button>
         <button
-          onClick={() => { setForm(emptyForm); setSelected(new Set()); setTouched(false); }}
+          onClick={() => {
+            setForm(emptyForm);
+            setSelected(new Set());
+            setDismissed(new Set());
+            autoPicked.current = new Set();
+            setTouched(false);
+            setStep('form');
+          }}
           className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
         >
           <RotateCcw size={12} /> Очистить форму
         </button>
       </div>
 
-      <h1 className="text-xl font-bold">Новый запрос ставок</h1>
+      <div className="space-y-2">
+        <h1 className="text-xl font-bold">Новый запрос ставок</h1>
+        {/* Индикатор этапов */}
+        <div className="flex items-center gap-2 text-xs">
+          {(['form', 'suppliers'] as const).map((s, i) => {
+            const active = step === s;
+            const done = step === 'suppliers' && s === 'form';
+            return (
+              <span key={s} className="flex items-center gap-2">
+                {i > 0 && <span className="text-muted-foreground">→</span>}
+                <span
+                  className={cn(
+                    'flex items-center gap-1.5 px-2.5 py-1 rounded-full border',
+                    active ? 'bg-primary text-primary-foreground border-primary'
+                      : done ? 'border-green-200 bg-green-50 text-green-700'
+                      : 'border-border text-muted-foreground',
+                  )}
+                >
+                  <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[10px]">
+                    {done ? <Check size={10} /> : i + 1}
+                  </span>
+                  {s === 'form' ? 'Параметры запроса' : 'Подрядчики'}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
+      {step === 'form' && (
+      <>
       {/* ── Маршрут ── */}
       <Card>
         <CardHeader className="border-b pb-3"><CardTitle className="text-sm">Маршрут</CardTitle></CardHeader>
@@ -185,6 +306,7 @@ export default function NewRateRequestPage() {
             <div className="space-y-1.5">
               <Label>{req('Город отправления')}</Label>
               <Input value={form.origin} onChange={(e) => set({ origin: e.target.value })} placeholder="Москва"
+                onBlur={(e) => fillCountry(e.target.value, 'originCountry')}
                 className={cn(invalid(form.origin) && 'border-red-400')} />
             </div>
             <div className="space-y-1.5">
@@ -200,6 +322,7 @@ export default function NewRateRequestPage() {
             <div className="space-y-1.5">
               <Label>{req('Город назначения')}</Label>
               <Input value={form.destination} onChange={(e) => set({ destination: e.target.value })} placeholder="Ташкент"
+                onBlur={(e) => fillCountry(e.target.value, 'destinationCountry')}
                 className={cn(invalid(form.destination) && 'border-red-400')} />
             </div>
             <div className="space-y-1.5">
@@ -374,7 +497,57 @@ export default function NewRateRequestPage() {
         </CardContent>
       </Card>
 
-      {/* ── Подрядчики ── */}
+      {/* Переход к шагу 2 */}
+      <div className="flex items-center gap-3 flex-wrap pb-6">
+        <button
+          onClick={goToSuppliers}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          Далее — подрядчики <ArrowRight size={15} />
+        </button>
+        <span className="text-xs text-muted-foreground">
+          {touched && missing.length > 0
+            ? `Не заполнено: ${missing.join(', ')}`
+            : 'Подрядчики подберутся автоматически по направлению.'}
+        </span>
+      </div>
+      </>
+      )}
+
+      {/* ── Шаг 2: подрядчики ── */}
+      {step === 'suppliers' && (
+      <>
+      {/* Сводка запроса — чтобы менеджер видел, под что подбирает */}
+      <Card size="sm">
+        <CardContent className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="text-sm">
+            <div className="font-semibold">
+              {form.origin} → {form.destination}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {[
+                form.originCountry && form.destinationCountry
+                  ? `${form.originCountry} → ${form.destinationCountry}`
+                  : null,
+                // Дата из <input type=date> — «2026-08-01», парсится как UTC-полночь.
+                // Без timeZone:'UTC' в западных зонах показывался бы предыдущий день.
+                form.loadingDate
+                  ? new Date(form.loadingDate).toLocaleDateString('ru-RU', { timeZone: 'UTC' })
+                  : null,
+                form.cargoType,
+                form.weightKg ? `${Number(form.weightKg).toLocaleString('ru-RU')} кг` : null,
+                form.vehicleType ? `${form.vehicleType} × ${form.vehicleCount}` : null,
+                form.incoterms,
+              ].filter(Boolean).join(' · ')}
+            </div>
+          </div>
+          <button onClick={backToForm}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors">
+            <ArrowLeft size={13} /> Изменить параметры
+          </button>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="border-b pb-3">
           <CardTitle className="text-sm">
@@ -382,6 +555,24 @@ export default function NewRateRequestPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-1 space-y-3">
+          {/* Итог автоподбора — видно, сработал он или маршрут ещё не задан */}
+          {(form.originCountry?.trim() || form.destinationCountry?.trim()) && (
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2 text-xs flex-wrap">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Wand2 size={12} className="text-primary" />
+                {fullMatchIds.length > 0
+                  ? <>Подобрано <b className="text-foreground">{fullMatchIds.length}</b> по направлению {form.originCountry || '?'} → {form.destinationCountry || '?'}</>
+                  : <>По направлению {form.originCountry || '?'} → {form.destinationCountry || '?'} совпадений нет — отметьте вручную</>}
+              </span>
+              {dismissed.size > 0 && (
+                <button type="button" onClick={() => setDismissed(new Set())}
+                  className="text-primary hover:underline">
+                  Вернуть снятых ({dismissed.size})
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="relative w-full sm:w-64">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input className="pl-8 h-8 text-sm" placeholder="Поиск…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -391,7 +582,7 @@ export default function NewRateRequestPage() {
             {filtered.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">Подрядчики не найдены</div>
             ) : (
-              filtered.map((s) => {
+              filtered.map(({ supplier: s, matchType, reasons }) => {
                 const on = selected.has(s.id);
                 const tgOk = !!(s.telegramUsername || s.telegramBound);
                 const emailOk = !!s.email;
@@ -414,6 +605,17 @@ export default function NewRateRequestPage() {
                         {s.email && ` · ${s.email}`}
                       </span>
                     </span>
+                    {/* Почему подрядчик подобран (или почему нет) */}
+                    {matchType === 'full' && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
+                        по направлению
+                      </span>
+                    )}
+                    {matchType === 'none' && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground" title={reasons[0]}>
+                        {reasons[0]}
+                      </span>
+                    )}
                     {unreachable && <span className="text-xs text-amber-600 shrink-0">нет контакта</span>}
                   </button>
                 );
@@ -425,6 +627,12 @@ export default function NewRateRequestPage() {
 
       <div className="flex items-center gap-3 flex-wrap pb-6">
         <button
+          onClick={backToForm}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted/50 transition-colors"
+        >
+          <ArrowLeft size={15} /> Назад
+        </button>
+        <button
           disabled={saving}
           onClick={submit}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
@@ -433,11 +641,13 @@ export default function NewRateRequestPage() {
           Создать запрос
         </button>
         <span className="text-xs text-muted-foreground">
-          {touched && missing.length > 0
-            ? `Не заполнено: ${missing.length}`
-            : 'Отправка подрядчикам — на следующем экране.'}
+          {selected.size > 0
+            ? `Выбрано подрядчиков: ${selected.size}. Отправка — на следующем экране.`
+            : 'Можно создать и без подрядчиков — добавите позже.'}
         </span>
       </div>
+      </>
+      )}
     </div>
   );
 }

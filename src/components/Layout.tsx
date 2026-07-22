@@ -1,9 +1,10 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  Truck, FileText, Users, Package, Sparkles, LogOut,
+  FileText, Users, Package, Sparkles, LogOut,
   LayoutDashboard, Shield, User, Map, Database, Send, Building2,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
+import { Logo } from './Logo';
 
 const nav = [
   { to: '/dashboard',     label: 'Дашборд',         icon: LayoutDashboard },
@@ -27,19 +28,15 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#f5f6fa]">
-      {/* Sidebar */}
-      <aside className="w-[220px] shrink-0 flex flex-col bg-[#131c27] text-white">
-        {/* Logo */}
-        <div className="px-5 py-4 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
-              <Truck size={15} className="text-white" />
-            </div>
-            <div>
-              <div className="font-bold text-sm leading-none">TransAsia</div>
-              <div className="text-[10px] text-white/40 mt-0.5 leading-none">TMS</div>
-            </div>
+    // Фон прозрачный — сквозь него виден фирменный градиент body
+    <div className="flex min-h-screen">
+      {/* Sidebar — фирменный синий */}
+      <aside className="w-[220px] shrink-0 flex flex-col bg-[#0c3078] text-white">
+        {/* Logo — надпись белая: фирменный синий на синем фоне нечитаем */}
+        <div className="px-5 py-5 border-b border-white/10">
+          <Logo className="w-full h-auto" textColor="#ffffff" />
+          <div className="text-[10px] text-white/40 mt-2 leading-none tracking-wide">
+            Кабинет сотрудника
           </div>
         </div>
 
@@ -53,8 +50,8 @@ export default function Layout() {
                 [
                   'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all',
                   isActive
-                    ? 'bg-blue-500 text-white shadow-sm'
-                    : 'text-white/50 hover:text-white hover:bg-white/5',
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-white/60 hover:text-white hover:bg-white/5',
                 ].join(' ')
               }
             >
@@ -69,7 +66,7 @@ export default function Layout() {
           <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white/5 mb-2">
             <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0">
               {user?.isAdmin
-                ? <Shield size={11} className="text-blue-400" />
+                ? <Shield size={11} className="text-[#ef3f22]" />
                 : <User size={11} className="text-white/60" />
               }
             </div>
