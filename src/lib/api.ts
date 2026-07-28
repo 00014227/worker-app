@@ -408,12 +408,20 @@ export const CONTACT_CHANNEL_LABELS: Record<ContactChannel, string> = {
   both: "Оба",
 };
 
+export type ContactLanguage = "RU" | "EN" | "UZ";
+export const CONTACT_LANGUAGE_LABELS: Record<ContactLanguage, string> = {
+  RU: "Русский",
+  EN: "English",
+  UZ: "Oʻzbekcha",
+};
+
 export interface SupplierRow {
   id: string;
   name: string;
   country: string | null;
   email: string | null;
   contactChannel: ContactChannel;
+  preferredLanguage: ContactLanguage;
   telegramUsername: string | null;
   telegramBound: boolean;
   telegramAccountId: string | null;
@@ -429,6 +437,7 @@ export interface SupplierRow {
 export interface CreateSupplierInput {
   name: string;
   contactChannel?: ContactChannel;
+  preferredLanguage?: ContactLanguage;
   directions?: string[];
   transportModes?: string[];
   telegramUsername?: string;
@@ -629,6 +638,7 @@ export const tenderApi = {
         telegramUsername?: string;
         telegramAccountId?: string;
         contactChannel?: ContactChannel;
+        preferredLanguage?: ContactLanguage;
         email?: string;
         directions?: string[];
         transportModes?: string[];

@@ -3,6 +3,7 @@ import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail,
 import {
   tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput,
   ContactChannel, CONTACT_CHANNEL_LABELS,
+  ContactLanguage, CONTACT_LANGUAGE_LABELS,
 } from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 const CHANNELS: ContactChannel[] = ['telegram', 'email', 'both'];
+const LANGUAGES: ContactLanguage[] = ['RU', 'EN', 'UZ'];
 const MODES: { value: string; label: string }[] = [
   { value: 'auto', label: 'Авто' },
   { value: 'rail', label: 'Ж/Д' },
@@ -61,6 +63,27 @@ function ChannelSelect({ value, onChange }: { value: ContactChannel; onChange: (
           )}
         >
           {CONTACT_CHANNEL_LABELS[c]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Segmented language selector — the language outbound tender messages go out in. */
+function LangSelect({ value, onChange }: { value: ContactLanguage; onChange: (l: ContactLanguage) => void }) {
+  return (
+    <div className="flex gap-2">
+      {LANGUAGES.map((l) => (
+        <button
+          key={l}
+          type="button"
+          onClick={() => onChange(l)}
+          className={cn(
+            'flex-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all',
+            value === l ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted/50',
+          )}
+        >
+          {CONTACT_LANGUAGE_LABELS[l]}
         </button>
       ))}
     </div>
@@ -142,9 +165,14 @@ export default function ContractorsPage() {
                     <div className="font-medium text-sm truncate">{c.name}</div>
                     <div className="text-xs text-muted-foreground">{c.country ?? '—'}</div>
                   </div>
-                  <span className="shrink-0 px-1.5 py-0.5 rounded bg-muted text-xs text-muted-foreground">
-                    {CONTACT_CHANNEL_LABELS[c.contactChannel] ?? c.contactChannel}
-                  </span>
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-xs text-muted-foreground">
+                      {CONTACT_CHANNEL_LABELS[c.contactChannel] ?? c.contactChannel}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-xs text-primary font-medium">
+                      {c.preferredLanguage}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
                   {/* Направления показываем всегда: пустые сразу видно — такие не подберутся автоматически */}
@@ -201,7 +229,7 @@ function CreateSupplierPanel({
   onClose: () => void;
   onCreated: (s: SupplierRow) => void;
 }) {
-  const [form, setForm] = useState<CreateSupplierInput>({ name: '', contactChannel: 'telegram' });
+  const [form, setForm] = useState<CreateSupplierInput>({ name: '', contactChannel: 'telegram', preferredLanguage: 'RU' });
   const [directions, setDirections] = useState('');
   const [modes, setModes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -218,6 +246,7 @@ function CreateSupplierPanel({
       const payload: CreateSupplierInput = {
         name: form.name.trim(),
         contactChannel: form.contactChannel,
+        preferredLanguage: form.preferredLanguage,
         directions: parseList(directions),
         transportModes: modes,
       };
@@ -249,6 +278,12 @@ function CreateSupplierPanel({
             <Label>Канал связи</Label>
             <ChannelSelect value={form.contactChannel ?? 'telegram'} onChange={(c) => set({ contactChannel: c })} />
             <p className="text-xs text-muted-foreground">По этому каналу пойдёт рассылка тендеров. Для «Почта» заполните email, для Telegram — @username.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Язык общения</Label>
+            <LangSelect value={form.preferredLanguage ?? 'RU'} onChange={(l) => set({ preferredLanguage: l })} />
+            <p className="text-xs text-muted-foreground">Запросы, напоминания и уведомления будут уходить на этом языке.</p>
           </div>
 
           <div className="space-y-1.5">
@@ -325,6 +360,7 @@ function BindPanel({
   const [username, setUsername] = useState(supplier.telegramUsername ?? '');
   const [email, setEmail] = useState(supplier.email ?? '');
   const [channel, setChannel] = useState<ContactChannel>(supplier.contactChannel ?? 'telegram');
+  const [language, setLanguage] = useState<ContactLanguage>(supplier.preferredLanguage ?? 'RU');
   const [directions, setDirections] = useState((supplier.directions ?? []).join(', '));
   const [modes, setModes] = useState<string[]>(supplier.transportModes ?? []);
   const [accountId, setAccountId] = useState(supplier.telegramAccountId ?? '');
@@ -340,6 +376,7 @@ function BindPanel({
         telegramUsername: username.trim() || undefined,
         email: email.trim() || undefined,
         contactChannel: channel,
+        preferredLanguage: language,
         directions: dirs,
         transportModes: modes,
         telegramAccountId: accountId || undefined,
@@ -349,6 +386,7 @@ function BindPanel({
         telegramUsername: username.trim().replace('@', '') || null,
         email: email.trim() || null,
         contactChannel: channel,
+        preferredLanguage: language,
         directions: dirs,
         transportModes: modes,
         telegramAccountId: accountId || null,
@@ -384,6 +422,12 @@ function BindPanel({
           <div className="space-y-1.5">
             <Label>Канал связи</Label>
             <ChannelSelect value={channel} onChange={setChannel} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Язык общения</Label>
+            <LangSelect value={language} onChange={setLanguage} />
+            <p className="text-xs text-muted-foreground">Запросы и уведомления уходят на этом языке.</p>
           </div>
 
           <div className="space-y-1.5">
