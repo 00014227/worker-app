@@ -462,6 +462,23 @@ export interface TenderInviteRow {
   telegramAccount: { id: string; label: string; phone: string } | null;
 }
 
+export type PriceBasis = "with_vat" | "without_vat" | "cash" | "other";
+
+export const PRICE_BASIS_LABELS: Record<PriceBasis, string> = {
+  with_vat: "с НДС",
+  without_vat: "без НДС",
+  cash: "наличными",
+  other: "иное",
+};
+
+/** Один ценовой вариант из ответа: «1600 с НДС», «1450 налом». */
+export interface QuoteOption {
+  amount: number;
+  currency: string | null;
+  basis: PriceBasis | null;
+  label: string | null;
+}
+
 export interface TenderReplyRow {
   id: string;
   supplierId: string;
@@ -470,6 +487,10 @@ export interface TenderReplyRow {
   accepted: boolean | null;
   amount: string | null;
   currency: string | null;
+  /** База основной цены — цены на разной базе напрямую несравнимы. */
+  priceBasis: PriceBasis | null;
+  /** Все названные варианты. Больше одного = неоднозначность, решает логист. */
+  priceOptions: QuoteOption[] | null;
   transitDays: number | null;
   conditions: string | null;
   aiConfidence: string | null;

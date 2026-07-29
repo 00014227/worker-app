@@ -1,12 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
   ArrowLeft, Trophy, CheckCircle2, Send, Loader2, MapPin, Calendar,
-  MessageSquare, AlertTriangle, Clock, Sparkles, X, Mail,
+  MessageSquare, AlertTriangle, Clock, Sparkles, X, Mail, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import {
-  tenderApi, TenderDetail, TenderStatus, DeliveryStatus,
-  ConversationMessage, TENDER_MODE_LABELS,
+  tenderApi, TenderDetail, TenderStatus, DeliveryStatus, TenderReplyRow,
+  ConversationMessage, TENDER_MODE_LABELS, PRICE_BASIS_LABELS,
 } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -29,9 +29,32 @@ const CHANNEL_LABEL: Record<string, string> = {
   telegram: 'TG', email: 'Почта', both: 'TG+Почта',
 };
 
-function money(amount: string | null, currency: string | null) {
+function money(amount: string | number | null, currency: string | null) {
   if (amount == null) return '—';
   return `${Number(amount).toLocaleString('ru-RU')} ${currency ?? ''}`.trim();
+}
+
+/**
+ * Курсы к USD — те же значения, что на бэке (FX_RATES_USD). Нужны только чтобы
+ * показать порядок величины в валюте тендера, счета по ним не выставляют.
+ */
+const RATES_TO_USD: Record<string, number> = {
+  USD: 1, EUR: 1.08, RUB: 0.011, UZS: 0.000079, KZT: 0.0019, CNY: 0.14,
+};
+
+/** Цена в валюте тендера. null = курс неизвестен → сравнивать напрямую нельзя. */
+function comparable(amount: string | null, from: string | null, to: string | null): number | null {
+  if (amount == null || !from || !to) return null;
+  if (from === to) return Number(amount);
+  const a = RATES_TO_USD[from];
+  const b = RATES_TO_USD[to];
+  if (!a || !b) return null;
+  return (Number(amount) * a) / b;
+}
+
+/** Ставка неоднозначна: подрядчик назвал несколько цен при разных условиях. */
+function isAmbiguous(r: TenderReplyRow): boolean {
+  return (r.priceOptions?.length ?? 0) > 1;
 }
 
 export default function RateRequestDetailPage() {
@@ -43,6 +66,8 @@ export default function RateRequestDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [selectingId, setSelectingId] = useState<string | null>(null);
+  /** Ответ, у которого раскрыт исходный текст сообщения. */
+  const [openRawId, setOpenRawId] = useState<string | null>(null);
   const [showMessages, setShowMessages] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
@@ -225,6 +250,7 @@ export default function RateRequestDetailPage() {
                     <th className="px-4 py-2 text-left font-medium">#</th>
                     <th className="px-4 py-2 text-left font-medium">Подрядчик</th>
                     <th className="px-4 py-2 text-right font-medium">Цена</th>
+                    <th className="px-4 py-2 text-right font-medium">Сравнимая</th>
                     <th className="px-4 py-2 text-right font-medium">Срок</th>
                     <th className="px-4 py-2 text-left font-medium hidden md:table-cell">Условия</th>
                     <th className="px-4 py-2 text-center font-medium">ИИ</th>
@@ -234,43 +260,99 @@ export default function RateRequestDetailPage() {
                 <tbody className="divide-y">
                   {replies.map((r) => {
                     const recommended = tender.recommendedSupplierId === r.supplierId;
+                    const ambiguous = isAmbiguous(r);
+                    const open = openRawId === r.id;
+                    const conv = comparable(r.amount, r.currency, tender.currency);
+                    const crossCurrency = !!(r.currency && tender.currency && r.currency !== tender.currency);
                     return (
-                      <tr key={r.id} className={cn(recommended && !decided && 'bg-violet-50/50', r.isSelected && 'bg-green-50/60')}>
-                        <td className="px-4 py-3 text-muted-foreground">{r.rank ?? '—'}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium">{r.supplier.name}</span>
-                            {recommended && !decided && <Sparkles size={12} className="text-violet-500" />}
-                            {r.isSelected && <Trophy size={12} className="text-green-600" />}
-                            {r.isLate && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                                после дедлайна
-                              </span>
-                            )}
-                          </div>
-                          {r.accepted === false && <span className="text-xs text-red-500">отказ</span>}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold whitespace-nowrap">{money(r.amount, r.currency)}</td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">{r.transitDays != null ? `${r.transitDays} дн` : '—'}</td>
-                        <td className="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground max-w-[220px] truncate">{r.conditions ?? '—'}</td>
-                        <td className="px-4 py-3 text-center text-xs text-muted-foreground">
-                          {r.aiConfidence != null ? `${Math.round(Number(r.aiConfidence) * 100)}%` : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {r.isSelected ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium"><CheckCircle2 size={13} /> Выбран</span>
-                          ) : !decided ? (
+                      <Fragment key={r.id}>
+                        <tr className={cn(recommended && !decided && 'bg-violet-50/50', r.isSelected && 'bg-green-50/60')}>
+                          <td className="px-4 py-3 text-muted-foreground">{r.rank ?? '—'}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium">{r.supplier.name}</span>
+                              {recommended && !decided && <Sparkles size={12} className="text-violet-500" />}
+                              {r.isSelected && <Trophy size={12} className="text-green-600" />}
+                              {r.isLate && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                  после дедлайна
+                                </span>
+                              )}
+                            </div>
+                            {r.accepted === false && <span className="text-xs text-red-500">отказ</span>}
+                            {/* Источник истины — исходное сообщение подрядчика. */}
                             <button
-                              onClick={() => select(r.supplierId)}
-                              disabled={selectingId != null}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-40 transition-colors"
+                              onClick={() => setOpenRawId(open ? null : r.id)}
+                              className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
                             >
-                              {selectingId === r.supplierId ? <Loader2 size={12} className="animate-spin" /> : <Trophy size={12} />}
-                              Выбрать
+                              {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />} исходное сообщение
                             </button>
-                          ) : null}
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <div className="font-semibold">{money(r.amount, r.currency)}</div>
+                            {r.priceBasis && (
+                              <div className="text-[11px] text-muted-foreground">{PRICE_BASIS_LABELS[r.priceBasis]}</div>
+                            )}
+                            {/* Несколько цен при разных условиях — выбор за логистом, не за ИИ. */}
+                            {ambiguous && (
+                              <div className="mt-1 text-[11px] text-amber-700 text-left inline-block">
+                                <span className="inline-flex items-center gap-1 font-medium">
+                                  <AlertTriangle size={11} /> вариантов: {r.priceOptions!.length}
+                                </span>
+                                <ul className="mt-0.5 space-y-0.5">
+                                  {r.priceOptions!.map((o, i) => (
+                                    <li key={i}>
+                                      {money(o.amount, o.currency ?? r.currency)}
+                                      {o.basis ? ` — ${PRICE_BASIS_LABELS[o.basis]}` : o.label ? ` — ${o.label}` : ''}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap text-xs">
+                            {!crossCurrency ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : conv != null ? (
+                              <span title="Приведено к валюте тендера по справочному курсу">
+                                ≈ {money(Math.round(conv), tender.currency)}
+                              </span>
+                            ) : (
+                              <span className="text-amber-700">курс неизвестен</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">{r.transitDays != null ? `${r.transitDays} дн` : '—'}</td>
+                          <td className="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground max-w-[220px] truncate">{r.conditions ?? '—'}</td>
+                          <td className="px-4 py-3 text-center text-xs text-muted-foreground">
+                            {r.aiConfidence != null ? `${Math.round(Number(r.aiConfidence) * 100)}%` : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {r.isSelected ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium"><CheckCircle2 size={13} /> Выбран</span>
+                            ) : !decided ? (
+                              <button
+                                onClick={() => select(r.supplierId)}
+                                disabled={selectingId != null}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-40 transition-colors"
+                              >
+                                {selectingId === r.supplierId ? <Loader2 size={12} className="animate-spin" /> : <Trophy size={12} />}
+                                Выбрать
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                        {open && (
+                          <tr className="bg-muted/20">
+                            <td />
+                            <td colSpan={7} className="px-4 py-3">
+                              <div className="text-[11px] text-muted-foreground mb-1">
+                                Как написал подрядчик · {new Date(r.receivedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' })}
+                              </div>
+                              <pre className="whitespace-pre-wrap break-words text-xs bg-background border rounded-lg p-3">{r.rawText}</pre>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
