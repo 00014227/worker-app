@@ -3,20 +3,30 @@ import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
   ArrowLeft, Trophy, CheckCircle2, Send, Loader2, MapPin, Calendar,
   MessageSquare, AlertTriangle, Clock, Sparkles, X, Mail, ChevronDown, ChevronRight,
+  TrendingDown,
 } from 'lucide-react';
 import {
   tenderApi, TenderDetail, TenderStatus, DeliveryStatus, TenderReplyRow,
   ConversationMessage, TENDER_MODE_LABELS, PRICE_BASIS_LABELS,
+  AwardStatus, AWARD_STATUS_LABELS, DECLINE_REASON_LABELS,
 } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
-  draft:      { label: 'Черновик',    cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-  sent:       { label: 'Отправлен',   cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  collecting: { label: 'Сбор ставок', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  decided:    { label: 'Выбран',      cls: 'bg-green-50 text-green-700 border-green-200' },
-  cancelled:  { label: 'Отменён',     cls: 'bg-red-50 text-red-700 border-red-200' },
+  draft:         { label: 'Черновик',            cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+  sent:          { label: 'Отправлен',           cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  collecting:    { label: 'Сбор ставок',         cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  award_pending: { label: 'Ждём подтверждения',  cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  decided:       { label: 'Выбран',              cls: 'bg-green-50 text-green-700 border-green-200' },
+  cancelled:     { label: 'Отменён',             cls: 'bg-red-50 text-red-700 border-red-200' },
+};
+
+const AWARD_BADGE: Record<AwardStatus, string> = {
+  pending:   'bg-violet-50 text-violet-700 border-violet-200',
+  confirmed: 'bg-green-50 text-green-700 border-green-200',
+  refused:   'bg-red-50 text-red-700 border-red-200',
+  expired:   'bg-slate-100 text-slate-600 border-slate-200',
 };
 
 const DELIVERY: Record<DeliveryStatus, { label: string; cls: string }> = {
@@ -68,6 +78,7 @@ export default function RateRequestDetailPage() {
   const [selectingId, setSelectingId] = useState<string | null>(null);
   /** Ответ, у которого раскрыт исходный текст сообщения. */
   const [openRawId, setOpenRawId] = useState<string | null>(null);
+  const [improving, setImproving] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
@@ -114,6 +125,19 @@ export default function RateRequestDetailPage() {
     setMessages(await tenderApi.tenders.messages(id).catch(() => []));
   };
 
+  const requestImprovement = async () => {
+    if (!id) return;
+    setImproving(true);
+    setError(null);
+    try {
+      setTender(await tenderApi.tenders.requestImprovement(id));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setImproving(false);
+    }
+  };
+
   if (loading) {
     return <div className="py-16 text-center text-sm text-muted-foreground"><Loader2 className="animate-spin mx-auto mb-2" /> Загрузка…</div>;
   }
@@ -125,6 +149,12 @@ export default function RateRequestDetailPage() {
   const pendingCount = tender.invites.filter((i) => i.deliveryStatus !== 'sent').length;
   const canSend = tender.status !== 'decided' && tender.status !== 'cancelled' && pendingCount > 0;
   const decided = tender.status === 'decided';
+  const awardPending = tender.status === 'award_pending';
+  // Торг возможен один раз и только пока есть с чем работать.
+  const pricedCount = tender.replies.filter((r) => r.accepted !== false && r.amount != null).length;
+  const canImprove =
+    !decided && !awardPending && tender.status !== 'cancelled' &&
+    !tender.improvementRequestedAt && pricedCount > 1;
   // Replies ordered by rank (nulls last).
   const replies = [...tender.replies].sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99));
 
@@ -232,12 +262,36 @@ export default function RateRequestDetailPage() {
       {/* Replies / ranking */}
       <Card>
         <CardHeader className="border-b pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
+          <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
             Ответы и ставки ({replies.length})
-            {tender.recommendedSupplierId && (
+            {tender.recommendedSupplierId && !awardPending && !decided && (
               <span className="flex items-center gap-1 text-xs font-normal text-violet-600"><Sparkles size={12} /> ИИ-рекомендация выделена</span>
             )}
+            <span className="ml-auto flex items-center gap-2">
+              {tender.improvementRequestedAt && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  Торг проведён{tender.improvementDeadline ? ` · до ${new Date(tender.improvementDeadline).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+                </span>
+              )}
+              {canImprove && (
+                <button
+                  onClick={requestImprovement}
+                  disabled={improving}
+                  title="Тем, кто дороже лидера, уйдёт «готовы улучшить?». Лидера не трогаем. Раунд один."
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-primary hover:text-primary-foreground hover:border-primary disabled:opacity-40 transition-colors"
+                >
+                  {improving ? <Loader2 size={12} className="animate-spin" /> : <TrendingDown size={12} />}
+                  Запросить лучшую цену
+                </button>
+              )}
+            </span>
           </CardTitle>
+          {awardPending && (
+            <p className="text-xs text-violet-700 mt-1.5">
+              Предложение отправлено победителю. Остальным ничего не сообщаем, пока он не подтвердит
+              {tender.awardDeadline ? ` — ждём до ${new Date(tender.awardDeadline).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="pt-0 px-0">
           {replies.length === 0 ? (
@@ -279,7 +333,19 @@ export default function RateRequestDetailPage() {
                                 </span>
                               )}
                             </div>
-                            {r.accepted === false && <span className="text-xs text-red-500">отказ</span>}
+                            <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                              {r.accepted === false && <span className="text-xs text-red-500">отказ</span>}
+                              {r.declineReason && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-50 text-red-700 border border-red-200">
+                                  {DECLINE_REASON_LABELS[r.declineReason]}
+                                </span>
+                              )}
+                              {r.awardStatus && (
+                                <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-medium border', AWARD_BADGE[r.awardStatus])}>
+                                  {AWARD_STATUS_LABELS[r.awardStatus]}
+                                </span>
+                              )}
+                            </div>
                             {/* Источник истины — исходное сообщение подрядчика. */}
                             <button
                               onClick={() => setOpenRawId(open ? null : r.id)}
@@ -329,7 +395,7 @@ export default function RateRequestDetailPage() {
                           <td className="px-4 py-3 text-right">
                             {r.isSelected ? (
                               <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium"><CheckCircle2 size={13} /> Выбран</span>
-                            ) : !decided ? (
+                            ) : !decided && !awardPending ? (
                               <button
                                 onClick={() => select(r.supplierId)}
                                 disabled={selectingId != null}

@@ -397,8 +397,34 @@ export type TenderStatus =
   | "draft"
   | "sent"
   | "collecting"
+  /** Победителю предложили перевозку — ждём подтверждения до дедлайна. */
+  | "award_pending"
   | "decided"
   | "cancelled";
+
+/** Ход подтверждения после выбора подрядчика. */
+export type AwardStatus = "pending" | "confirmed" | "refused" | "expired";
+export const AWARD_STATUS_LABELS: Record<AwardStatus, string> = {
+  pending: "ждём подтверждения",
+  confirmed: "подтвердил",
+  refused: "отказался",
+  expired: "не ответил",
+};
+
+/** Причина отказа, распознанная из свободного текста. */
+export type DeclineReason =
+  | "no_vehicle"
+  | "route_not_served"
+  | "date_not_suitable"
+  | "price_too_low"
+  | "other";
+export const DECLINE_REASON_LABELS: Record<DeclineReason, string> = {
+  no_vehicle: "нет машины",
+  route_not_served: "не возят это направление",
+  date_not_suitable: "не подходит дата",
+  price_too_low: "цена не интересна",
+  other: "другое",
+};
 export type DeliveryStatus = "pending" | "sent" | "error";
 
 export type ContactChannel = "telegram" | "email" | "both";
@@ -498,6 +524,9 @@ export interface TenderReplyRow {
   isSelected: boolean;
   /** Ставка пришла после дедлайна подачи. */
   isLate: boolean;
+  /** Пусто = подрядчику ещё не предлагали перевозку. */
+  awardStatus: AwardStatus | null;
+  declineReason: DeclineReason | null;
   supplier: { id: string; name: string };
 }
 
@@ -531,6 +560,11 @@ export interface TenderDetail {
   currency: string | null;
   status: TenderStatus;
   recommendedSupplierId: string | null;
+  /** До какого момента ждём подтверждения от выбранного подрядчика. */
+  awardDeadline: string | null;
+  /** Непусто = раунд улучшения уже проводился (он один). */
+  improvementRequestedAt: string | null;
+  improvementDeadline: string | null;
   createdAt: string;
   updatedAt: string;
   invites: TenderInviteRow[];
@@ -617,7 +651,8 @@ export interface CreateTenderInput {
   currency?: string;
   orderId?: string;
   supplierIds?: string[];
-  selfCost?: string;
+  /** Целевая ставка логиста в USD. Число — бэк валидирует как @IsNumber. */
+  selfCost?: number;
 }
 
 export interface ConversationMessage {
@@ -700,6 +735,13 @@ export const tenderApi = {
       return req<TenderDetail>(`/worker/tenders/${id}/select`, {
         method: "POST",
         body: JSON.stringify({ supplierId }),
+      });
+    },
+    /** Один раунд торга: тем, кто дороже лидера, уходит «готовы улучшить?». */
+    requestImprovement(id: string, deadline?: string): Promise<TenderDetail> {
+      return req<TenderDetail>(`/worker/tenders/${id}/request-improvement`, {
+        method: "POST",
+        body: JSON.stringify(deadline ? { deadline } : {}),
       });
     },
     messages(id: string): Promise<ConversationMessage[]> {

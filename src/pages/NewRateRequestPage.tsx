@@ -37,11 +37,12 @@ const DRAFT_KEY = "transasia.tender.draft";
 
 type FormState = Omit<
   CreateTenderInput,
-  "weightKg" | "vehicleCount" | "cargoValue" | "supplierIds"
+  "weightKg" | "vehicleCount" | "cargoValue" | "selfCost" | "supplierIds"
 > & {
   weightKg: string;
   vehicleCount: string;
   cargoValue: string;
+  selfCost: string;
   /** Значение <input type="datetime-local"> — местное время без зоны. */
   bidDeadline: string;
 };
@@ -283,6 +284,8 @@ export default function NewRateRequestPage() {
         weightKg: Number(form.weightKg),
         vehicleCount: Number(form.vehicleCount),
         cargoValue: form.cargoValue ? Number(form.cargoValue) : undefined,
+        // Пустая строка из поля «Ставка» не пройдёт валидацию числа на бэке.
+        selfCost: form.selfCost ? Number(form.selfCost) : undefined,
         // datetime-local has no timezone: parse it as the manager's local time and
         // send a real instant, otherwise the server (UTC) would shift it by hours.
         bidDeadline: form.bidDeadline

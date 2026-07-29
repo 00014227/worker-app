@@ -6,11 +6,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
-  draft:      { label: 'Черновик',    cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-  sent:       { label: 'Отправлен',   cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  collecting: { label: 'Сбор ставок', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  decided:    { label: 'Выбран',      cls: 'bg-green-50 text-green-700 border-green-200' },
-  cancelled:  { label: 'Отменён',     cls: 'bg-red-50 text-red-700 border-red-200' },
+  draft:         { label: 'Черновик',           cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+  sent:          { label: 'Отправлен',          cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  collecting:    { label: 'Сбор ставок',        cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  award_pending: { label: 'Ждём подтверждения', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  decided:       { label: 'Выбран',             cls: 'bg-green-50 text-green-700 border-green-200' },
+  cancelled:     { label: 'Отменён',            cls: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 export default function RateRequestsPage() {
