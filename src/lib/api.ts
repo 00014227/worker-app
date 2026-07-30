@@ -458,6 +458,8 @@ export interface SupplierRow {
   avgResponseTimeSec: number | null;
   responseRate: number | null;
   lastReplyAt: string | null;
+  /** Рейтинг надёжности; null у новых подрядчиков без истории. */
+  scorecard: SupplierScorecard | null;
 }
 
 export interface CreateSupplierInput {
@@ -569,6 +571,43 @@ export interface TenderDetail {
   updatedAt: string;
   invites: TenderInviteRow[];
   replies: TenderReplyRow[];
+}
+
+/** Откуда взяты цифры бенчмарка — данных по маршрутам мало, поэтому показываем. */
+export type BenchmarkLevel = "route" | "country" | "global";
+
+export interface RouteBenchmark {
+  level: BenchmarkLevel;
+  scope: string;
+  currency: string;
+  /** Подтверждённые закупки — то, что реально заплатили. */
+  purchases: number;
+  bids: number;
+  /** Медиана закупочных цен (не среднее: один выброс исказил бы среднее). */
+  medianPurchase: number | null;
+  lastPurchase: number | null;
+  lastPurchaseAt: string | null;
+  minBid: number | null;
+  maxBid: number | null;
+  /** false = выборка слишком мала, чтобы на неё опираться. */
+  reliable: boolean;
+  days: number;
+}
+
+/** Рейтинг надёжности подрядчика. */
+export interface SupplierScorecard {
+  supplierId: string;
+  invites: number;
+  replies: number;
+  /** Выбран и подтвердил — реально взял перевозку. */
+  wins: number;
+  /** Отказался или промолчал после выбора. */
+  breaks: number;
+  responseRate: number | null;
+  avgResponseMin: number | null;
+  /** null = истории недостаточно для честной оценки (не «ноль»). */
+  reliability: number | null;
+  note: string;
 }
 
 export interface TenderListRow {
@@ -746,6 +785,18 @@ export const tenderApi = {
     },
     messages(id: string): Promise<ConversationMessage[]> {
       return req<ConversationMessage[]>(`/worker/tenders/${id}/messages`);
+    },
+    /** Сколько обычно стоит этот маршрут (медиана закупок + диапазон ставок). */
+    benchmark(p: {
+      origin?: string | null;
+      destination?: string | null;
+      originCountry?: string | null;
+      destinationCountry?: string | null;
+      currency?: string | null;
+    }): Promise<RouteBenchmark> {
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(p)) if (v) q.set(k, String(v));
+      return req<RouteBenchmark>(`/worker/tenders/benchmark?${q}`);
     },
   },
   telegramAccounts: {

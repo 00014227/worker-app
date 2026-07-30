@@ -3,12 +3,12 @@ import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
   ArrowLeft, Trophy, CheckCircle2, Send, Loader2, MapPin, Calendar,
   MessageSquare, AlertTriangle, Clock, Sparkles, X, Mail, ChevronDown, ChevronRight,
-  TrendingDown,
+  TrendingDown, BarChart3,
 } from 'lucide-react';
 import {
   tenderApi, TenderDetail, TenderStatus, DeliveryStatus, TenderReplyRow,
   ConversationMessage, TENDER_MODE_LABELS, PRICE_BASIS_LABELS,
-  AwardStatus, AWARD_STATUS_LABELS, DECLINE_REASON_LABELS,
+  AwardStatus, AWARD_STATUS_LABELS, DECLINE_REASON_LABELS, RouteBenchmark,
 } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -67,6 +67,26 @@ function isAmbiguous(r: TenderReplyRow): boolean {
   return (r.priceOptions?.length ?? 0) > 1;
 }
 
+/**
+ * Медиана по ВСЕМ маршрутам ориентиром быть не может (в одной выборке и 200, и
+ * 21000), поэтому глобальный уровень показываем как «нет истории», а не цифрой.
+ */
+function benchmarkUsable(b: RouteBenchmark | null): b is RouteBenchmark {
+  return !!b && b.level !== 'global' && b.medianPurchase != null;
+}
+
+/** Отклонение от ориентира в процентах; null — сравнивать не с чем. */
+function deviationPct(
+  r: TenderReplyRow,
+  tenderCurrency: string | null,
+  b: RouteBenchmark | null,
+): number | null {
+  if (!benchmarkUsable(b) || r.amount == null) return null;
+  const price = comparable(r.amount, r.currency, b.currency ?? tenderCurrency);
+  if (price == null || !b.medianPurchase) return null;
+  return ((price - b.medianPurchase) / b.medianPurchase) * 100;
+}
+
 export default function RateRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -79,6 +99,7 @@ export default function RateRequestDetailPage() {
   /** Ответ, у которого раскрыт исходный текст сообщения. */
   const [openRawId, setOpenRawId] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
+  const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
   const [showMessages, setShowMessages] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
@@ -92,6 +113,22 @@ export default function RateRequestDetailPage() {
   }, [id]);
 
   useEffect(load, [load]);
+
+  // Рыночный ориентир по маршруту — грузим отдельно, чтобы пустая история
+  // аналитики не мешала показать сам тендер.
+  useEffect(() => {
+    if (!tender) return;
+    tenderApi.tenders
+      .benchmark({
+        origin: tender.origin,
+        destination: tender.destination,
+        originCountry: tender.originCountry,
+        destinationCountry: tender.destinationCountry,
+        currency: tender.currency,
+      })
+      .then(setBenchmark)
+      .catch(() => setBenchmark(null));
+  }, [tender?.id, tender?.origin, tender?.destination]);
 
   const send = async () => {
     if (!id) return;
@@ -292,6 +329,32 @@ export default function RateRequestDetailPage() {
               {tender.awardDeadline ? ` — ждём до ${new Date(tender.awardDeadline).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}.
             </p>
           )}
+          {/* Рыночный ориентир: всегда с размером выборки, чтобы не выглядеть точнее, чем есть. */}
+          {benchmark && (
+            <div className="mt-2 flex items-start gap-1.5 text-xs">
+              <BarChart3 size={12} className="mt-0.5 shrink-0 text-muted-foreground" />
+              {benchmarkUsable(benchmark) ? (
+                <p className="text-muted-foreground">
+                  Ориентир{benchmark.level === 'country' ? ` по направлению ${benchmark.scope}` : ''}:
+                  {' '}медиана закупок <span className="font-medium text-foreground">{money(benchmark.medianPurchase, benchmark.currency)}</span>
+                  {benchmark.lastPurchase != null && <> · последняя {money(benchmark.lastPurchase, benchmark.currency)}</>}
+                  {benchmark.minBid != null && benchmark.maxBid != null && (
+                    <> · ставки {money(benchmark.minBid, null)}–{money(benchmark.maxBid, benchmark.currency)}</>
+                  )}
+                  {' · '}
+                  <span className={cn(!benchmark.reliable && 'text-amber-700')}>
+                    {benchmark.reliable
+                      ? `по ${benchmark.purchases} закупкам за ${benchmark.days} дн`
+                      : `мало данных: ${benchmark.purchases} закупк${benchmark.purchases === 1 ? 'а' : 'и'}`}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  По этому маршруту истории закупок пока нет — ориентир появится, когда наберутся сделки.
+                </p>
+              )}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="pt-0 px-0">
           {replies.length === 0 ? (
@@ -359,6 +422,20 @@ export default function RateRequestDetailPage() {
                             {r.priceBasis && (
                               <div className="text-[11px] text-muted-foreground">{PRICE_BASIS_LABELS[r.priceBasis]}</div>
                             )}
+                            {/* Отклонение от рыночного ориентира — только заметное (≥15%). */}
+                            {(() => {
+                              const dev = deviationPct(r, tender.currency, benchmark);
+                              if (dev == null || Math.abs(dev) < 15) return null;
+                              const above = dev > 0;
+                              return (
+                                <div
+                                  className={cn('text-[11px] font-medium', above ? 'text-amber-700' : 'text-green-700')}
+                                  title={`Медиана закупок по маршруту: ${money(benchmark?.medianPurchase ?? null, benchmark?.currency ?? null)}`}
+                                >
+                                  {above ? '↑ выше' : '↓ ниже'} ориентира на {Math.abs(Math.round(dev))}%
+                                </div>
+                              );
+                            })()}
                             {/* Несколько цен при разных условиях — выбор за логистом, не за ИИ. */}
                             {ambiguous && (
                               <div className="mt-1 text-[11px] text-amber-700 text-left inline-block">

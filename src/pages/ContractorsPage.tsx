@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail, Globe } from 'lucide-react';
+import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail, Globe, ShieldCheck } from 'lucide-react';
 import {
   tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput,
   ContactChannel, CONTACT_CHANNEL_LABELS,
@@ -88,6 +88,16 @@ function LangSelect({ value, onChange }: { value: ContactLanguage; onChange: (l:
       ))}
     </div>
   );
+}
+
+/**
+ * Цвет рейтинга надёжности. Отсутствие рейтинга (null) — это «не проверен», а не
+ * «плохой»: новичок без истории не должен выглядеть хуже, чем сорвавший рейс.
+ */
+function reliabilityCls(score: number): string {
+  if (score >= 80) return 'bg-green-50 text-green-700 border-green-200';
+  if (score >= 50) return 'bg-amber-50 text-amber-700 border-amber-200';
+  return 'bg-red-50 text-red-700 border-red-200';
 }
 
 function slaLabel(s: SupplierRow): string | null {
@@ -186,6 +196,29 @@ export default function ContractorsPage() {
                   {c.telegramUsername && <div className="flex items-center gap-1 text-blue-600"><Send size={11} /> @{c.telegramUsername.replace('@', '')}</div>}
                   {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}
                   {sla && <div className="flex items-center gap-1"><Zap size={11} /> {sla}</div>}
+                  {/* Надёжность: считается по выполненным подтверждениям, поэтому
+                      у новых подрядчиков честно пусто, а не ноль. */}
+                  {c.scorecard && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <ShieldCheck size={11} className="shrink-0" />
+                      {c.scorecard.reliability != null ? (
+                        <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-medium border', reliabilityCls(c.scorecard.reliability))}>
+                          надёжность {c.scorecard.reliability}
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground border">
+                          не проверен
+                        </span>
+                      )}
+                      <span className="truncate">{c.scorecard.note}</span>
+                    </div>
+                  )}
+                  {c.scorecard && (c.scorecard.invites > 0 || c.scorecard.wins > 0) && (
+                    <div className="text-[11px] text-muted-foreground/80">
+                      приглашений {c.scorecard.invites} · ответов {c.scorecard.replies} · перевозок {c.scorecard.wins}
+                      {c.scorecard.breaks > 0 && <span className="text-red-600"> · срывов {c.scorecard.breaks}</span>}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
