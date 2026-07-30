@@ -443,11 +443,50 @@ function BindPanel({
           <div>{supplier.country ?? '—'}</div>
         </div>
 
-        {(supplier.responseRate != null || supplier.avgResponseTimeSec != null) && (
-          <div className="mb-4 rounded-lg border p-3 text-xs space-y-1">
-            <div className="text-muted-foreground flex items-center gap-1"><Clock size={11} /> SLA</div>
-            {supplier.responseRate != null && <div>Отвечает: {Math.round(supplier.responseRate)}%</div>}
-            {supplier.avgResponseTimeSec != null && <div>Среднее время: ~{Math.round(supplier.avgResponseTimeSec / 60)} мин</div>}
+        {/* Надёжность и история — то, на что смотрят, решая, звать ли подрядчика. */}
+        {supplier.scorecard && (
+          <div className="mb-4 rounded-lg border p-3 text-xs space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground flex items-center gap-1"><ShieldCheck size={11} /> Надёжность</span>
+              {supplier.scorecard.reliability != null ? (
+                <span className={cn('px-1.5 py-0.5 rounded text-[11px] font-medium border', reliabilityCls(supplier.scorecard.reliability))}>
+                  {supplier.scorecard.reliability} / 100
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded text-[11px] bg-muted text-muted-foreground border">не проверен</span>
+              )}
+            </div>
+            <p className="text-muted-foreground">{supplier.scorecard.note}</p>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1 border-t">
+              <span className="text-muted-foreground">Приглашений</span>
+              <span className="text-right">{supplier.scorecard.invites}</span>
+              <span className="text-muted-foreground">Ответов</span>
+              <span className="text-right">{supplier.scorecard.replies}</span>
+              <span className="text-muted-foreground">Перевозок</span>
+              <span className="text-right">{supplier.scorecard.wins}</span>
+              {supplier.scorecard.breaks > 0 && (
+                <>
+                  <span className="text-red-600">Срывов после выбора</span>
+                  <span className="text-right text-red-600 font-medium">{supplier.scorecard.breaks}</span>
+                </>
+              )}
+              {supplier.scorecard.responseRate != null && (
+                <>
+                  <span className="text-muted-foreground">Отвечает</span>
+                  <span className="text-right">{Math.round(supplier.scorecard.responseRate)}%</span>
+                </>
+              )}
+              {supplier.scorecard.avgResponseMin != null && (
+                <>
+                  <span className="text-muted-foreground flex items-center gap-1"><Clock size={10} /> Среднее время</span>
+                  <span className="text-right">
+                    {supplier.scorecard.avgResponseMin < 60
+                      ? `~${supplier.scorecard.avgResponseMin} мин`
+                      : `~${Math.round(supplier.scorecard.avgResponseMin / 60)} ч`}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         )}
 

@@ -9,6 +9,7 @@ import {
   Loader2,
   RotateCcw,
   Wand2,
+  BarChart3,
 } from "lucide-react";
 import { matchSuppliers } from "../lib/contractor-matcher";
 import {
@@ -24,6 +25,7 @@ import {
   REF_VEHICLE_TYPE,
   LOADING_METHODS,
   INCOTERMS,
+  RouteBenchmark,
 } from "../lib/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -112,6 +114,8 @@ export default function NewRateRequestPage() {
   const [touched, setTouched] = useState(false);
   /** Шаг 1 — параметры запроса, шаг 2 — подбор подрядчиков. */
   const [step, setStep] = useState<"form" | "suppliers">("form");
+  /** Рыночный ориентир по маршруту — грузится при переходе на шаг подбора. */
+  const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
 
   useEffect(() => {
     tenderApi.suppliers
@@ -259,6 +263,18 @@ export default function NewRateRequestPage() {
     }
     setError(null);
     setStep("suppliers");
+    // Ориентир по маршруту нужен именно здесь — перед рассылкой. Ошибку глотаем:
+    // отсутствие истории не должно мешать выбрать подрядчиков.
+    tenderApi.tenders
+      .benchmark({
+        origin: form.origin,
+        destination: form.destination,
+        originCountry: form.originCountry,
+        destinationCountry: form.destinationCountry,
+        currency: form.currency,
+      })
+      .then(setBenchmark)
+      .catch(() => setBenchmark(null));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -796,6 +812,41 @@ export default function NewRateRequestPage() {
               >
                 <ArrowLeft size={13} /> Изменить параметры
               </button>
+              {/* Рыночный ориентир до рассылки: видно, адекватна ли будущая ставка. */}
+              {benchmark && (
+                <div className="w-full pt-2 border-t flex items-start gap-1.5 text-xs">
+                  <BarChart3 size={12} className="mt-0.5 shrink-0 text-muted-foreground" />
+                  {benchmark.level !== "global" && benchmark.medianPurchase != null ? (
+                    <p className="text-muted-foreground">
+                      Ориентир
+                      {benchmark.level === "country"
+                        ? ` по направлению ${benchmark.scope}`
+                        : " по маршруту"}
+                      :{" "}
+                      <span className="font-medium text-foreground">
+                        {Number(benchmark.medianPurchase).toLocaleString("ru-RU")}{" "}
+                        {benchmark.currency}
+                      </span>
+                      {benchmark.minBid != null && benchmark.maxBid != null && (
+                        <>
+                          {" "}· ставки {Number(benchmark.minBid).toLocaleString("ru-RU")}–
+                          {Number(benchmark.maxBid).toLocaleString("ru-RU")}
+                        </>
+                      )}
+                      {" · "}
+                      <span className={cn(!benchmark.reliable && "text-amber-700")}>
+                        {benchmark.reliable
+                          ? `по ${benchmark.purchases} закупкам`
+                          : `мало данных: ${benchmark.purchases} закупк${benchmark.purchases === 1 ? "а" : "и"}`}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      По этому маршруту истории закупок пока нет — сравнивать ставки будет не с чем.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -901,6 +952,24 @@ export default function NewRateRequestPage() {
                               ` · @${s.telegramUsername.replace("@", "")}`}
                             {s.email && ` · ${s.email}`}
                           </span>
+                          {/* Надёжность и история — чтобы звать не только «по направлению». */}
+                          {s.scorecard && (s.scorecard.reliability != null || s.scorecard.invites > 0) && (
+                            <span className="text-[11px] text-muted-foreground block truncate">
+                              {s.scorecard.reliability != null
+                                ? `надёжность ${s.scorecard.reliability}`
+                                : "не проверен"}
+                              {s.scorecard.wins > 0 && ` · перевозок ${s.scorecard.wins}`}
+                              {s.scorecard.breaks > 0 && (
+                                <span className="text-red-600"> · срывов {s.scorecard.breaks}</span>
+                              )}
+                              {s.scorecard.avgResponseMin != null &&
+                                ` · отвечает ~${
+                                  s.scorecard.avgResponseMin < 60
+                                    ? `${s.scorecard.avgResponseMin} мин`
+                                    : `${Math.round(s.scorecard.avgResponseMin / 60)} ч`
+                                }`}
+                            </span>
+                          )}
                         </span>
                         {/* Почему подрядчик подобран (или почему нет) */}
                         {matchType === "full" && (
