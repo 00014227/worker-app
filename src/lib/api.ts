@@ -610,6 +610,40 @@ export interface SupplierScorecard {
   note: string;
 }
 
+/** Сделка Битрикса на этапе «Расчет ставки» — источник автозаполнения. */
+export interface BitrixDealRow {
+  id: number;
+  title: string;
+  /** Сотрудник — ответственный по сделке; такие показываем первыми. */
+  mine: boolean;
+  origin: string | null;
+  destination: string | null;
+  createdAt: string | null;
+}
+
+/** Поля запроса, заполненные из сделки, + что осталось заполнить руками. */
+export interface DealPrefill {
+  dealId: number;
+  dealTitle: string;
+  origin?: string;
+  destination?: string;
+  originCountry?: string;
+  destinationCountry?: string;
+  cargo?: string;
+  cargoType?: string;
+  temperatureRegime?: string;
+  weightKg?: number;
+  hsCodes?: string;
+  vehicleCount?: number;
+  incoterms?: string;
+  cargoValue?: number;
+  currency?: string;
+  mode?: TenderMode;
+  loadingDate?: string;
+  comment?: string;
+  unmapped: string[];
+}
+
 export interface TenderListRow {
   id: string;
   origin: string;
@@ -692,6 +726,8 @@ export interface CreateTenderInput {
   supplierIds?: string[];
   /** Целевая ставка логиста в USD. Число — бэк валидирует как @IsNumber. */
   selfCost?: number;
+  /** Сделка Битрикса, из которой заполнен запрос. */
+  bitrixDealId?: number;
 }
 
 export interface ConversationMessage {
@@ -775,6 +811,14 @@ export const tenderApi = {
         method: "POST",
         body: JSON.stringify({ supplierId }),
       });
+    },
+    /** Сделки воронки офиса на этапе «Расчет ставки» (свои первыми). */
+    bitrixDeals(): Promise<BitrixDealRow[]> {
+      return req<BitrixDealRow[]>("/worker/tenders/bitrix-deals");
+    },
+    /** Поля запроса из выбранной сделки. */
+    dealPrefill(dealId: number): Promise<DealPrefill> {
+      return req<DealPrefill>(`/worker/tenders/bitrix-deals/${dealId}/prefill`);
     },
     /** Один раунд торга: тем, кто дороже лидера, уходит «готовы улучшить?». */
     requestImprovement(id: string, deadline?: string): Promise<TenderDetail> {

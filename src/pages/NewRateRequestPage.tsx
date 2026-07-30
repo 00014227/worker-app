@@ -10,6 +10,8 @@ import {
   RotateCcw,
   Wand2,
   BarChart3,
+  Download,
+  X,
 } from "lucide-react";
 import { matchSuppliers } from "../lib/contractor-matcher";
 import {
@@ -26,6 +28,8 @@ import {
   LOADING_METHODS,
   INCOTERMS,
   RouteBenchmark,
+  BitrixDealRow,
+  DealPrefill,
 } from "../lib/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,6 +120,14 @@ export default function NewRateRequestPage() {
   const [step, setStep] = useState<"form" | "suppliers">("form");
   /** Рыночный ориентир по маршруту — грузится при переходе на шаг подбора. */
   const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
+  /** Модалка выбора сделки Битрикса и её содержимое. */
+  const [dealsOpen, setDealsOpen] = useState(false);
+  const [deals, setDeals] = useState<BitrixDealRow[] | null>(null);
+  const [dealsError, setDealsError] = useState<string | null>(null);
+  const [dealSearch, setDealSearch] = useState("");
+  const [prefilling, setPrefilling] = useState<number | null>(null);
+  /** Из какой сделки заполнена форма (бейдж + список незаполненного). */
+  const [prefilledFrom, setPrefilledFrom] = useState<DealPrefill | null>(null);
 
   useEffect(() => {
     tenderApi.suppliers
@@ -239,6 +251,72 @@ export default function NewRateRequestPage() {
     });
   };
 
+  /** Свои сделки первыми, затем остальные; поиск по названию и номеру. */
+  const visibleDeals = useMemo(() => {
+    const list = deals ?? [];
+    const q = dealSearch.trim().toLowerCase();
+    const found = q
+      ? list.filter(
+          (d) => d.title.toLowerCase().includes(q) || String(d.id).includes(q),
+        )
+      : list;
+    return [...found].sort((a, b) => Number(b.mine) - Number(a.mine));
+  }, [deals, dealSearch]);
+
+  const openDeals = async () => {
+    setDealsOpen(true);
+    setDealsError(null);
+    setDeals(null);
+    try {
+      setDeals(await tenderApi.tenders.bitrixDeals());
+    } catch (e) {
+      setDealsError((e as Error).message);
+      setDeals([]);
+    }
+  };
+
+  /**
+   * Переносит поля сделки в форму. Заполняем только то, что пришло: пустые
+   * значения не затирают уже введённое руками, иначе выбор сделки мог бы стереть
+   * работу логиста.
+   */
+  const applyDeal = async (dealId: number) => {
+    setPrefilling(dealId);
+    setDealsError(null);
+    try {
+      const p = await tenderApi.tenders.dealPrefill(dealId);
+      setForm((f) => ({
+        ...f,
+        origin: p.origin ?? f.origin,
+        destination: p.destination ?? f.destination,
+        originCountry: p.originCountry ?? f.originCountry,
+        destinationCountry: p.destinationCountry ?? f.destinationCountry,
+        cargo: p.cargo ?? f.cargo,
+        cargoType: (p.cargoType as CargoType) ?? f.cargoType,
+        temperatureRegime: p.temperatureRegime ?? f.temperatureRegime,
+        // Температурный груз возит только реф — держим кузов согласованным.
+        vehicleType:
+          p.cargoType === "температурный" ? REF_VEHICLE_TYPE : f.vehicleType,
+        weightKg: p.weightKg != null ? String(p.weightKg) : f.weightKg,
+        hsCodes: p.hsCodes ?? f.hsCodes,
+        vehicleCount:
+          p.vehicleCount != null ? String(p.vehicleCount) : f.vehicleCount,
+        incoterms: p.incoterms ?? f.incoterms,
+        cargoValue: p.cargoValue != null ? String(p.cargoValue) : f.cargoValue,
+        currency: p.currency ?? f.currency,
+        mode: p.mode ?? f.mode,
+        loadingDate: p.loadingDate ?? f.loadingDate,
+        comment: p.comment ?? f.comment,
+      }));
+      setPrefilledFrom(p);
+      setDealsOpen(false);
+    } catch (e) {
+      setDealsError((e as Error).message);
+    } finally {
+      setPrefilling(null);
+    }
+  };
+
   const missing = useMemo(() => {
     const m: string[] = [];
     if (!form.origin.trim()) m.push("Город отправления");
@@ -302,6 +380,7 @@ export default function NewRateRequestPage() {
         cargoValue: form.cargoValue ? Number(form.cargoValue) : undefined,
         // Пустая строка из поля «Ставка» не пройдёт валидацию числа на бэке.
         selfCost: form.selfCost ? Number(form.selfCost) : undefined,
+        bitrixDealId: prefilledFrom?.dealId,
         // datetime-local has no timezone: parse it as the manager's local time and
         // send a real instant, otherwise the server (UTC) would shift it by hours.
         bidDeadline: form.bidDeadline
@@ -388,6 +467,38 @@ export default function NewRateRequestPage() {
 
       {step === "form" && (
         <>
+          {/* Автозаполнение из сделки: логисту не нужно перебивать руками то,
+              что уже заведено в Битриксе. */}
+          <Card size="sm">
+            <CardContent className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs text-muted-foreground">
+                {prefilledFrom ? (
+                  <>
+                    Заполнено из сделки{" "}
+                    <span className="font-medium text-foreground">
+                      #{prefilledFrom.dealId} {prefilledFrom.dealTitle}
+                    </span>
+                    {prefilledFrom.unmapped.length > 0 && (
+                      <span className="text-amber-700 block mt-0.5">
+                        Заполните вручную: {prefilledFrom.unmapped.join(", ")}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  "Можно заполнить поля из сделки Битрикса на этапе «Расчет ставки»"
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={openDeals}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
+              >
+                <Download size={13} />
+                {prefilledFrom ? "Выбрать другую сделку" : "Заполнить из сделки"}
+              </button>
+            </CardContent>
+          </Card>
+
           {/* ── Маршрут ── */}
           <Card>
             <CardHeader className="border-b pb-3">
@@ -1024,6 +1135,96 @@ export default function NewRateRequestPage() {
             </span>
           </div>
         </>
+      )}
+
+      {/* Выбор сделки Битрикса: свои сверху — логист обычно берёт собственную,
+          но должен видеть и остальные, чтобы подхватить работу коллеги. */}
+      {dealsOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/30 flex items-start justify-center pt-16 px-4"
+          onClick={() => setDealsOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[70vh] flex flex-col bg-background rounded-xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b">
+              <div>
+                <h2 className="font-semibold text-sm">Сделки на этапе «Расчет ставки»</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Из воронки вашего офиса
+                </p>
+              </div>
+              <button
+                onClick={() => setDealsOpen(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 border-b">
+              <div className="relative">
+                <Search
+                  size={13}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  className="pl-8 h-8 text-sm"
+                  placeholder="Поиск по названию или номеру…"
+                  value={dealSearch}
+                  onChange={(e) => setDealSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {dealsError && (
+                <div className="p-4 text-sm text-red-700 bg-red-50">{dealsError}</div>
+              )}
+              {deals == null && !dealsError && (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  <Loader2 className="animate-spin mx-auto mb-2" size={18} /> Загрузка сделок…
+                </div>
+              )}
+              {deals != null && visibleDeals.length === 0 && !dealsError && (
+                <div className="py-10 text-center text-sm text-muted-foreground px-4">
+                  Сделок на этапе «Расчет ставки» не найдено
+                </div>
+              )}
+              {visibleDeals.map((d, i) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => applyDeal(d.id)}
+                  disabled={prefilling != null}
+                  className={cn(
+                    "w-full text-left px-4 py-2.5 border-b last:border-b-0 hover:bg-muted/40 disabled:opacity-50 transition-colors",
+                    // Граница между «своими» и остальными — чтобы было видно, где чужие.
+                    i > 0 && visibleDeals[i - 1].mine && !d.mine && "border-t-2",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">{d.title}</span>
+                    {d.mine && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary">
+                        моя
+                      </span>
+                    )}
+                    {prefilling === d.id && (
+                      <Loader2 size={12} className="animate-spin shrink-0" />
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    #{d.id}
+                    {(d.origin || d.destination) &&
+                      ` · ${d.origin ?? "?"} → ${d.destination ?? "?"}`}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
