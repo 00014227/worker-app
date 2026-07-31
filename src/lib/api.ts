@@ -532,6 +532,15 @@ export interface TenderReplyRow {
   supplier: { id: string; name: string };
 }
 
+/** Одна присланная ставка — из них складывается динамика цены по подрядчику. */
+export interface TenderBidRow {
+  id: string;
+  supplierId: string;
+  amount: string | null;
+  currency: string | null;
+  receivedAt: string;
+}
+
 export interface TenderDetail {
   id: string;
   orderId: string | null;
@@ -571,6 +580,8 @@ export interface TenderDetail {
   updatedAt: string;
   invites: TenderInviteRow[];
   replies: TenderReplyRow[];
+  /** Все присланные ставки, старые первыми (история торга). */
+  bids: TenderBidRow[];
 }
 
 /** Откуда взяты цифры бенчмарка — данных по маршрутам мало, поэтому показываем. */

@@ -9,6 +9,7 @@ import {
   tenderApi, TenderDetail, TenderStatus, DeliveryStatus, TenderReplyRow,
   ConversationMessage, TENDER_MODE_LABELS, PRICE_BASIS_LABELS,
   AwardStatus, AWARD_STATUS_LABELS, DECLINE_REASON_LABELS, RouteBenchmark,
+  TenderBidRow,
 } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -60,6 +61,26 @@ function comparable(amount: string | null, from: string | null, to: string | nul
   const b = RATES_TO_USD[to];
   if (!a || !b) return null;
   return (Number(amount) * a) / b;
+}
+
+/**
+ * Цены, которые подрядчик присылал по этому тендеру, в порядке поступления.
+ * Подряд идущие одинаковые суммы схлопываем: подрядчик мог прислать несколько
+ * сообщений, не меняя цену, и «11000 → 11000 → 2500» читалось бы как торг.
+ */
+function priceTrail(
+  bids: TenderBidRow[],
+  supplierId: string,
+): Array<{ amount: number; currency: string | null }> {
+  const out: Array<{ amount: number; currency: string | null }> = [];
+  for (const b of bids) {
+    if (b.supplierId !== supplierId || b.amount == null) continue;
+    const amount = Number(b.amount);
+    if (!Number.isFinite(amount)) continue;
+    if (out.length > 0 && out[out.length - 1].amount === amount) continue;
+    out.push({ amount, currency: b.currency });
+  }
+  return out;
 }
 
 /** Ставка неоднозначна: подрядчик назвал несколько цен при разных условиях. */
@@ -419,6 +440,31 @@ export default function RateRequestDetailPage() {
                           </td>
                           <td className="px-4 py-3 text-right whitespace-nowrap">
                             <div className="font-semibold">{money(r.amount, r.currency)}</div>
+                            {/* Динамика торга: без неё прежняя цена исчезала при
+                                новой ставке и экономия была не видна. */}
+                            {(() => {
+                              const trail = priceTrail(tender.bids ?? [], r.supplierId);
+                              if (trail.length < 2) return null;
+                              const first = trail[0];
+                              const last = trail[trail.length - 1];
+                              const down = last.amount < first.amount;
+                              return (
+                                <div
+                                  className="text-[11px] text-muted-foreground"
+                                  title={`Все присланные ставки: ${trail
+                                    .map((t) => Number(t.amount).toLocaleString('ru-RU'))
+                                    .join(' → ')}`}
+                                >
+                                  было {Number(first.amount).toLocaleString('ru-RU')}
+                                  {trail.length > 2 && ` (ставок: ${trail.length})`}
+                                  {down && (
+                                    <span className="text-green-700 font-medium">
+                                      {' '}−{Math.round(((first.amount - last.amount) / first.amount) * 100)}%
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             {r.priceBasis && (
                               <div className="text-[11px] text-muted-foreground">{PRICE_BASIS_LABELS[r.priceBasis]}</div>
                             )}
