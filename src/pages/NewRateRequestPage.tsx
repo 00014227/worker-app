@@ -317,6 +317,17 @@ export default function NewRateRequestPage() {
     }
   };
 
+  /**
+   * Снимает все галочки, включая проставленные автоподбором. Снятых запоминаем
+   * в `dismissed` — иначе следующий пересчёт автоподбора вернёт их обратно, и
+   * кнопка выглядела бы неработающей. Вернуть можно ссылкой «Вернуть снятых».
+   */
+  const clearSelection = () => {
+    setDismissed((prev) => new Set([...prev, ...selected]));
+    setSelected(new Set());
+    autoPicked.current = new Set();
+  };
+
   const missing = useMemo(() => {
     const m: string[] = [];
     if (!form.origin.trim()) m.push("Город отправления");
@@ -963,12 +974,22 @@ export default function NewRateRequestPage() {
 
           <Card>
             <CardHeader className="border-b pb-3">
-              <CardTitle className="text-sm">
+              <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
                 Подрядчики{" "}
                 {selected.size > 0 && (
                   <span className="text-primary font-normal">
                     · выбрано {selected.size}
                   </span>
+                )}
+                {selected.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    title="Снять все галочки, в том числе проставленные автоподбором"
+                    className="ml-auto flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                  >
+                    <RotateCcw size={12} /> Снять все
+                  </button>
                 )}
               </CardTitle>
             </CardHeader>
