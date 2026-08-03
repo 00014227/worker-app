@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   UserCog, Search, RefreshCw, Loader2, Plus, KeyRound, ShieldCheck, Copy, Check, X, Mail, Phone,
+  Pencil, Save,
 } from 'lucide-react';
 import { employeeApi, EmployeeAdminRow, CreateEmployeeInput, DepartmentRow } from '../lib/api';
 import { getUser } from '../lib/auth';
@@ -193,7 +194,7 @@ export default function EmployeesPage() {
                         onClick={() => setSelected(e)}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
                       >
-                        <KeyRound size={12} /> {e.hasAccess ? 'Сбросить пароль' : 'Выдать доступ'}
+                        <Pencil size={12} /> Изменить
                       </button>
                     </td>
                   </tr>
@@ -212,7 +213,7 @@ export default function EmployeesPage() {
       </Card>
 
       {selected && (
-        <CredentialsPanel
+        <EmployeePanel
           employee={selected}
           departments={departments}
           isSelf={me?.id === selected.id}
@@ -238,8 +239,11 @@ export default function EmployeesPage() {
   );
 }
 
-/** Выдача доступа и сброс пароля. */
-function CredentialsPanel({
+/**
+ * Карточка сотрудника: данные и доступ. Разделены намеренно — правка контактов
+ * не должна требовать смены пароля, а смена пароля не должна трогать остальное.
+ */
+function EmployeePanel({
   employee, departments, isSelf, onClose, onSaved,
 }: {
   employee: EmployeeAdminRow;
@@ -248,14 +252,31 @@ function CredentialsPanel({
   onClose: () => void;
   onSaved: (row: EmployeeAdminRow) => void;
 }) {
+  // ── Данные сотрудника ──
+  const [name, setName] = useState(employee.name);
+  const [email, setEmail] = useState(employee.email ?? '');
+  const [phone, setPhone] = useState(employee.phone ?? '');
+  const [departmentId, setDepartmentId] = useState(employee.departmentId ?? '');
+  const [bitrixId, setBitrixId] = useState(employee.bitrix24Id ? String(employee.bitrix24Id) : '');
+  const [isAdmin, setIsAdmin] = useState(employee.isAdmin);
+
+  // ── Доступ ──
   const [login, setLogin] = useState(employee.login ?? suggestLogin(employee.name));
   const [password, setPassword] = useState(() => generatePassword());
-  const [isAdmin, setIsAdmin] = useState(employee.isAdmin);
-  const [bitrixId, setBitrixId] = useState(employee.bitrix24Id ? String(employee.bitrix24Id) : '');
-  const [departmentId, setDepartmentId] = useState(employee.departmentId ?? '');
-  const [saving, setSaving] = useState(false);
+
+  const [savingCard, setSavingCard] = useState(false);
+  const [savingAccess, setSavingAccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const cardChanged =
+    name !== employee.name ||
+    email !== (employee.email ?? '') ||
+    phone !== (employee.phone ?? '') ||
+    departmentId !== (employee.departmentId ?? '') ||
+    bitrixId !== (employee.bitrix24Id ? String(employee.bitrix24Id) : '') ||
+    isAdmin !== employee.isAdmin;
 
   const copy = async () => {
     await navigator.clipboard.writeText(`Логин: ${login}\nПароль: ${password}`);
@@ -263,36 +284,48 @@ function CredentialsPanel({
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const save = async () => {
-    setSaving(true);
+  const saveCard = async () => {
+    setSavingCard(true);
     setError(null);
     try {
-      const saved = await employeeApi.issueCredentials(employee.id, {
-        login: login.trim(),
-        password,
-        isAdmin,
+      const row = await employeeApi.update(employee.id, {
+        name: name.trim(),
+        email,
+        phone,
+        departmentId,
+        // Свои админские права не трогаем — бэкенд их всё равно отклонит.
+        ...(isSelf ? {} : { isAdmin }),
         ...(bitrixId ? { bitrix24Id: Number(bitrixId) } : {}),
       });
-      // Подразделение правится отдельным методом — выдача доступа его не трогает.
-      onSaved(
-        departmentId !== (employee.departmentId ?? '')
-          ? await employeeApi.update(employee.id, { departmentId })
-          : saved,
-      );
+      onSaved(row);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       setError((e as Error).message);
-      setSaving(false);
+    } finally {
+      setSavingCard(false);
+    }
+  };
+
+  const saveAccess = async () => {
+    setSavingAccess(true);
+    setError(null);
+    try {
+      onSaved(await employeeApi.issueCredentials(employee.id, { login: login.trim(), password }));
+    } catch (e) {
+      setError((e as Error).message);
+      setSavingAccess(false);
     }
   };
 
   const revoke = async () => {
-    setSaving(true);
+    setSavingAccess(true);
     setError(null);
     try {
       onSaved(await employeeApi.revokeAccess(employee.id));
     } catch (e) {
       setError((e as Error).message);
-      setSaving(false);
+      setSavingAccess(false);
     }
   };
 
@@ -309,44 +342,30 @@ function CredentialsPanel({
           </button>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          {employee.hasAccess ? 'Доступ выдан — можно сбросить пароль' : 'Доступа пока нет'}
+          {employee.hasAccess ? `Доступ выдан · логин ${employee.login}` : 'Доступа пока нет'}
         </p>
 
+        {error && <div className="mb-3 text-xs text-red-600">{error}</div>}
+
+        {/* ── Данные сотрудника ── */}
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Логин</Label>
-            <Input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="ivanov" />
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Данные
           </div>
 
           <div className="space-y-1.5">
-            <Label>Пароль</Label>
-            <div className="flex gap-2">
-              <Input
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => setPassword(generatePassword())}
-                title="Сгенерировать новый"
-                className="px-2 rounded-md border border-border hover:bg-muted/50 transition-colors"
-              >
-                <RefreshCw size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={copy}
-                title="Скопировать логин и пароль"
-                className="px-2 rounded-md border border-border hover:bg-muted/50 transition-colors"
-              >
-                {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
-              </button>
+            <Label>ФИО</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
-            {/* Хеш необратим: после сохранения пароль восстановить нельзя, только сбросить. */}
-            <p className="text-xs text-amber-700">
-              Скопируйте пароль сейчас — посмотреть его позже будет нельзя, только задать новый.
-            </p>
+            <div className="space-y-1.5">
+              <Label>Телефон</Label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -385,21 +404,77 @@ function CredentialsPanel({
             </p>
           )}
 
-          {error && <div className="text-xs text-red-600">{error}</div>}
+          <button
+            onClick={saveCard}
+            disabled={savingCard || !cardChanged || name.trim().length < 2}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted/50 disabled:opacity-40 transition-colors"
+          >
+            {savingCard ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : saved ? (
+              <Check size={15} className="text-green-600" />
+            ) : (
+              <Save size={15} />
+            )}
+            {saved ? 'Сохранено' : 'Сохранить изменения'}
+          </button>
+        </div>
+
+        {/* ── Доступ ── */}
+        <div className="space-y-3 mt-6 pt-5 border-t">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Доступ в систему
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Логин</Label>
+            <Input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="ivanov" />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{employee.hasAccess ? 'Новый пароль' : 'Пароль'}</Label>
+            <div className="flex gap-2">
+              <Input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setPassword(generatePassword())}
+                title="Сгенерировать новый"
+                className="px-2 rounded-md border border-border hover:bg-muted/50 transition-colors"
+              >
+                <RefreshCw size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={copy}
+                title="Скопировать логин и пароль"
+                className="px-2 rounded-md border border-border hover:bg-muted/50 transition-colors"
+              >
+                {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+              </button>
+            </div>
+            {/* Хеш необратим: после сохранения пароль восстановить нельзя, только сбросить. */}
+            <p className="text-xs text-amber-700">
+              Скопируйте пароль сейчас — посмотреть его позже будет нельзя, только задать новый.
+            </p>
+          </div>
 
           <button
-            onClick={save}
-            disabled={saving || !login.trim() || password.length < 8}
+            onClick={saveAccess}
+            disabled={savingAccess || !login.trim() || password.length < 8}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
           >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
+            {savingAccess ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
             {employee.hasAccess ? 'Сохранить новый пароль' : 'Выдать доступ'}
           </button>
 
           {employee.hasAccess && !isSelf && (
             <button
               onClick={revoke}
-              disabled={saving}
+              disabled={savingAccess}
               className="w-full px-4 py-2 rounded-lg border border-red-200 text-red-700 text-sm font-medium hover:bg-red-50 disabled:opacity-40 transition-colors"
             >
               Отозвать доступ
@@ -410,6 +485,7 @@ function CredentialsPanel({
     </div>
   );
 }
+
 
 /** Новый сотрудник — для тех, кого нет в выгрузке из 1С. */
 function CreateEmployeePanel({
