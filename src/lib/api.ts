@@ -627,6 +627,7 @@ export interface EmployeeAdminRow {
   name: string;
   email: string | null;
   phone: string | null;
+  departmentId: string | null;
   department: string | null;
   login: string | null;
   /** Есть логин и пароль — сотрудник может войти. */
@@ -643,6 +644,14 @@ export interface CreateEmployeeInput {
   password?: string;
   isAdmin?: boolean;
   bitrix24Id?: number;
+  /** Подразделение = офис: от него зависят воронка Битрикса и импорт/экспорт. */
+  departmentId?: string;
+}
+
+export interface DepartmentRow {
+  id: string;
+  name: string;
+  employees: number;
 }
 
 /** Сделка Битрикса на этапе «Расчет ставки» — источник автозаполнения. */
@@ -813,9 +822,19 @@ export const employeeApi = {
       method: "DELETE",
     });
   },
+  departments(): Promise<DepartmentRow[]> {
+    return req<DepartmentRow[]>("/worker/admin/employees/departments");
+  },
   update(
     id: string,
-    patch: { name?: string; email?: string; phone?: string; isAdmin?: boolean; bitrix24Id?: number },
+    patch: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      isAdmin?: boolean;
+      bitrix24Id?: number;
+      departmentId?: string;
+    },
   ): Promise<EmployeeAdminRow> {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}`, {
       method: "PATCH",

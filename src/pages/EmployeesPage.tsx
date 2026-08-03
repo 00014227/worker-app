@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   UserCog, Search, RefreshCw, Loader2, Plus, KeyRound, ShieldCheck, Copy, Check, X, Mail, Phone,
 } from 'lucide-react';
-import { employeeApi, EmployeeAdminRow, CreateEmployeeInput } from '../lib/api';
+import { employeeApi, EmployeeAdminRow, CreateEmployeeInput, DepartmentRow } from '../lib/api';
 import { getUser } from '../lib/auth';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +37,29 @@ function suggestLogin(name: string): string {
     .join('');
 }
 
+const selectCls =
+  'w-full h-9 rounded-md border border-border bg-background px-2 text-sm outline-none';
+
+/** Выбор офиса. Пустое значение допустимо — тогда действуют настройки по умолчанию. */
+function DepartmentSelect({
+  value, options, onChange,
+}: {
+  value: string;
+  options: DepartmentRow[];
+  onChange: (id: string) => void;
+}) {
+  return (
+    <select className={selectCls} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">— не указано —</option>
+      {options.map((d) => (
+        <option key={d.id} value={d.id}>
+          {d.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export default function EmployeesPage() {
   const me = getUser();
   const [rows, setRows] = useState<EmployeeAdminRow[]>([]);
@@ -45,6 +68,7 @@ export default function EmployeesPage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<EmployeeAdminRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [departments, setDepartments] = useState<DepartmentRow[]>([]);
 
   const load = () => {
     setLoading(true);
@@ -55,6 +79,9 @@ export default function EmployeesPage() {
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
+  useEffect(() => {
+    employeeApi.departments().then(setDepartments).catch(() => setDepartments([]));
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -187,6 +214,7 @@ export default function EmployeesPage() {
       {selected && (
         <CredentialsPanel
           employee={selected}
+          departments={departments}
           isSelf={me?.id === selected.id}
           onClose={() => setSelected(null)}
           onSaved={(row) => {
@@ -198,6 +226,7 @@ export default function EmployeesPage() {
 
       {creating && (
         <CreateEmployeePanel
+          departments={departments}
           onClose={() => setCreating(false)}
           onCreated={(row) => {
             upsertRow(row);
@@ -211,9 +240,10 @@ export default function EmployeesPage() {
 
 /** Выдача доступа и сброс пароля. */
 function CredentialsPanel({
-  employee, isSelf, onClose, onSaved,
+  employee, departments, isSelf, onClose, onSaved,
 }: {
   employee: EmployeeAdminRow;
+  departments: DepartmentRow[];
   isSelf: boolean;
   onClose: () => void;
   onSaved: (row: EmployeeAdminRow) => void;
@@ -222,6 +252,7 @@ function CredentialsPanel({
   const [password, setPassword] = useState(() => generatePassword());
   const [isAdmin, setIsAdmin] = useState(employee.isAdmin);
   const [bitrixId, setBitrixId] = useState(employee.bitrix24Id ? String(employee.bitrix24Id) : '');
+  const [departmentId, setDepartmentId] = useState(employee.departmentId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -236,13 +267,17 @@ function CredentialsPanel({
     setSaving(true);
     setError(null);
     try {
+      const saved = await employeeApi.issueCredentials(employee.id, {
+        login: login.trim(),
+        password,
+        isAdmin,
+        ...(bitrixId ? { bitrix24Id: Number(bitrixId) } : {}),
+      });
+      // Подразделение правится отдельным методом — выдача доступа его не трогает.
       onSaved(
-        await employeeApi.issueCredentials(employee.id, {
-          login: login.trim(),
-          password,
-          isAdmin,
-          ...(bitrixId ? { bitrix24Id: Number(bitrixId) } : {}),
-        }),
+        departmentId !== (employee.departmentId ?? '')
+          ? await employeeApi.update(employee.id, { departmentId })
+          : saved,
       );
     } catch (e) {
       setError((e as Error).message);
@@ -315,6 +350,14 @@ function CredentialsPanel({
           </div>
 
           <div className="space-y-1.5">
+            <Label>Подразделение (офис)</Label>
+            <DepartmentSelect value={departmentId} options={departments} onChange={setDepartmentId} />
+            <p className="text-xs text-muted-foreground">
+              Определяет воронку Битрикса и импорт/экспорт для сотрудника.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
             <Label>Bitrix24 ID</Label>
             <Input
               value={bitrixId}
@@ -370,8 +413,9 @@ function CredentialsPanel({
 
 /** Новый сотрудник — для тех, кого нет в выгрузке из 1С. */
 function CreateEmployeePanel({
-  onClose, onCreated,
+  departments, onClose, onCreated,
 }: {
+  departments: DepartmentRow[];
   onClose: () => void;
   onCreated: (row: EmployeeAdminRow) => void;
 }) {
@@ -394,6 +438,7 @@ function CreateEmployeePanel({
           phone: form.phone?.trim() || undefined,
           isAdmin: form.isAdmin ?? false,
           bitrix24Id: form.bitrix24Id,
+          departmentId: form.departmentId || undefined,
           ...(withAccess
             ? { login: (form.login || suggestLogin(form.name)).trim(), password }
             : {}),
@@ -437,6 +482,18 @@ function CreateEmployeePanel({
               <Input value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} />
             </div>
           </div>
+          <div className="space-y-1.5">
+            <Label>Подразделение (офис)</Label>
+            <DepartmentSelect
+              value={form.departmentId ?? ''}
+              options={departments}
+              onChange={(id) => set({ departmentId: id })}
+            />
+            <p className="text-xs text-muted-foreground">
+              От офиса зависят воронка Битрикса и определение импорт/экспорт.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <Label>Bitrix24 ID</Label>
             <Input
