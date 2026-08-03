@@ -621,6 +621,30 @@ export interface SupplierScorecard {
   note: string;
 }
 
+/** Сотрудник в админ-разделе. Пароль и его хеш наружу не отдаются. */
+export interface EmployeeAdminRow {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  department: string | null;
+  login: string | null;
+  /** Есть логин и пароль — сотрудник может войти. */
+  hasAccess: boolean;
+  isAdmin: boolean;
+  bitrix24Id: number | null;
+}
+
+export interface CreateEmployeeInput {
+  name: string;
+  email?: string;
+  phone?: string;
+  login?: string;
+  password?: string;
+  isAdmin?: boolean;
+  bitrix24Id?: number;
+}
+
 /** Сделка Битрикса на этапе «Расчет ставки» — источник автозаполнения. */
 export interface BitrixDealRow {
   id: number;
@@ -761,6 +785,44 @@ export interface TelegramAccountRow {
   floodWaitUntil: string | null;
   createdAt: string;
 }
+
+/** Админ-раздел: сотрудники и их доступ. Требует прав администратора. */
+export const employeeApi = {
+  list(search?: string): Promise<EmployeeAdminRow[]> {
+    const q = search ? `?search=${encodeURIComponent(search)}` : "";
+    return req<EmployeeAdminRow[]>(`/worker/admin/employees${q}`);
+  },
+  create(input: CreateEmployeeInput): Promise<EmployeeAdminRow> {
+    return req<EmployeeAdminRow>("/worker/admin/employees", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  /** Выдать доступ или сбросить пароль. */
+  issueCredentials(
+    id: string,
+    input: { login: string; password: string; isAdmin?: boolean; bitrix24Id?: number },
+  ): Promise<EmployeeAdminRow> {
+    return req<EmployeeAdminRow>(`/worker/admin/employees/${id}/credentials`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+  revokeAccess(id: string): Promise<EmployeeAdminRow> {
+    return req<EmployeeAdminRow>(`/worker/admin/employees/${id}/credentials`, {
+      method: "DELETE",
+    });
+  },
+  update(
+    id: string,
+    patch: { name?: string; email?: string; phone?: string; isAdmin?: boolean; bitrix24Id?: number },
+  ): Promise<EmployeeAdminRow> {
+    return req<EmployeeAdminRow>(`/worker/admin/employees/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  },
+};
 
 export const tenderApi = {
   suppliers: {

@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   FileText, Users, Package, Sparkles, LogOut,
-  LayoutDashboard, Shield, User, Map, Database, Send, Building2,
+  LayoutDashboard, Shield, User, Map, Database, Send, Building2, UserCog,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 import { Logo } from './Logo';
@@ -16,6 +16,12 @@ const nav = [
   { to: '/telegram-accounts', label: 'Telegram',     icon: Send },
   { to: '/tariff-sources',label: 'Тарифы',            icon: Database },
   { to: '/ai-deal',       label: 'Сделка через ИИ',  icon: Sparkles },
+];
+
+/** Разделы только для администраторов. Права всё равно проверяет бэкенд —
+    здесь просто не показываем то, чем сотрудник не сможет воспользоваться. */
+const adminNav = [
+  { to: '/employees',     label: 'Сотрудники',       icon: UserCog },
 ];
 
 export default function Layout() {
@@ -42,7 +48,7 @@ export default function Layout() {
 
         {/* Nav */}
         <nav className="flex-1 py-3 px-2 space-y-0.5">
-          {nav.map(({ to, label, icon: Icon }) => (
+          {[...nav, ...(user?.isAdmin ? adminNav : [])].map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

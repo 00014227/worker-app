@@ -16,6 +16,7 @@ import EditShipmentPage from './pages/EditShipmentPage';
 import AiDealPage from './pages/AiDealPage';
 import MapPage from './pages/MapPage';
 import TariffSourcesPage from './pages/TariffSourcesPage';
+import EmployeesPage from './pages/EmployeesPage';
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/map" element={<MapPage />} />
           <Route path="/ai-deal" element={<AiDealPage />} />
           <Route path="/tariff-sources" element={<TariffSourcesPage />} />
+          <Route path="/employees" element={<EmployeesPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
