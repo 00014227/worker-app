@@ -259,6 +259,7 @@ function EmployeePanel({
   const [departmentId, setDepartmentId] = useState(employee.departmentId ?? '');
   const [bitrixId, setBitrixId] = useState(employee.bitrix24Id ? String(employee.bitrix24Id) : '');
   const [isAdmin, setIsAdmin] = useState(employee.isAdmin);
+  const [reportsEnabled, setReportsEnabled] = useState(employee.reportsEnabled);
 
   // ── Доступ ──
   const [login, setLogin] = useState(employee.login ?? suggestLogin(employee.name));
@@ -276,7 +277,8 @@ function EmployeePanel({
     phone !== (employee.phone ?? '') ||
     departmentId !== (employee.departmentId ?? '') ||
     bitrixId !== (employee.bitrix24Id ? String(employee.bitrix24Id) : '') ||
-    isAdmin !== employee.isAdmin;
+    isAdmin !== employee.isAdmin ||
+    reportsEnabled !== employee.reportsEnabled;
 
   const copy = async () => {
     await navigator.clipboard.writeText(`Логин: ${login}\nПароль: ${password}`);
@@ -293,6 +295,7 @@ function EmployeePanel({
         email,
         phone,
         departmentId,
+        reportsEnabled,
         // Свои админские права не трогаем — бэкенд их всё равно отклонит.
         ...(isSelf ? {} : { isAdmin }),
         ...(bitrixId ? { bitrix24Id: Number(bitrixId) } : {}),
@@ -403,6 +406,19 @@ function EmployeePanel({
               Свои права администратора изменить нельзя.
             </p>
           )}
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={reportsEnabled}
+              onChange={(e) => setReportsEnabled(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span>Слать отчёты по активным перевозкам</span>
+          </label>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Ежедневный Excel на почту (если пусто — на логин) по перевозкам, где сотрудник КАМ.
+          </p>
 
           <button
             onClick={saveCard}

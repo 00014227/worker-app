@@ -634,6 +634,8 @@ export interface EmployeeAdminRow {
   hasAccess: boolean;
   isAdmin: boolean;
   bitrix24Id: number | null;
+  /** Слать ли ежедневный Excel по активным перевозкам этого сотрудника. */
+  reportsEnabled: boolean;
 }
 
 export interface CreateEmployeeInput {
@@ -834,6 +836,7 @@ export const employeeApi = {
       isAdmin?: boolean;
       bitrix24Id?: number;
       departmentId?: string;
+      reportsEnabled?: boolean;
     },
   ): Promise<EmployeeAdminRow> {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}`, {
