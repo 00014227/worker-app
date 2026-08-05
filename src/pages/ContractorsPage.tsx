@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail, Globe, ShieldCheck } from 'lucide-react';
+import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail, Globe, ShieldCheck, PhoneCall, AlertTriangle } from 'lucide-react';
 import {
   tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput,
   ContactChannel, CONTACT_CHANNEL_LABELS,
@@ -91,6 +91,19 @@ function LangSelect({ value, onChange }: { value: ContactLanguage; onChange: (l:
 }
 
 /**
+ * Можно ли вообще написать подрядчику. Для Telegram юзербот умеет писать только
+ * по @username: одного числового ID мало — нужен access hash, который выдаётся
+ * при поиске по телефону или после входящего сообщения.
+ */
+function hasNoContact(s: SupplierRow): boolean {
+  const tgOk = !!s.telegramUsername;
+  const mailOk = !!s.email;
+  if (s.contactChannel === 'email') return !mailOk;
+  if (s.contactChannel === 'both') return !tgOk && !mailOk;
+  return !tgOk;
+}
+
+/**
  * Цвет рейтинга надёжности. Отсутствие рейтинга (null) — это «не проверен», а не
  * «плохой»: новичок без истории не должен выглядеть хуже, чем сорвавший рейс.
  */
@@ -118,6 +131,8 @@ export default function ContractorsPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SupplierRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveInfo, setResolveInfo] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -134,17 +149,59 @@ export default function ContractorsPage() {
     return rows.filter((c) => c.name.toLowerCase().includes(q) || (c.telegramUsername ?? '').toLowerCase().includes(q));
   }, [rows, search]);
 
+  const noContact = rows.filter(hasNoContact).length;
+  const withPhoneNoUsername = rows.filter((c) => c.phone && !c.telegramUsername).length;
+
+  /**
+   * Ищет подрядчиков в Telegram по телефонам. Массовый импорт контактов Telegram
+   * считает спам-поведением, поэтому первый прогон стоит делать на нескольких.
+   */
+  const resolvePhones = async () => {
+    setResolving(true);
+    setResolveInfo(null);
+    try {
+      const r = await tenderApi.suppliers.resolveByPhone();
+      const s = r.summary;
+      setResolveInfo(
+        `Проверено ${s.total}: найдено ${s.resolved} (username ${s.withUsername}), ` +
+          `скрыто приватностью ${s.notFound}, чужой номер ${s.idMismatch}` +
+          (s.errors ? `, ошибок ${s.errors}` : ''),
+      );
+      load();
+    } catch (e) {
+      setResolveInfo((e as Error).message);
+    } finally {
+      setResolving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Подрядчики</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{loading ? 'Загрузка…' : `${rows.length} компаний`}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {loading ? 'Загрузка…' : `${rows.length} компаний`}
+            {!loading && noContact > 0 && (
+              <span className="text-amber-700"> · без способа связи {noContact}</span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
+          {withPhoneNoUsername > 0 && (
+            <button
+              onClick={resolvePhones}
+              disabled={resolving}
+              title="Telegram найдёт подрядчиков по номеру и вернёт @username — после этого им можно писать"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 disabled:opacity-40 transition-colors"
+            >
+              {resolving ? <Loader2 size={13} className="animate-spin" /> : <PhoneCall size={13} />}
+              Найти по телефонам ({withPhoneNoUsername})
+            </button>
+          )}
           <button
             onClick={() => setCreating(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
@@ -153,6 +210,10 @@ export default function ContractorsPage() {
           </button>
         </div>
       </div>
+
+      {resolveInfo && (
+        <div className="rounded-lg border bg-muted/40 px-4 py-2.5 text-xs">{resolveInfo}</div>
+      )}
 
       <div className="relative max-w-sm">
         <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -194,6 +255,12 @@ export default function ContractorsPage() {
                     </span>
                   </div>
                   {c.telegramUsername && <div className="flex items-center gap-1 text-blue-600"><Send size={11} /> @{c.telegramUsername.replace('@', '')}</div>}
+                  {hasNoContact(c) && (
+                    <div className="flex items-center gap-1 text-amber-700">
+                      <AlertTriangle size={11} className="shrink-0" />
+                      {c.phone ? 'нет @username — найдите по телефону' : 'нет способа связи: добавьте телефон'}
+                    </div>
+                  )}
                   {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}
                   {sla && <div className="flex items-center gap-1"><Zap size={11} /> {sla}</div>}
                   {/* Надёжность: считается по выполненным подтверждениям, поэтому
@@ -392,6 +459,7 @@ function BindPanel({
 }) {
   const [username, setUsername] = useState(supplier.telegramUsername ?? '');
   const [email, setEmail] = useState(supplier.email ?? '');
+  const [phone, setPhone] = useState(supplier.phone ?? '');
   const [channel, setChannel] = useState<ContactChannel>(supplier.contactChannel ?? 'telegram');
   const [language, setLanguage] = useState<ContactLanguage>(supplier.preferredLanguage ?? 'RU');
   const [directions, setDirections] = useState((supplier.directions ?? []).join(', '));
@@ -408,6 +476,7 @@ function BindPanel({
       await tenderApi.suppliers.update(supplier.id, {
         telegramUsername: username.trim() || undefined,
         email: email.trim() || undefined,
+        phone,
         contactChannel: channel,
         preferredLanguage: language,
         directions: dirs,
@@ -418,6 +487,7 @@ function BindPanel({
         id: supplier.id,
         telegramUsername: username.trim().replace('@', '') || null,
         email: email.trim() || null,
+        phone: phone.trim() || null,
         contactChannel: channel,
         preferredLanguage: language,
         directions: dirs,
@@ -500,6 +570,15 @@ function BindPanel({
             <Label>Язык общения</Label>
             <LangSelect value={language} onChange={setLanguage} />
             <p className="text-xs text-muted-foreground">Запросы и уведомления уходят на этом языке.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Телефон</Label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123-45-67" />
+            <p className="text-xs text-muted-foreground">
+              По номеру Telegram находит подрядчика и отдаёт @username — без этого
+              написать тому, у кого только числовой ID, нельзя.
+            </p>
           </div>
 
           <div className="space-y-1.5">

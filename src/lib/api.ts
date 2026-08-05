@@ -446,6 +446,7 @@ export interface SupplierRow {
   name: string;
   country: string | null;
   email: string | null;
+  phone: string | null;
   contactChannel: ContactChannel;
   preferredLanguage: ContactLanguage;
   telegramUsername: string | null;
@@ -460,6 +461,26 @@ export interface SupplierRow {
   lastReplyAt: string | null;
   /** Рейтинг надёжности; null у новых подрядчиков без истории. */
   scorecard: SupplierScorecard | null;
+}
+
+/** Итог поиска подрядчиков в Telegram по телефонам. */
+export interface PhoneResolveResponse {
+  summary: {
+    total: number;
+    resolved: number;
+    withUsername: number;
+    notFound: number;
+    idMismatch: number;
+    errors: number;
+  };
+  results: Array<{
+    supplierId: string;
+    name: string;
+    phone: string;
+    status: "resolved" | "id_mismatch" | "not_found" | "error";
+    username?: string | null;
+    message?: string;
+  }>;
 }
 
 export interface CreateSupplierInput {
@@ -866,6 +887,8 @@ export const tenderApi = {
         contactChannel?: ContactChannel;
         preferredLanguage?: ContactLanguage;
         email?: string;
+        /** Ключ к поиску в Telegram, когда нет username. */
+        phone?: string;
         directions?: string[];
         transportModes?: string[];
       },
@@ -873,6 +896,16 @@ export const tenderApi = {
       return req(`/worker/suppliers/${id}/telegram`, {
         method: "POST",
         body: JSON.stringify(patch),
+      });
+    },
+    /**
+     * Ищет подрядчиков в Telegram по телефону и сохраняет найденные username.
+     * Без этого юзербот не может написать тем, у кого только числовой ID.
+     */
+    resolveByPhone(supplierIds?: string[]): Promise<PhoneResolveResponse> {
+      return req<PhoneResolveResponse>("/worker/suppliers/resolve-by-phone", {
+        method: "POST",
+        body: JSON.stringify(supplierIds?.length ? { supplierIds } : {}),
       });
     },
     /** Страна по названию города (справочник пунктов) — для автозаполнения формы. */
