@@ -573,15 +573,6 @@ function BindPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Телефон</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123-45-67" />
-            <p className="text-xs text-muted-foreground">
-              По номеру Telegram находит подрядчика и отдаёт @username — без этого
-              написать тому, у кого только числовой ID, нельзя.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
             <Label>Направления (страны)</Label>
             <Input value={directions} onChange={(e) => setDirections(e.target.value)} placeholder="Россия, Казахстан, Узбекистан" />
             <p className="text-xs text-muted-foreground">Через запятую — для автоподбора под маршрут запроса.</p>
@@ -601,6 +592,15 @@ function BindPanel({
           <div className="space-y-1.5">
             <Label>Email</Label>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mail@company.com" />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Телефон</Label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123-45-67" />
+            <p className="text-xs text-muted-foreground">
+              По номеру Telegram находит подрядчика и отдаёт @username — без него
+              нельзя написать тому, у кого есть только числовой ID.
+            </p>
           </div>
 
           <div className="space-y-1.5">
