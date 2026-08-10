@@ -510,7 +510,17 @@ export default function RateRequestDetailPage() {
                               <span className="text-amber-700">курс неизвестен</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right whitespace-nowrap">{r.transitDays != null ? `${r.transitDays} дн` : '—'}</td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            {r.transitDays != null ? (
+                              `${r.transitDays} дн`
+                            ) : r.clarifyAskedAt ? (
+                              <span className="text-xs text-amber-700" title="Подрядчик не назвал срок — мы уже спросили, ждём ответа">
+                                запросили
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
                           <td className="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground max-w-[220px] truncate">{r.conditions ?? '—'}</td>
                           <td className="px-4 py-3 text-center text-xs text-muted-foreground">
                             {r.aiConfidence != null ? `${Math.round(Number(r.aiConfidence) * 100)}%` : '—'}

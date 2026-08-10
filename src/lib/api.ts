@@ -471,15 +471,18 @@ export interface PhoneResolveResponse {
     withUsername: number;
     notFound: number;
     idMismatch: number;
+    /** Тот же Telegram уже привязан к другой карточке подрядчика. */
+    duplicate: number;
     errors: number;
   };
   results: Array<{
     supplierId: string;
     name: string;
     phone: string;
-    status: "resolved" | "id_mismatch" | "not_found" | "error";
+    status: "resolved" | "id_mismatch" | "duplicate" | "not_found" | "error";
     username?: string | null;
     message?: string;
+    note?: string;
   }>;
 }
 
@@ -550,6 +553,9 @@ export interface TenderReplyRow {
   /** Пусто = подрядчику ещё не предлагали перевозку. */
   awardStatus: AwardStatus | null;
   declineReason: DeclineReason | null;
+  /** Непусто = мы дозапросили недостающее (срок/цену) и ждём ответа. */
+  clarifyAskedAt: string | null;
+  clarifyCount: number;
   supplier: { id: string; name: string };
 }
 
@@ -897,6 +903,13 @@ export const tenderApi = {
         method: "POST",
         body: JSON.stringify(patch),
       });
+    },
+    /**
+     * Удалить подрядчика (только админ). Удаление физическое: вместе с ним
+     * уходят его приглашения, ответы и ставки.
+     */
+    remove(id: string): Promise<{ name: string }> {
+      return req<{ name: string }>(`/worker/suppliers/${id}`, { method: "DELETE" });
     },
     /**
      * Ищет подрядчиков в Telegram по телефону и сохраняет найденные username.

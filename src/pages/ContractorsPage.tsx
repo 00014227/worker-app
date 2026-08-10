@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail, Globe, ShieldCheck, PhoneCall, AlertTriangle } from 'lucide-react';
+import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail, Globe, ShieldCheck, PhoneCall, AlertTriangle, Trash2 } from 'lucide-react';
 import {
   tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput,
   ContactChannel, CONTACT_CHANNEL_LABELS,
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { getUser } from '@/lib/auth';
 
 const CHANNELS: ContactChannel[] = ['telegram', 'email', 'both'];
 const LANGUAGES: ContactLanguage[] = ['RU', 'EN', 'UZ'];
@@ -162,10 +163,13 @@ export default function ContractorsPage() {
     try {
       const r = await tenderApi.suppliers.resolveByPhone();
       const s = r.summary;
+      const dup = r.results.find((x) => x.status === 'duplicate');
       setResolveInfo(
         `Проверено ${s.total}: найдено ${s.resolved} (username ${s.withUsername}), ` +
           `скрыто приватностью ${s.notFound}, чужой номер ${s.idMismatch}` +
-          (s.errors ? `, ошибок ${s.errors}` : ''),
+          (s.duplicate ? `, дубль ${s.duplicate}` : '') +
+          (s.errors ? `, ошибок ${s.errors}` : '') +
+          (dup?.note ? ` — ${dup.note}` : ''),
       );
       load();
     } catch (e) {
@@ -262,6 +266,7 @@ export default function ContractorsPage() {
                     </div>
                   )}
                   {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}
+                  {c.phone && <div className="flex items-center gap-1"><PhoneCall size={11} /> {c.phone}</div>}
                   {sla && <div className="flex items-center gap-1"><Zap size={11} /> {sla}</div>}
                   {/* Надёжность: считается по выполненным подтверждениям, поэтому
                       у новых подрядчиков честно пусто, а не ноль. */}
@@ -305,6 +310,10 @@ export default function ContractorsPage() {
           onClose={() => setSelected(null)}
           onSaved={(updated) => {
             setRows((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+            setSelected(null);
+          }}
+          onDeleted={(id) => {
+            setRows((prev) => prev.filter((r) => r.id !== id));
             setSelected(null);
           }}
         />
@@ -450,12 +459,13 @@ function CreateSupplierPanel({
 }
 
 function BindPanel({
-  supplier, accounts, onClose, onSaved,
+  supplier, accounts, onClose, onSaved, onDeleted,
 }: {
   supplier: SupplierRow;
   accounts: TelegramAccountRow[];
   onClose: () => void;
   onSaved: (s: Partial<SupplierRow> & { id: string }) => void;
+  onDeleted: (id: string) => void;
 }) {
   const [username, setUsername] = useState(supplier.telegramUsername ?? '');
   const [email, setEmail] = useState(supplier.email ?? '');
@@ -467,6 +477,24 @@ function BindPanel({
   const [accountId, setAccountId] = useState(supplier.telegramAccountId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Удаление необратимо, поэтому подтверждается вторым нажатием: отдельная
+  // модалка ради одной кнопки избыточна, но снести подрядчика одним кликом нельзя.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const isAdmin = getUser()?.isAdmin ?? false;
+
+  const remove = async () => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await tenderApi.suppliers.remove(supplier.id);
+      onDeleted(supplier.id);
+    } catch (e) {
+      setError((e as Error).message);
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -624,6 +652,42 @@ function BindPanel({
           >
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Сохранить
           </button>
+
+          {isAdmin && (
+            <div className="pt-3 mt-1 border-t">
+              {confirmDelete ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Удалить «{supplier.name}» безвозвратно? Вместе с ним пропадут его ставки и
+                    ответы в прошлых запросах — и его вклад в статистику цен по маршрутам.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={remove}
+                      disabled={deleting}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-40 transition-colors"
+                    >
+                      {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Удалить
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      disabled={deleting}
+                      className="px-3 py-2 rounded-lg border text-sm hover:bg-muted transition-colors"
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-red-200 text-red-600 text-sm hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={14} /> Удалить подрядчика
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
