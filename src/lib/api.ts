@@ -839,7 +839,12 @@ export const employeeApi = {
   /** Выдать доступ или сбросить пароль. */
   issueCredentials(
     id: string,
-    input: { login: string; password: string; isAdmin?: boolean; bitrix24Id?: number },
+    input: {
+      login: string;
+      password: string;
+      isAdmin?: boolean;
+      bitrix24Id?: number;
+    },
   ): Promise<EmployeeAdminRow> {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}/credentials`, {
       method: "POST",
@@ -909,7 +914,9 @@ export const tenderApi = {
      * уходят его приглашения, ответы и ставки.
      */
     remove(id: string): Promise<{ name: string }> {
-      return req<{ name: string }>(`/worker/suppliers/${id}`, { method: "DELETE" });
+      return req<{ name: string }>(`/worker/suppliers/${id}`, {
+        method: "DELETE",
+      });
     },
     /**
      * Ищет подрядчиков в Telegram по телефону и сохраняет найденные username.
