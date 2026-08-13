@@ -71,6 +71,26 @@ const DELIVERY: Record<DeliveryStatus, { label: string; cls: string }> = {
   error: { label: "Ошибка", cls: "text-red-600" },
 };
 
+function error_msg(raw: string) {
+  const str = raw.toLowerCase();
+  if (
+    str.includes("could not find the input entity") ||
+    str.includes("peer_id_invalid")
+  )
+    return "Не указан @username или номер телефона (или нужен начатый диалог)";
+  if (str.includes("username_not_occupied") || str.includes("no user has"))
+    return "Username не существует";
+  if (str.includes("user_privacy_restricted"))
+    return "Настройки приватности запрещают сообщения";
+  if (str.includes("blocked") || str.includes("can't write"))
+    return "Подрядчик заблокировал аккаунт";
+  if (str.includes("flood_wait") || str.includes("too many requests"))
+    return "Лимит Telegram — попробуйте позже";
+  if (str.includes("auth_key") || str.includes("unauthorized"))
+    return "Telegram-аккаунт не авторизован";
+  return "Не удалось отправить";
+}
+
 const CHANNEL_LABEL: Record<string, string> = {
   telegram: "TG",
   email: "Почта",
@@ -454,8 +474,12 @@ export default function RateRequestDetailPage() {
                       </span>
                     )}
                     {inv.errorMessage && (
-                      <div className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
-                        <AlertTriangle size={11} /> {inv.errorMessage}
+                      <div
+                        className="text-xs text-red-600 flex items-center gap-1 mt-0.5"
+                        title={String(inv.errorMessage)}
+                      >
+                        <AlertTriangle size={11} />
+                        {error_msg(inv.errorMessage)}
                       </div>
                     )}
                   </div>
