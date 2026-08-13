@@ -12,3 +12,19 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Контексты сборки. Прокси на API выше общий для всех контекстов: тестового
+# инстанса бэкенда нет, любой стенд работает с боевой базой. Поэтому стенды
+# помечаются VITE_APP_ENV — фронт по нему рисует предупреждающую полосу и
+# спрашивает подтверждение перед отправкой в Telegram.
+# $BRANCH и $COMMIT_REF доступны только как переменные шелла на этапе сборки,
+# в значениях toml они не подставляются — отсюда переопределение command.
+
+[context.production.environment]
+  VITE_APP_ENV = "production"
+
+[context.branch-deploy]
+  command = "VITE_APP_ENV=staging VITE_GIT_BRANCH=$BRANCH VITE_GIT_SHA=$COMMIT_REF npm run build"
+
+[context.deploy-preview]
+  command = "VITE_APP_ENV=preview VITE_GIT_BRANCH=$BRANCH VITE_GIT_SHA=$COMMIT_REF npm run build"
