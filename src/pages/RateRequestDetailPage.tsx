@@ -73,6 +73,10 @@ const DELIVERY: Record<DeliveryStatus, { label: string; cls: string }> = {
 
 function error_msg(raw: string) {
   const str = raw.toLowerCase();
+  // Часть причин бэкенд формулирует сам и уже по-русски («нет Telegram у
+  // подрядчика», «нет email у подрядчика»). Такие показываем как есть: они
+  // конкретнее любого нашего обобщения.
+  if (!/[a-z]/.test(str)) return raw;
   if (
     str.includes("could not find the input entity") ||
     str.includes("peer_id_invalid")

@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { getUser } from '@/lib/auth';
 
 const CHANNELS: ContactChannel[] = ['telegram', 'email', 'both'];
 const LANGUAGES: ContactLanguage[] = ['RU', 'EN', 'UZ'];
@@ -481,7 +480,6 @@ function BindPanel({
   // модалка ради одной кнопки избыточна, но снести подрядчика одним кликом нельзя.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const isAdmin = getUser()?.isAdmin ?? false;
 
   const remove = async () => {
     setDeleting(true);
@@ -653,8 +651,7 @@ function BindPanel({
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Сохранить
           </button>
 
-          {isAdmin && (
-            <div className="pt-3 mt-1 border-t">
+          <div className="pt-3 mt-1 border-t">
               {confirmDelete ? (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">
@@ -686,8 +683,7 @@ function BindPanel({
                   <Trash2 size={14} /> Удалить подрядчика
                 </button>
               )}
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
