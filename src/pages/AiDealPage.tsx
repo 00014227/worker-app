@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, ExternalLink, Sparkles, X, Search } from 'lucide-react';
 import { authHeaders } from '../lib/auth';
+import { confirmOnStand } from '../lib/env';
 
 // Empty default → relative `/api` requests go through the Vite dev proxy
 // (and same-origin in production), avoiding the cross-origin CORS failure.
@@ -298,6 +299,7 @@ export default function AiDealPage() {
   }
 
   async function handleCreate() {
+    if (!confirmOnStand('Сделка будет создана в рабочем Битриксе24.')) return;
     setError(null);
     setStep('creating');
     try {
