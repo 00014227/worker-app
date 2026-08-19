@@ -4,7 +4,6 @@ import { Package, TrendingUp, Calendar, Truck, ArrowRight, RefreshCw } from 'luc
 import { workerApi, OrderStats, OrderRow } from '../lib/api';
 import { getUser } from '../lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 function statusColor(s: string | null) {
