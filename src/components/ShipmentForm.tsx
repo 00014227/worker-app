@@ -1,4 +1,3 @@
-import { useId } from 'react';
 import {
   Truck, Plane, Train, Ship, Plus, Trash2,
   Package, MapPin, FileText, Hash, User, MessageSquare,
@@ -167,7 +166,6 @@ function LegEditor({ leg, index, total, onChange, onDelete }: {
   onDelete: () => void;
 }) {
   const set = <K extends keyof Leg>(key: K, val: string) => onChange({ ...leg, [key]: val });
-  const t = LEG_TYPES.find(t => t.value === leg.type);
 
   return (
     <div className="rounded-xl border bg-muted/20 overflow-hidden">

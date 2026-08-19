@@ -36,6 +36,7 @@ import {
 } from "../lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { confirmOnStand } from "../lib/env";
 
 const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
   draft: {
@@ -223,6 +224,16 @@ export default function RateRequestDetailPage() {
 
   const send = async () => {
     if (!id) return;
+    // Счётчик считаем здесь, а не берём pendingCount ниже: тот объявлен после
+    // раннего выхода по !tender и в этом замыкании существовать не обязан.
+    const pending =
+      tender?.invites.filter((i) => i.deliveryStatus !== "sent").length ?? 0;
+    if (
+      !confirmOnStand(
+        `Приглашения уйдут реальным подрядчикам в Telegram (${pending}).`,
+      )
+    )
+      return;
     setSending(true);
     setError(null);
     try {
@@ -236,6 +247,10 @@ export default function RateRequestDetailPage() {
 
   const select = async (supplierId: string) => {
     if (!id) return;
+    if (
+      !confirmOnStand("Выбранному подрядчику уйдёт запрос подтверждения.")
+    )
+      return;
     setSelectingId(supplierId);
     setError(null);
     try {
@@ -255,6 +270,12 @@ export default function RateRequestDetailPage() {
 
   const requestImprovement = async () => {
     if (!id) return;
+    if (
+      !confirmOnStand(
+        "Подрядчикам дороже лидера уйдёт предложение улучшить ставку.",
+      )
+    )
+      return;
     setImproving(true);
     setError(null);
     try {

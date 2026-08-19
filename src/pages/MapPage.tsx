@@ -11,7 +11,7 @@ import { workerApi, MapOrderRow } from '../lib/api';
 import { cn } from '@/lib/utils';
 
 // Leaflet Vite icon fix
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as { _getIconUrl?: string })._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconUrl: markerIcon,
   iconRetinaUrl: markerIcon2x,
@@ -32,10 +32,6 @@ function statusRing(status: string | null): string {
   if (s.includes('таможн') || s.includes('границ')) return '#ea580c';
   if (s.includes('задержк') || s.includes('отмен')) return '#dc2626';
   return '#3b82f6';
-}
-
-function markerColor(status: string | null): string {
-  return statusRing(status);
 }
 
 function buildDivIcon(transportationType: string | null, status: string | null) {

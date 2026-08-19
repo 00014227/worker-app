@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { confirmOnStand } from '../lib/env';
 
 const CHANNELS: ContactChannel[] = ['telegram', 'email', 'both'];
 const LANGUAGES: ContactLanguage[] = ['RU', 'EN', 'UZ'];
@@ -157,6 +158,12 @@ export default function ContractorsPage() {
    * считает спам-поведением, поэтому первый прогон стоит делать на нескольких.
    */
   const resolvePhones = async () => {
+    if (
+      !confirmOnStand(
+        'Номера будут добавлены в контакты рабочего Telegram-аккаунта — массовый импорт Telegram считает спамом.',
+      )
+    )
+      return;
     setResolving(true);
     setResolveInfo(null);
     try {
