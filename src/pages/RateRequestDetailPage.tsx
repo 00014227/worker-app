@@ -36,6 +36,7 @@ import {
 } from "../lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { subscribeToTender, getSocket } from "@/lib/socket";
 import { confirmOnStand } from "../lib/env";
 
 const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
@@ -205,6 +206,58 @@ export default function RateRequestDetailPage() {
   }, [id]);
 
   useEffect(load, [load]);
+
+  /**
+   * Фоновое обновление: только данные. Ошибку глушим и спиннер не трогаем —
+   * моргнувшая сеть не должна подменять таблицу со ставками текстом ошибки,
+   * а мигающий спиннер раз в цикл раздражал бы больше, чем помогал.
+   */
+  const refresh = useCallback(() => {
+    if (!id) return;
+    tenderApi.tenders.get(id).then(setTender).catch(() => undefined);
+  }, [id]);
+
+  // Живые ставки: сервер сам сообщает, что по запросу что-то изменилось.
+  // Перечитываем карточку целиком — ранги считает бэкенд, и собирать их на
+  // клиенте по кусочкам значит рано или поздно разойтись с истиной.
+  useEffect(() => {
+    if (!id) return;
+    return subscribeToTender(id, refresh);
+  }, [id, refresh]);
+
+  /**
+   * Запасной путь. Сокет может не подняться — сетевая политика офиса, упавший
+   * шлюз, отсутствующий VITE_WS_URL. Логист не должен из-за этого остаться
+   * перед застывшей страницей, поэтому при отсутствии связи включаем опрос.
+   */
+  useEffect(() => {
+    if (!id) return;
+    const socket = getSocket();
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (!timer) timer = setInterval(refresh, 20_000);
+    };
+    const stopPolling = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
+
+    if (!socket) startPolling();
+    else {
+      if (!socket.connected) startPolling();
+      socket.on("connect", stopPolling);
+      socket.on("disconnect", startPolling);
+      socket.on("connect_error", startPolling);
+    }
+
+    return () => {
+      stopPolling();
+      socket?.off("connect", stopPolling);
+      socket?.off("disconnect", startPolling);
+      socket?.off("connect_error", startPolling);
+    };
+  }, [id, refresh]);
 
   // Рыночный ориентир по маршруту — грузим отдельно, чтобы пустая история
   // аналитики не мешала показать сам тендер.

@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Shield, User, Map, Database, Send, Building2, UserCog,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
+import { closeSocket } from '../lib/socket';
 import { Logo } from './Logo';
 import { StandBanner } from './StandBanner';
 
@@ -30,6 +31,9 @@ export default function Layout() {
   const user = getUser();
 
   const handleLogout = () => {
+    // Сокет держит токен в рукопожатии — без разрыва он продолжил бы жить
+    // с учётными данными вышедшего сотрудника.
+    closeSocket();
     clearAuth();
     navigate('/login', { replace: true });
   };
