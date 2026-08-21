@@ -277,12 +277,17 @@ export default function RateRequestDetailPage() {
   }, [tender?.id, tender?.origin, tender?.destination]);
 
   useEffect(() => {
-    if (!requestedChatId || !tender || chatWith) return;
+    if (!requestedChatId || !tender) return;
     const name =
       tender.invites.find((i) => i.supplier.id === requestedChatId)?.supplier.name ??
       tender.replies.find((r) => r.supplierId === requestedChatId)?.supplier.name;
-    if (name) setChatWith({ id: requestedChatId, name });
-  }, [requestedChatId, tender, chatWith]);
+    if (!name) return;
+    setChatWith({ id: requestedChatId, name });
+    // Просьбу из уведомления гасим сразу после открытия. Иначе закрытие чата
+    // возвращало бы нас в этот же эффект — и он открывал бы переписку снова,
+    // не давая её закрыть. Заодно перезагрузка страницы больше её не воскрешает.
+    navigate(".", { replace: true, state: null });
+  }, [requestedChatId, tender, navigate]);
 
   const send = async () => {
     if (!id) return;
