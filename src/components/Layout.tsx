@@ -85,14 +85,11 @@ export default function Layout() {
                   : <User size={11} className="text-white/60" />
                 }
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0">
                 <p className="text-xs font-medium truncate leading-none">{user?.name ?? ''}</p>
                 <p className="text-[10px] text-white/40 mt-0.5 leading-none">
                   {user?.isAdmin ? 'Администратор' : 'Сотрудник'}
                 </p>
-              </div>
-              <div className="shrink-0 text-white/60 hover:text-white transition-colors">
-                <NotificationBell />
               </div>
             </div>
             <button
@@ -106,9 +103,14 @@ export default function Layout() {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="h-12 shrink-0 flex items-center justify-end px-6 border-b border-border/60">
+            <NotificationBell />
+          </header>
+          <main className="flex-1 overflow-y-auto p-6">
+            <Outlet />
+          </main>
+        </div>
       </div>
     </div>
   );

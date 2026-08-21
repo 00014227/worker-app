@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useCallback, Fragment } from "react";
 import {
   ArrowLeft,
@@ -181,6 +181,7 @@ function deviationPct(
 export default function RateRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [tender, setTender] = useState<TenderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -193,6 +194,8 @@ export default function RateRequestDetailPage() {
   const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
   /** Подрядчик, с которым открыт чат. */
   const [chatWith, setChatWith] = useState<{ id: string; name: string } | null>(null);
+  /** Из уведомления пришли «в переписку с подрядчиком» — открываем её сразу. */
+  const requestedChatId = (location.state as { openChatWith?: string } | null)?.openChatWith;
 
   const load = useCallback(() => {
     if (!id) return;
@@ -272,6 +275,14 @@ export default function RateRequestDetailPage() {
       .then(setBenchmark)
       .catch(() => setBenchmark(null));
   }, [tender?.id, tender?.origin, tender?.destination]);
+
+  useEffect(() => {
+    if (!requestedChatId || !tender || chatWith) return;
+    const name =
+      tender.invites.find((i) => i.supplier.id === requestedChatId)?.supplier.name ??
+      tender.replies.find((r) => r.supplierId === requestedChatId)?.supplier.name;
+    if (name) setChatWith({ id: requestedChatId, name });
+  }, [requestedChatId, tender, chatWith]);
 
   const send = async () => {
     if (!id) return;

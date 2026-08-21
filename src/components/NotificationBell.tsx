@@ -73,7 +73,10 @@ export default function NotificationBell() {
   const go = async (n: NotificationRow) => {
     setOpen(false);
     if (!n.readAt) setFeed(await notificationApi.markRead(n.id).catch(() => feed));
-    if (n.tenderId) navigate(`/rate-requests/${n.tenderId}`);
+    if (!n.tenderId) return;
+    navigate(`/rate-requests/${n.tenderId}`, {
+      state: n.supplierId ? { openChatWith: n.supplierId } : undefined,
+    });
   };
 
   const readAll = async () => {
@@ -98,7 +101,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute left-0 bottom-full mb-2 w-80 max-h-[420px] overflow-y-auto rounded-xl border border-border bg-background shadow-lg z-50 text-foreground">
+        <div className="absolute right-0 top-full mt-2 w-96 max-h-[440px] overflow-y-auto rounded-xl border border-border bg-background shadow-lg z-50">
           <div className="flex items-center justify-between px-4 py-2.5 border-b sticky top-0 bg-background">
             <span className="text-sm font-medium">Уведомления</span>
             {feed.unread > 0 && (
@@ -132,7 +135,9 @@ export default function NotificationBell() {
                     <div className="min-w-0">
                       <div className="text-sm leading-snug">{n.title}</div>
                       {n.body && (
-                        <div className="text-xs text-muted-foreground truncate">{n.body}</div>
+                        <div className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3 mt-0.5">
+                          {n.body}
+                        </div>
                       )}
                       <div className="text-[10px] text-muted-foreground mt-0.5">
                         {ago(n.createdAt)}
