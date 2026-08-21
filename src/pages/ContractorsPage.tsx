@@ -96,8 +96,14 @@ function LangSelect({ value, onChange }: { value: ContactLanguage; onChange: (l:
  * по @username: одного числового ID мало — нужен access hash, который выдаётся
  * при поиске по телефону или после входящего сообщения.
  */
+/**
+ * Есть ли вообще способ связаться. Достижимость в Telegram — это @username ИЛИ
+ * успешный поиск по телефону: последний импортирует контакт и даёт access_hash,
+ * после чего мы пишем по числовому ID. Из 70 найденных публичный username есть
+ * у 34 — приравнивать «нет username» к «нет связи» значит зря пугать логиста.
+ */
 function hasNoContact(s: SupplierRow): boolean {
-  const tgOk = !!s.telegramUsername;
+  const tgOk = !!s.telegramUsername || !!s.telegramResolved;
   const mailOk = !!s.email;
   if (s.contactChannel === 'email') return !mailOk;
   if (s.contactChannel === 'both') return !tgOk && !mailOk;
@@ -151,7 +157,7 @@ export default function ContractorsPage() {
   }, [rows, search]);
 
   const noContact = rows.filter(hasNoContact).length;
-  const withPhoneNoUsername = rows.filter((c) => c.phone && !c.telegramUsername).length;
+  const needResolve = rows.filter((c) => c.phone && !c.telegramUsername && !c.telegramResolved).length;
 
   /**
    * Ищет подрядчиков в Telegram по телефонам. Массовый импорт контактов Telegram
@@ -201,7 +207,7 @@ export default function ContractorsPage() {
           <button onClick={load} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
-          {withPhoneNoUsername > 0 && (
+          {needResolve > 0 && (
             <button
               onClick={resolvePhones}
               disabled={resolving}
@@ -209,7 +215,7 @@ export default function ContractorsPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 disabled:opacity-40 transition-colors"
             >
               {resolving ? <Loader2 size={13} className="animate-spin" /> : <PhoneCall size={13} />}
-              Найти по телефонам ({withPhoneNoUsername})
+              Найти по телефонам ({needResolve})
             </button>
           )}
           <button
@@ -268,7 +274,7 @@ export default function ContractorsPage() {
                   {hasNoContact(c) && (
                     <div className="flex items-center gap-1 text-amber-700">
                       <AlertTriangle size={11} className="shrink-0" />
-                      {c.phone ? 'нет @username — найдите по телефону' : 'нет способа связи: добавьте телефон'}
+                      {c.phone ? 'не найден в Telegram — проверьте номер' : 'нет способа связи: добавьте телефон'}
                     </div>
                   )}
                   {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}

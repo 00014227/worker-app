@@ -452,6 +452,12 @@ export interface SupplierRow {
   telegramUsername: string | null;
   telegramBound: boolean;
   telegramAccountId: string | null;
+  /**
+   * Подрядчик найден в Telegram по телефону и добавлен в контакты. Именно это,
+   * а не наличие @username, означает «писать можно»: у половины найденных
+   * публичного username нет, но связь работает по числовому ID.
+   */
+  telegramResolved?: boolean;
   /** Страны, которые возит подрядчик — основа автоподбора. Пусто = не задано. */
   directions: string[];
   /** Виды транспорта (auto|rail|air|sea). Пусто = не задано. */
