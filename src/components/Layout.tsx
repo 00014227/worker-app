@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 import { closeSocket } from '../lib/socket';
+import NotificationBell from './NotificationBell';
 import { Logo } from './Logo';
 import { StandBanner } from './StandBanner';
 
@@ -84,11 +85,14 @@ export default function Layout() {
                   : <User size={11} className="text-white/60" />
                 }
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium truncate leading-none">{user?.name ?? ''}</p>
                 <p className="text-[10px] text-white/40 mt-0.5 leading-none">
                   {user?.isAdmin ? 'Администратор' : 'Сотрудник'}
                 </p>
+              </div>
+              <div className="shrink-0 text-white/60 hover:text-white transition-colors">
+                <NotificationBell />
               </div>
             </div>
             <button

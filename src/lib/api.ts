@@ -878,6 +878,41 @@ export const employeeApi = {
   },
 };
 
+export type NotificationType = "reply" | "award_confirmed" | "award_refused";
+
+export interface NotificationRow {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  tenderId: string | null;
+  supplierId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationFeed {
+  unread: number;
+  items: NotificationRow[];
+}
+
+/** Колокольчик логиста. Получатель везде берётся из токена. */
+export const notificationApi = {
+  feed(): Promise<NotificationFeed> {
+    return req<NotificationFeed>("/worker/notifications");
+  },
+  markRead(id: string): Promise<NotificationFeed> {
+    return req<NotificationFeed>(`/worker/notifications/${id}/read`, {
+      method: "POST",
+    });
+  },
+  markAllRead(): Promise<NotificationFeed> {
+    return req<NotificationFeed>("/worker/notifications/read-all", {
+      method: "POST",
+    });
+  },
+};
+
 export const tenderApi = {
   suppliers: {
     list(search?: string): Promise<SupplierRow[]> {

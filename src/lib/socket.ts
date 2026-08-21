@@ -99,3 +99,27 @@ export function subscribeToChat(
     s.off("tender-message", onMessage);
   };
 }
+
+/** Уведомление логисту — приходит на любой странице, комната задана токеном. */
+export interface NotificationEvent {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  tenderId: string | null;
+  supplierId: string | null;
+  createdAt: string;
+}
+
+/**
+ * Подписка на уведомления. Комнату выбирать не нужно: сервер записывает в неё
+ * при подключении, по идентификатору из токена.
+ */
+export function subscribeToNotifications(
+  onNotification: (n: NotificationEvent) => void,
+): () => void {
+  const s = getSocket();
+  if (!s) return () => {};
+  s.on("notification", onNotification);
+  return () => s.off("notification", onNotification);
+}
