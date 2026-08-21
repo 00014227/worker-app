@@ -12,8 +12,6 @@ import {
   AlertTriangle,
   Clock,
   Sparkles,
-  X,
-  Mail,
   ChevronDown,
   ChevronRight,
   TrendingDown,
@@ -25,7 +23,6 @@ import {
   TenderStatus,
   DeliveryStatus,
   TenderReplyRow,
-  ConversationMessage,
   TENDER_MODE_LABELS,
   PRICE_BASIS_LABELS,
   AwardStatus,
@@ -194,10 +191,8 @@ export default function RateRequestDetailPage() {
   const [openRawId, setOpenRawId] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
   const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
-  const [showMessages, setShowMessages] = useState(false);
   /** Подрядчик, с которым открыт чат. */
   const [chatWith, setChatWith] = useState<{ id: string; name: string } | null>(null);
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -316,12 +311,6 @@ export default function RateRequestDetailPage() {
     } finally {
       setSelectingId(null);
     }
-  };
-
-  const openMessages = async () => {
-    if (!id) return;
-    setShowMessages(true);
-    setMessages(await tenderApi.tenders.messages(id).catch(() => []));
   };
 
   const requestImprovement = async () => {
@@ -504,12 +493,6 @@ export default function RateRequestDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={openMessages}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
-              >
-                <MessageSquare size={13} /> Переписка
-              </button>
               {canSend && (
                 <button
                   onClick={send}
@@ -1002,68 +985,6 @@ export default function RateRequestDetailPage() {
         />
       )}
 
-      {showMessages && (
-        <div
-          className="fixed inset-0 z-50 bg-black/30 flex justify-end"
-          onClick={() => setShowMessages(false)}
-        >
-          <div
-            className="w-full max-w-md h-full bg-background shadow-xl p-5 overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-sm">Переписка</h2>
-              <button
-                onClick={() => setShowMessages(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="space-y-2">
-              {messages.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  Сообщений нет
-                </p>
-              ) : (
-                messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={cn(
-                      "rounded-lg px-3 py-2 text-sm max-w-[85%]",
-                      m.direction === "outgoing"
-                        ? "bg-primary/10 ml-auto"
-                        : "bg-muted",
-                    )}
-                  >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      {m.channel === "email" ? (
-                        <Mail size={11} className="text-muted-foreground" />
-                      ) : (
-                        <Send size={11} className="text-muted-foreground" />
-                      )}
-                      {m.subject && (
-                        <span className="text-[10px] text-muted-foreground truncate">
-                          {m.subject}
-                        </span>
-                      )}
-                    </div>
-                    <div className="whitespace-pre-wrap break-words">
-                      {m.text}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground mt-1">
-                      {new Date(m.createdAt).toLocaleString("ru-RU")}
-                      {m.status === "error" && (
-                        <span className="text-red-500 ml-1">· ошибка</span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

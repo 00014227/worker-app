@@ -995,9 +995,6 @@ export const tenderApi = {
         body: JSON.stringify({ text }),
       });
     },
-    messages(id: string): Promise<ConversationMessage[]> {
-      return req<ConversationMessage[]>(`/worker/tenders/${id}/messages`);
-    },
     /** Сколько обычно стоит этот маршрут (медиана закупок + диапазон ставок). */
     benchmark(p: {
       origin?: string | null;
