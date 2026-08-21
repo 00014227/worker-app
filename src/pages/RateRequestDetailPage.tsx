@@ -37,6 +37,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { subscribeToTender, getSocket } from "@/lib/socket";
+import SupplierChat from "@/components/SupplierChat";
 import { confirmOnStand } from "../lib/env";
 
 const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
@@ -194,6 +195,8 @@ export default function RateRequestDetailPage() {
   const [improving, setImproving] = useState(false);
   const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
   const [showMessages, setShowMessages] = useState(false);
+  /** Подрядчик, с которым открыт чат. */
+  const [chatWith, setChatWith] = useState<{ id: string; name: string } | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
   const load = useCallback(() => {
@@ -576,6 +579,15 @@ export default function RateRequestDetailPage() {
                       </span>
                     )}
                     <span className={cn("font-medium", d.cls)}>{d.label}</span>
+                    <button
+                      onClick={() =>
+                        setChatWith({ id: inv.supplier.id, name: inv.supplier.name })
+                      }
+                      title="Переписка с подрядчиком"
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <MessageSquare size={14} />
+                    </button>
                   </div>
                 </div>
               );
@@ -940,6 +952,18 @@ export default function RateRequestDetailPage() {
                                 Выбрать
                               </button>
                             ) : null}
+                            <button
+                              onClick={() =>
+                                setChatWith({
+                                  id: r.supplierId,
+                                  name: r.supplier.name,
+                                })
+                              }
+                              title="Переписка с подрядчиком"
+                              className="ml-2 text-muted-foreground hover:text-foreground transition-colors align-middle"
+                            >
+                              <MessageSquare size={14} />
+                            </button>
                           </td>
                         </tr>
                         {open && (
@@ -970,6 +994,14 @@ export default function RateRequestDetailPage() {
       </Card>
 
       {/* Messages drawer */}
+      {chatWith && id && (
+        <SupplierChat
+          tenderId={id}
+          supplier={chatWith}
+          onClose={() => setChatWith(null)}
+        />
+      )}
+
       {showMessages && (
         <div
           className="fixed inset-0 z-50 bg-black/30 flex justify-end"

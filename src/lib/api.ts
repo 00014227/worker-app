@@ -975,6 +975,26 @@ export const tenderApi = {
         body: JSON.stringify(deadline ? { deadline } : {}),
       });
     },
+    /** Переписка с одним подрядчиком — чат логиста с ним. */
+    supplierMessages(
+      tenderId: string,
+      supplierId: string,
+    ): Promise<ConversationMessage[]> {
+      return req<ConversationMessage[]>(
+        `/worker/tenders/${tenderId}/suppliers/${supplierId}/messages`,
+      );
+    },
+    /** Логист пишет подрядчику вручную. Возвращает обновлённую переписку. */
+    sendSupplierMessage(
+      tenderId: string,
+      supplierId: string,
+      text: string,
+    ): Promise<{ ok: boolean; messages: ConversationMessage[] }> {
+      return req(`/worker/tenders/${tenderId}/suppliers/${supplierId}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+    },
     messages(id: string): Promise<ConversationMessage[]> {
       return req<ConversationMessage[]>(`/worker/tenders/${id}/messages`);
     },

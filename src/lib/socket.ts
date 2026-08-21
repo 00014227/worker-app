@@ -75,3 +75,27 @@ export function subscribeToTender(
     s.off("tender-updated", onChange);
   };
 }
+
+/**
+ * Подписка на переписку с подрядчиком. Отдельная комната от карточки запроса:
+ * чат может быть открыт и тогда, когда карточка закрыта, а сообщение приходит
+ * раньше, чем система поймёт, к какому запросу оно относится.
+ */
+export function subscribeToChat(
+  supplierId: string,
+  onMessage: () => void,
+): () => void {
+  const s = getSocket();
+  if (!s) return () => {};
+
+  const join = () => s.emit("join-chat", supplierId);
+  join();
+  s.on("connect", join);
+  s.on("tender-message", onMessage);
+
+  return () => {
+    s.emit("leave-chat", supplierId);
+    s.off("connect", join);
+    s.off("tender-message", onMessage);
+  };
+}
