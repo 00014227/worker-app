@@ -140,6 +140,11 @@ export default function ContractorsPage() {
   const [creating, setCreating] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [resolveInfo, setResolveInfo] = useState<string | null>(null);
+  /** Быстрые фильтры: всё | доступные | без связи | без направлений. */
+  const [tab, setTab] = useState<'all' | 'ready' | 'nocontact' | 'nodir'>('all');
+  const [dir, setDir] = useState('');
+  /** Только что добавленный — держим наверху, иначе он тонет среди сотни. */
+  const [justAdded, setJustAdded] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -150,11 +155,49 @@ export default function ContractorsPage() {
     tenderApi.telegramAccounts.list().then(setAccounts).catch(() => {});
   }, []);
 
+  /** Список направлений для фильтра — берём из самих подрядчиков. */
+  const allDirections = useMemo(() => {
+    const set = new Set<string>();
+    rows.forEach((c) => c.directions.forEach((d) => set.add(d)));
+    return [...set].sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((c) => c.name.toLowerCase().includes(q) || (c.telegramUsername ?? '').toLowerCase().includes(q));
-  }, [rows, search]);
+    // Телефон логист помнит цифрами, а записан он с плюсом и скобками —
+    // сравниваем только цифры, иначе поиск по номеру не работает.
+    const digits = q.replace(/\D/g, '');
+    let out = rows;
+
+    if (q) {
+      out = out.filter((c) => {
+        const haystack = [
+          c.name,
+          c.telegramUsername ?? '',
+          c.email ?? '',
+          c.country ?? '',
+          ...c.directions,
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (haystack.includes(q)) return true;
+        return digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits);
+      });
+    }
+
+    if (dir) out = out.filter((c) => c.directions.includes(dir));
+    if (tab === 'ready') out = out.filter((c) => !hasNoContact(c));
+    if (tab === 'nocontact') out = out.filter(hasNoContact);
+    if (tab === 'nodir') out = out.filter((c) => c.directions.length === 0);
+
+    // Новый подрядчик — наверх: сразу после создания его надо дозаполнить,
+    // а в алфавитном списке из сотни он теряется мгновенно.
+    if (justAdded) {
+      const i = out.findIndex((c) => c.id === justAdded);
+      if (i > 0) out = [out[i], ...out.slice(0, i), ...out.slice(i + 1)];
+    }
+    return out;
+  }, [rows, search, dir, tab, justAdded]);
 
   const noContact = rows.filter(hasNoContact).length;
   const needResolve = rows.filter((c) => c.phone && !c.telegramUsername && !c.telegramResolved).length;
@@ -231,10 +274,71 @@ export default function ContractorsPage() {
         <div className="rounded-lg border bg-muted/40 px-4 py-2.5 text-xs">{resolveInfo}</div>
       )}
 
-      <div className="relative max-w-sm">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-8 h-8 text-sm" placeholder="Поиск по названию или @username…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-80">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-8 h-8 text-sm"
+            placeholder="Название, @username, телефон, страна, направление…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Разрезы, по которым логист ищет чаще всего. Счётчики сразу говорят,
+            сколько подрядчиков в каждом — не приходится проверять вслепую. */}
+        {([
+          ['all', 'Все', rows.length],
+          ['ready', 'Со связью', rows.length - noContact],
+          ['nocontact', 'Без связи', noContact],
+          ['nodir', 'Без направлений', rows.filter((c) => c.directions.length === 0).length],
+        ] as const).map(([key, label, count]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={cn(
+              'px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors',
+              tab === key
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-border hover:bg-muted/50',
+            )}
+          >
+            {label} <span className="opacity-70">{count}</span>
+          </button>
+        ))}
+
+        {allDirections.length > 0 && (
+          <select
+            value={dir}
+            onChange={(e) => setDir(e.target.value)}
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none"
+          >
+            <option value="">Любое направление</option>
+            {allDirections.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        )}
+
+        {(search || dir || tab !== 'all') && (
+          <button
+            onClick={() => { setSearch(''); setDir(''); setTab('all'); }}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Сбросить
+          </button>
+        )}
+
+        <span className="text-xs text-muted-foreground ml-auto">
+          показано {filtered.length} из {rows.length}
+        </span>
       </div>
+
+      {!loading && filtered.length === 0 && (
+        <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
+          Ничего не нашлось. Попробуйте часть названия, номер телефона или сбросьте фильтры.
+        </div>
+      )}
 
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
         {filtered.map((c) => {
@@ -243,13 +347,24 @@ export default function ContractorsPage() {
             <Card
               key={c.id}
               size="sm"
-              className={cn('cursor-pointer transition-shadow hover:ring-foreground/20', selected?.id === c.id && 'ring-2 ring-primary')}
+              className={cn(
+                'cursor-pointer transition-shadow hover:ring-foreground/20',
+                selected?.id === c.id && 'ring-2 ring-primary',
+                justAdded === c.id && 'ring-2 ring-green-500',
+              )}
               onClick={() => setSelected(c)}
             >
               <CardContent>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-medium text-sm truncate">{c.name}</div>
+                    <div className="font-medium text-sm truncate">
+                      {c.name}
+                      {justAdded === c.id && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-medium align-middle">
+                          новый
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">{c.country ?? '—'}</div>
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-1">
@@ -337,6 +452,14 @@ export default function ContractorsPage() {
           onCreated={(row) => {
             setRows((prev) => [row, ...prev]);
             setCreating(false);
+            // Новый подрядчик закрепляется наверху с пометкой и сразу
+            // открывается на правку: без направлений и телефона он бесполезен —
+            // в автоподбор не попадёт и написать ему будет нечем.
+            setJustAdded(row.id);
+            setSearch('');
+            setDir('');
+            setTab('all');
+            setSelected(row);
           }}
         />
       )}
