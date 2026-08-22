@@ -6,6 +6,8 @@ export interface WorkerUser {
   name: string;
   bitrix24Id: number | null;
   isAdmin: boolean;
+  /** Доступ к разделу проверки контрагентов. */
+  isLawyer?: boolean;
 }
 
 export function getToken(): string | null {

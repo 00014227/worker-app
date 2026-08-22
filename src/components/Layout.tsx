@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   FileText, Users, Package, Sparkles, LogOut,
-  LayoutDashboard, Shield, User, Map, Database, Send, Building2, UserCog,
+  LayoutDashboard, Shield, User, Map, Database, Send, Building2, UserCog, Scale,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 import { closeSocket } from '../lib/socket';
@@ -25,6 +25,11 @@ const nav = [
     здесь просто не показываем то, чем сотрудник не сможет воспользоваться. */
 const adminNav = [
   { to: '/employees',     label: 'Сотрудники',       icon: UserCog },
+];
+
+/** Разделы юристов. Админ видит их тоже — иначе некому проверить настройку. */
+const lawyerNav = [
+  { to: '/counterparty-check', label: 'Проверка контрагентов', icon: Scale },
 ];
 
 export default function Layout() {
@@ -57,7 +62,11 @@ export default function Layout() {
 
           {/* Nav */}
           <nav className="flex-1 py-3 px-2 space-y-0.5">
-            {[...nav, ...(user?.isAdmin ? adminNav : [])].map(({ to, label, icon: Icon }) => (
+            {[
+              ...nav,
+              ...(user?.isAdmin ? adminNav : []),
+              ...(user?.isAdmin || user?.isLawyer ? lawyerNav : []),
+            ].map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}

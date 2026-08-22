@@ -666,6 +666,8 @@ export interface EmployeeAdminRow {
   /** Есть логин и пароль — сотрудник может войти. */
   hasAccess: boolean;
   isAdmin: boolean;
+  /** Доступ к проверке контрагентов. */
+  isLawyer: boolean;
   bitrix24Id: number | null;
   /** Слать ли ежедневный Excel по активным перевозкам этого сотрудника. */
   reportsEnabled: boolean;
@@ -678,6 +680,7 @@ export interface CreateEmployeeInput {
   login?: string;
   password?: string;
   isAdmin?: boolean;
+  isLawyer?: boolean;
   bitrix24Id?: number;
   /** Подразделение = офис: от него зависят воронка Битрикса и импорт/экспорт. */
   departmentId?: string;
@@ -849,6 +852,7 @@ export const employeeApi = {
       login: string;
       password: string;
       isAdmin?: boolean;
+  isLawyer?: boolean;
       bitrix24Id?: number;
     },
   ): Promise<EmployeeAdminRow> {
@@ -872,6 +876,7 @@ export const employeeApi = {
       email?: string;
       phone?: string;
       isAdmin?: boolean;
+  isLawyer?: boolean;
       bitrix24Id?: number;
       departmentId?: string;
       reportsEnabled?: boolean;
@@ -915,6 +920,62 @@ export const notificationApi = {
   markAllRead(): Promise<NotificationFeed> {
     return req<NotificationFeed>("/worker/notifications/read-all", {
       method: "POST",
+    });
+  },
+};
+
+export type RiskLevel = "low" | "medium" | "high" | "unknown";
+
+export interface CheckSource {
+  index: number;
+  url: string;
+  title: string;
+}
+
+/** Какой фрагмент отчёта каким источником подтверждён. */
+export interface CheckAnnotation {
+  start: number;
+  end: number;
+  sources: number[];
+}
+
+export interface CounterpartyCheck {
+  id: string;
+  rawQuery: string;
+  report: string;
+  sources: CheckSource[];
+  annotations: CheckAnnotation[] | null;
+  searchSuggestions: string | null;
+  riskLevel: RiskLevel | null;
+  model: string | null;
+  createdAt: string;
+  /** Отчёт отдан из сохранённых, без нового платного поиска. */
+  fromCache?: boolean;
+}
+
+export interface CheckHistoryRow {
+  id: string;
+  rawQuery: string;
+  riskLevel: RiskLevel | null;
+  createdAt: string;
+  employee: { name: string } | null;
+}
+
+/** Проверка контрагентов. Доступно юристам и админам. */
+export const legalCheckApi = {
+  status(): Promise<{ enabled: boolean }> {
+    return req<{ enabled: boolean }>("/worker/legal-check/status");
+  },
+  history(): Promise<CheckHistoryRow[]> {
+    return req<CheckHistoryRow[]>("/worker/legal-check");
+  },
+  byId(id: string): Promise<CounterpartyCheck> {
+    return req<CounterpartyCheck>(`/worker/legal-check/${id}`);
+  },
+  check(query: string, force = false): Promise<CounterpartyCheck> {
+    return req<CounterpartyCheck>("/worker/legal-check", {
+      method: "POST",
+      body: JSON.stringify({ query, force }),
     });
   },
 };

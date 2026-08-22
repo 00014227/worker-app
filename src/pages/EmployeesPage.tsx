@@ -259,6 +259,7 @@ function EmployeePanel({
   const [departmentId, setDepartmentId] = useState(employee.departmentId ?? '');
   const [bitrixId, setBitrixId] = useState(employee.bitrix24Id ? String(employee.bitrix24Id) : '');
   const [isAdmin, setIsAdmin] = useState(employee.isAdmin);
+  const [isLawyer, setIsLawyer] = useState(employee.isLawyer ?? false);
   const [reportsEnabled, setReportsEnabled] = useState(employee.reportsEnabled);
 
   // ── Доступ ──
@@ -278,6 +279,7 @@ function EmployeePanel({
     departmentId !== (employee.departmentId ?? '') ||
     bitrixId !== (employee.bitrix24Id ? String(employee.bitrix24Id) : '') ||
     isAdmin !== employee.isAdmin ||
+    isLawyer !== (employee.isLawyer ?? false) ||
     reportsEnabled !== employee.reportsEnabled;
 
   const copy = async () => {
@@ -298,6 +300,7 @@ function EmployeePanel({
         reportsEnabled,
         // Свои админские права не трогаем — бэкенд их всё равно отклонит.
         ...(isSelf ? {} : { isAdmin }),
+        isLawyer,
         ...(bitrixId ? { bitrix24Id: Number(bitrixId) } : {}),
       });
       onSaved(row);
@@ -400,6 +403,16 @@ function EmployeePanel({
               className="w-4 h-4"
             />
             <span>Права администратора</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isLawyer}
+              onChange={(e) => setIsLawyer(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span>Юрист — доступ к проверке контрагентов</span>
           </label>
           {isSelf && (
             <p className="text-xs text-muted-foreground -mt-1">
@@ -529,6 +542,7 @@ function CreateEmployeePanel({
           email: form.email?.trim() || undefined,
           phone: form.phone?.trim() || undefined,
           isAdmin: form.isAdmin ?? false,
+          isLawyer: form.isLawyer ?? false,
           bitrix24Id: form.bitrix24Id,
           departmentId: form.departmentId || undefined,
           ...(withAccess
@@ -648,6 +662,16 @@ function CreateEmployeePanel({
               className="w-4 h-4"
             />
             <span>Права администратора</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.isLawyer ?? false}
+              onChange={(e) => set({ isLawyer: e.target.checked })}
+              className="w-4 h-4"
+            />
+            <span>Юрист — доступ к проверке контрагентов</span>
           </label>
 
           {error && <div className="text-xs text-red-600">{error}</div>}
