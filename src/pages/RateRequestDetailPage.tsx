@@ -1,5 +1,5 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect, useCallback, Fragment } from "react";
+import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
   ArrowLeft,
   Trophy,
@@ -18,7 +18,7 @@ import {
   ChevronRight,
   TrendingDown,
   BarChart3,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   tenderApi,
   TenderDetail,
@@ -33,43 +33,43 @@ import {
   DECLINE_REASON_LABELS,
   RouteBenchmark,
   TenderBidRow,
-} from "../lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { confirmOnStand } from "../lib/env";
+} from '../lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import { confirmOnStand } from '../lib/env';
 
 const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
   draft: {
-    label: "Черновик",
-    cls: "bg-slate-100 text-slate-600 border-slate-200",
+    label: 'Черновик',
+    cls: 'bg-slate-100 text-slate-600 border-slate-200',
   },
-  sent: { label: "Отправлен", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  sent: { label: 'Отправлен', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
   collecting: {
-    label: "Сбор ставок",
-    cls: "bg-amber-50 text-amber-700 border-amber-200",
+    label: 'Сбор ставок',
+    cls: 'bg-amber-50 text-amber-700 border-amber-200',
   },
   award_pending: {
-    label: "Ждём подтверждения",
-    cls: "bg-violet-50 text-violet-700 border-violet-200",
+    label: 'Ждём подтверждения',
+    cls: 'bg-violet-50 text-violet-700 border-violet-200',
   },
   decided: {
-    label: "Выбран",
-    cls: "bg-green-50 text-green-700 border-green-200",
+    label: 'Выбран',
+    cls: 'bg-green-50 text-green-700 border-green-200',
   },
-  cancelled: { label: "Отменён", cls: "bg-red-50 text-red-700 border-red-200" },
+  cancelled: { label: 'Отменён', cls: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 const AWARD_BADGE: Record<AwardStatus, string> = {
-  pending: "bg-violet-50 text-violet-700 border-violet-200",
-  confirmed: "bg-green-50 text-green-700 border-green-200",
-  refused: "bg-red-50 text-red-700 border-red-200",
-  expired: "bg-slate-100 text-slate-600 border-slate-200",
+  pending: 'bg-violet-50 text-violet-700 border-violet-200',
+  confirmed: 'bg-green-50 text-green-700 border-green-200',
+  refused: 'bg-red-50 text-red-700 border-red-200',
+  expired: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 
 const DELIVERY: Record<DeliveryStatus, { label: string; cls: string }> = {
-  pending: { label: "Ожидает", cls: "text-slate-500" },
-  sent: { label: "Отправлено", cls: "text-blue-600" },
-  error: { label: "Ошибка", cls: "text-red-600" },
+  pending: { label: 'Ожидает', cls: 'text-slate-500' },
+  sent: { label: 'Отправлено', cls: 'text-blue-600' },
+  error: { label: 'Ошибка', cls: 'text-red-600' },
 };
 
 function error_msg(raw: string) {
@@ -79,32 +79,32 @@ function error_msg(raw: string) {
   // конкретнее любого нашего обобщения.
   if (!/[a-z]/.test(str)) return raw;
   if (
-    str.includes("could not find the input entity") ||
-    str.includes("peer_id_invalid")
+    str.includes('could not find the input entity') ||
+    str.includes('peer_id_invalid')
   )
-    return "Не указан @username или номер телефона (или нужен начатый диалог)";
-  if (str.includes("username_not_occupied") || str.includes("no user has"))
-    return "Username не существует";
-  if (str.includes("user_privacy_restricted"))
-    return "Настройки приватности запрещают сообщения";
-  if (str.includes("blocked") || str.includes("can't write"))
-    return "Подрядчик заблокировал аккаунт";
-  if (str.includes("flood_wait") || str.includes("too many requests"))
-    return "Лимит Telegram — попробуйте позже";
-  if (str.includes("auth_key") || str.includes("unauthorized"))
-    return "Telegram-аккаунт не авторизован";
-  return "Не удалось отправить";
+    return 'Не указан @username или номер телефона (или нужен начатый диалог)';
+  if (str.includes('username_not_occupied') || str.includes('no user has'))
+    return 'Username не существует';
+  if (str.includes('user_privacy_restricted'))
+    return 'Настройки приватности запрещают сообщения';
+  if (str.includes('blocked') || str.includes("can't write"))
+    return 'Подрядчик заблокировал аккаунт';
+  if (str.includes('flood_wait') || str.includes('too many requests'))
+    return 'Лимит Telegram — попробуйте позже';
+  if (str.includes('auth_key') || str.includes('unauthorized'))
+    return 'Telegram-аккаунт не авторизован';
+  return 'Не удалось отправить';
 }
 
 const CHANNEL_LABEL: Record<string, string> = {
-  telegram: "TG",
-  email: "Почта",
-  both: "TG+Почта",
+  telegram: 'TG',
+  email: 'Почта',
+  both: 'TG+Почта',
 };
 
 function money(amount: string | number | null, currency: string | null) {
-  if (amount == null) return "—";
-  return `${Number(amount).toLocaleString("ru-RU")} ${currency ?? ""}`.trim();
+  if (amount == null) return '—';
+  return `${Number(amount).toLocaleString('ru-RU')} ${currency ?? ''}`.trim();
 }
 
 /**
@@ -164,7 +164,7 @@ function isAmbiguous(r: TenderReplyRow): boolean {
  * 21000), поэтому глобальный уровень показываем как «нет истории», а не цифрой.
  */
 function benchmarkUsable(b: RouteBenchmark | null): b is RouteBenchmark {
-  return !!b && b.level !== "global" && b.medianPurchase != null;
+  return !!b && b.level !== 'global' && b.medianPurchase != null;
 }
 
 /** Отклонение от ориентира в процентах; null — сравнивать не с чем. */
@@ -227,7 +227,7 @@ export default function RateRequestDetailPage() {
     // Счётчик считаем здесь, а не берём pendingCount ниже: тот объявлен после
     // раннего выхода по !tender и в этом замыкании существовать не обязан.
     const pending =
-      tender?.invites.filter((i) => i.deliveryStatus !== "sent").length ?? 0;
+      tender?.invites.filter((i) => i.deliveryStatus !== 'sent').length ?? 0;
     if (
       !confirmOnStand(
         `Приглашения уйдут реальным подрядчикам в Telegram (${pending}).`,
@@ -247,9 +247,7 @@ export default function RateRequestDetailPage() {
 
   const select = async (supplierId: string) => {
     if (!id) return;
-    if (
-      !confirmOnStand("Выбранному подрядчику уйдёт запрос подтверждения.")
-    )
+    if (!confirmOnStand('Выбранному подрядчику уйдёт запрос подтверждения.'))
       return;
     setSelectingId(supplierId);
     setError(null);
@@ -272,7 +270,7 @@ export default function RateRequestDetailPage() {
     if (!id) return;
     if (
       !confirmOnStand(
-        "Подрядчикам дороже лидера уйдёт предложение улучшить ставку.",
+        'Подрядчикам дороже лидера уйдёт предложение улучшить ставку.',
       )
     )
       return;
@@ -304,14 +302,14 @@ export default function RateRequestDetailPage() {
 
   const st = STATUS[tender.status];
   const pendingCount = tender.invites.filter(
-    (i) => i.deliveryStatus !== "sent",
+    (i) => i.deliveryStatus !== 'sent',
   ).length;
   const canSend =
-    tender.status !== "decided" &&
-    tender.status !== "cancelled" &&
+    tender.status !== 'decided' &&
+    tender.status !== 'cancelled' &&
     pendingCount > 0;
-  const decided = tender.status === "decided";
-  const awardPending = tender.status === "award_pending";
+  const decided = tender.status === 'decided';
+  const awardPending = tender.status === 'award_pending';
   // Торг возможен один раз и только пока есть с чем работать.
   const pricedCount = tender.replies.filter(
     (r) => r.accepted !== false && r.amount != null,
@@ -319,7 +317,7 @@ export default function RateRequestDetailPage() {
   const canImprove =
     !decided &&
     !awardPending &&
-    tender.status !== "cancelled" &&
+    tender.status !== 'cancelled' &&
     !tender.improvementRequestedAt &&
     pricedCount > 1;
   // Replies ordered by rank (nulls last).
@@ -330,7 +328,7 @@ export default function RateRequestDetailPage() {
   return (
     <div className="space-y-4 max-w-5xl">
       <button
-        onClick={() => navigate("/rate-requests")}
+        onClick={() => navigate('/rate-requests')}
         className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
       >
         <ArrowLeft size={13} /> К запросам
@@ -361,7 +359,7 @@ export default function RateRequestDetailPage() {
                 )}
                 <span
                   className={cn(
-                    "px-2 py-0.5 rounded-full text-xs font-medium border",
+                    'px-2 py-0.5 rounded-full text-xs font-medium border',
                     st.cls,
                   )}
                 >
@@ -372,21 +370,21 @@ export default function RateRequestDetailPage() {
                 {/* Дата погрузки — @db.Date (UTC-полночь): без timeZone съезжает на день назад */}
                 {tender.loadingDate && (
                   <span className="flex items-center gap-1">
-                    <Calendar size={11} /> Погрузка:{" "}
-                    {new Date(tender.loadingDate).toLocaleDateString("ru-RU", {
-                      timeZone: "UTC",
+                    <Calendar size={11} /> Погрузка:{' '}
+                    {new Date(tender.loadingDate).toLocaleDateString('ru-RU', {
+                      timeZone: 'UTC',
                     })}
                   </span>
                 )}
                 {tender.weightKg && (
                   <span>
-                    ⚖️ {Number(tender.weightKg).toLocaleString("ru-RU")} кг
+                    ⚖️ {Number(tender.weightKg).toLocaleString('ru-RU')} кг
                   </span>
                 )}
                 {tender.cargoType && (
                   <span>
                     📦 {tender.cargoType}
-                    {tender.cargo ? ` — ${tender.cargo}` : ""}
+                    {tender.cargo ? ` — ${tender.cargo}` : ''}
                   </span>
                 )}
                 {tender.hazardClass && (
@@ -400,7 +398,7 @@ export default function RateRequestDetailPage() {
                 {tender.vehicleType && (
                   <span>
                     🚚 {tender.vehicleType}
-                    {tender.vehicleCount ? ` × ${tender.vehicleCount}` : ""}
+                    {tender.vehicleCount ? ` × ${tender.vehicleCount}` : ''}
                   </span>
                 )}
                 {tender.loadingMethod && <span>↕️ {tender.loadingMethod}</span>}
@@ -410,23 +408,23 @@ export default function RateRequestDetailPage() {
                   <span
                     className={cn(
                       new Date(tender.bidDeadline) < new Date() &&
-                        "text-red-600",
+                        'text-red-600',
                     )}
                   >
-                    ⏳ приём ставок до:{" "}
-                    {new Date(tender.bidDeadline).toLocaleString("ru-RU", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
+                    ⏳ приём ставок до:{' '}
+                    {new Date(tender.bidDeadline).toLocaleString('ru-RU', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
                     })}
                   </span>
                 )}
                 {tender.cargoValue && (
                   <span>
-                    💰 {Number(tender.cargoValue).toLocaleString("ru-RU")}{" "}
-                    {tender.currency ?? ""}
+                    💰 {Number(tender.cargoValue).toLocaleString('ru-RU')}{' '}
+                    {tender.currency ?? ''}
                   </span>
                 )}
                 {tender.exportCustoms && (
@@ -495,7 +493,7 @@ export default function RateRequestDetailPage() {
                     </span>
                     {inv.supplier.telegramUsername && (
                       <span className="text-xs text-muted-foreground ml-2">
-                        @{inv.supplier.telegramUsername.replace("@", "")}
+                        @{inv.supplier.telegramUsername.replace('@', '')}
                       </span>
                     )}
                     {inv.errorMessage && (
@@ -522,7 +520,7 @@ export default function RateRequestDetailPage() {
                         <Clock size={11} /> {inv.reminderCount}
                       </span>
                     )}
-                    <span className={cn("font-medium", d.cls)}>{d.label}</span>
+                    <span className={cn('font-medium', d.cls)}>{d.label}</span>
                   </div>
                 </div>
               );
@@ -551,8 +549,8 @@ export default function RateRequestDetailPage() {
                 <span className="text-xs font-normal text-muted-foreground">
                   Торг проведён
                   {tender.improvementDeadline
-                    ? ` · до ${new Date(tender.improvementDeadline).toLocaleString("ru-RU", { timeZone: "Asia/Tashkent", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
-                    : ""}
+                    ? ` · до ${new Date(tender.improvementDeadline).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                    : ''}
                 </span>
               )}
               {canImprove && (
@@ -577,8 +575,8 @@ export default function RateRequestDetailPage() {
               Предложение отправлено победителю. Остальным ничего не сообщаем,
               пока он не подтвердит
               {tender.awardDeadline
-                ? ` — ждём до ${new Date(tender.awardDeadline).toLocaleString("ru-RU", { timeZone: "Asia/Tashkent", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
-                : ""}
+                ? ` — ждём до ${new Date(tender.awardDeadline).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                : ''}
               .
             </p>
           )}
@@ -592,32 +590,32 @@ export default function RateRequestDetailPage() {
               {benchmarkUsable(benchmark) ? (
                 <p className="text-muted-foreground">
                   Ориентир
-                  {benchmark.level === "country"
+                  {benchmark.level === 'country'
                     ? ` по направлению ${benchmark.scope}`
-                    : ""}
-                  : медиана закупок{" "}
+                    : ''}
+                  : медиана закупок{' '}
                   <span className="font-medium text-foreground">
                     {money(benchmark.medianPurchase, benchmark.currency)}
                   </span>
                   {benchmark.lastPurchase != null && (
                     <>
-                      {" "}
-                      · последняя{" "}
+                      {' '}
+                      · последняя{' '}
                       {money(benchmark.lastPurchase, benchmark.currency)}
                     </>
                   )}
                   {benchmark.minBid != null && benchmark.maxBid != null && (
                     <>
-                      {" "}
+                      {' '}
                       · ставки {money(benchmark.minBid, null)}–
                       {money(benchmark.maxBid, benchmark.currency)}
                     </>
                   )}
-                  {" · "}
-                  <span className={cn(!benchmark.reliable && "text-amber-700")}>
+                  {' · '}
+                  <span className={cn(!benchmark.reliable && 'text-amber-700')}>
                     {benchmark.reliable
                       ? `по ${benchmark.purchases} закупкам за ${benchmark.days} дн`
-                      : `мало данных: ${benchmark.purchases} закупк${benchmark.purchases === 1 ? "а" : "и"}`}
+                      : `мало данных: ${benchmark.purchases} закупк${benchmark.purchases === 1 ? 'а' : 'и'}`}
                   </span>
                 </p>
               ) : (
@@ -675,12 +673,12 @@ export default function RateRequestDetailPage() {
                       <Fragment key={r.id}>
                         <tr
                           className={cn(
-                            recommended && !decided && "bg-violet-50/50",
-                            r.isSelected && "bg-green-50/60",
+                            recommended && !decided && 'bg-violet-50/50',
+                            r.isSelected && 'bg-green-50/60',
                           )}
                         >
                           <td className="px-4 py-3 text-muted-foreground">
-                            {r.rank ?? "—"}
+                            {r.rank ?? '—'}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
@@ -716,7 +714,7 @@ export default function RateRequestDetailPage() {
                               {r.awardStatus && (
                                 <span
                                   className={cn(
-                                    "px-1.5 py-0.5 rounded text-[10px] font-medium border",
+                                    'px-1.5 py-0.5 rounded text-[10px] font-medium border',
                                     AWARD_BADGE[r.awardStatus],
                                   )}
                                 >
@@ -733,7 +731,7 @@ export default function RateRequestDetailPage() {
                                 <ChevronDown size={11} />
                               ) : (
                                 <ChevronRight size={11} />
-                              )}{" "}
+                              )}{' '}
                               исходное сообщение
                             </button>
                           </td>
@@ -757,17 +755,17 @@ export default function RateRequestDetailPage() {
                                   className="text-[11px] text-muted-foreground"
                                   title={`Все присланные ставки: ${trail
                                     .map((t) =>
-                                      Number(t.amount).toLocaleString("ru-RU"),
+                                      Number(t.amount).toLocaleString('ru-RU'),
                                     )
-                                    .join(" → ")}`}
+                                    .join(' → ')}`}
                                 >
-                                  было{" "}
-                                  {Number(first.amount).toLocaleString("ru-RU")}
+                                  было{' '}
+                                  {Number(first.amount).toLocaleString('ru-RU')}
                                   {trail.length > 2 &&
                                     ` (ставок: ${trail.length})`}
                                   {down && (
                                     <span className="text-green-700 font-medium">
-                                      {" "}
+                                      {' '}
                                       −
                                       {Math.round(
                                         ((first.amount - last.amount) /
@@ -798,12 +796,12 @@ export default function RateRequestDetailPage() {
                               return (
                                 <div
                                   className={cn(
-                                    "text-[11px] font-medium",
-                                    above ? "text-amber-700" : "text-green-700",
+                                    'text-[11px] font-medium',
+                                    above ? 'text-amber-700' : 'text-green-700',
                                   )}
                                   title={`Медиана закупок по маршруту: ${money(benchmark?.medianPurchase ?? null, benchmark?.currency ?? null)}`}
                                 >
-                                  {above ? "↑ выше" : "↓ ниже"} ориентира на{" "}
+                                  {above ? '↑ выше' : '↓ ниже'} ориентира на{' '}
                                   {Math.abs(Math.round(dev))}%
                                 </div>
                               );
@@ -812,7 +810,7 @@ export default function RateRequestDetailPage() {
                             {ambiguous && (
                               <div className="mt-1 text-[11px] text-amber-700 text-left inline-block">
                                 <span className="inline-flex items-center gap-1 font-medium">
-                                  <AlertTriangle size={11} /> вариантов:{" "}
+                                  <AlertTriangle size={11} /> вариантов:{' '}
                                   {r.priceOptions!.length}
                                 </span>
                                 <ul className="mt-0.5 space-y-0.5">
@@ -826,7 +824,7 @@ export default function RateRequestDetailPage() {
                                         ? ` — ${PRICE_BASIS_LABELS[o.basis]}`
                                         : o.label
                                           ? ` — ${o.label}`
-                                          : ""}
+                                          : ''}
                                     </li>
                                   ))}
                                 </ul>
@@ -857,16 +855,16 @@ export default function RateRequestDetailPage() {
                                 запросили
                               </span>
                             ) : (
-                              "—"
+                              '—'
                             )}
                           </td>
                           <td className="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground max-w-[220px] truncate">
-                            {r.conditions ?? "—"}
+                            {r.conditions ?? '—'}
                           </td>
                           <td className="px-4 py-3 text-center text-xs text-muted-foreground">
                             {r.aiConfidence != null
                               ? `${Math.round(Number(r.aiConfidence) * 100)}%`
-                              : "—"}
+                              : '—'}
                           </td>
                           <td className="px-4 py-3 text-right">
                             {r.isSelected ? (
@@ -894,10 +892,10 @@ export default function RateRequestDetailPage() {
                             <td />
                             <td colSpan={7} className="px-4 py-3">
                               <div className="text-[11px] text-muted-foreground mb-1">
-                                Как написал подрядчик ·{" "}
+                                Как написал подрядчик ·{' '}
                                 {new Date(r.receivedAt).toLocaleString(
-                                  "ru-RU",
-                                  { timeZone: "Asia/Tashkent" },
+                                  'ru-RU',
+                                  { timeZone: 'Asia/Tashkent' },
                                 )}
                               </div>
                               <pre className="whitespace-pre-wrap break-words text-xs bg-background border rounded-lg p-3">
@@ -945,14 +943,14 @@ export default function RateRequestDetailPage() {
                   <div
                     key={m.id}
                     className={cn(
-                      "rounded-lg px-3 py-2 text-sm max-w-[85%]",
-                      m.direction === "outgoing"
-                        ? "bg-primary/10 ml-auto"
-                        : "bg-muted",
+                      'rounded-lg px-3 py-2 text-sm max-w-[85%]',
+                      m.direction === 'outgoing'
+                        ? 'bg-primary/10 ml-auto'
+                        : 'bg-muted',
                     )}
                   >
                     <div className="flex items-center gap-1.5 mb-1">
-                      {m.channel === "email" ? (
+                      {m.channel === 'email' ? (
                         <Mail size={11} className="text-muted-foreground" />
                       ) : (
                         <Send size={11} className="text-muted-foreground" />
@@ -967,8 +965,8 @@ export default function RateRequestDetailPage() {
                       {m.text}
                     </div>
                     <div className="text-[10px] text-muted-foreground mt-1">
-                      {new Date(m.createdAt).toLocaleString("ru-RU")}
-                      {m.status === "error" && (
+                      {new Date(m.createdAt).toLocaleString('ru-RU')}
+                      {m.status === 'error' && (
                         <span className="text-red-500 ml-1">· ошибка</span>
                       )}
                     </div>

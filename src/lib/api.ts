@@ -1,11 +1,11 @@
-import { authHeaders } from "./auth";
+import { authHeaders } from './auth';
 
-const BASE = "/api";
+const BASE = '/api';
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...authHeaders(),
       ...opts?.headers,
     },
@@ -17,8 +17,8 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
     // отдельных случаях — без нормализации в UI прилетало «[object Object]».
     const raw = body?.message ?? body?.error;
     const message = Array.isArray(raw)
-      ? raw.join("; ")
-      : typeof raw === "string"
+      ? raw.join('; ')
+      : typeof raw === 'string'
         ? raw
         : `Ошибка ${res.status}`;
     throw new Error(message);
@@ -89,7 +89,7 @@ export interface OrderQuery {
   responsibleId?: string;
   dateFrom?: string;
   dateTo?: string;
-  activeOnly?: "true";
+  activeOnly?: 'true';
   page?: number;
   limit?: number;
 }
@@ -140,7 +140,7 @@ export interface TariffUploadRow {
   validFrom: string | null;
   validUntil: string | null;
   notes: string | null;
-  rowStatus: "ok" | "warning" | "error";
+  rowStatus: 'ok' | 'warning' | 'error';
   errorMessage: string | null;
   isEdited: boolean;
 }
@@ -161,7 +161,7 @@ export interface TariffUploadBatch {
 
 export async function uploadTariffFile(
   file: File,
-  sourceType: "indicative" | "b24",
+  sourceType: 'indicative' | 'b24',
 ): Promise<{
   batchId: string;
   status: string;
@@ -170,10 +170,10 @@ export async function uploadTariffFile(
   warnings: string[];
 }> {
   const form = new FormData();
-  form.append("file", file);
-  form.append("sourceType", sourceType);
-  const res = await fetch("/api/worker/tariffs/uploads", {
-    method: "POST",
+  form.append('file', file);
+  form.append('sourceType', sourceType);
+  const res = await fetch('/api/worker/tariffs/uploads', {
+    method: 'POST',
     headers: authHeaders(),
     body: form,
   });
@@ -185,7 +185,7 @@ export async function getTariffBatch(
   batchId: string,
 ): Promise<TariffUploadBatch> {
   const res = await fetch(`/api/worker/tariffs/uploads/${batchId}`, {
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -211,8 +211,8 @@ export async function updateTariffRow(
   const res = await fetch(
     `/api/worker/tariffs/uploads/${batchId}/rows/${rowId}`,
     {
-      method: "PATCH",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     },
   );
@@ -224,8 +224,8 @@ export async function commitTariffBatch(
   batchId: string,
 ): Promise<{ committed: number; skipped: number; errors: string[] }> {
   const res = await fetch(`/api/worker/tariffs/uploads/${batchId}/commit`, {
-    method: "POST",
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -245,22 +245,22 @@ export async function listTariffs(params: {
   pages: number;
 }> {
   const q = new URLSearchParams();
-  if (params.departure) q.set("departure", params.departure);
-  if (params.destination) q.set("destination", params.destination);
-  if (params.transportType) q.set("transportType", params.transportType);
-  if (params.page) q.set("page", String(params.page));
-  if (params.limit) q.set("limit", String(params.limit));
+  if (params.departure) q.set('departure', params.departure);
+  if (params.destination) q.set('destination', params.destination);
+  if (params.transportType) q.set('transportType', params.transportType);
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
   const res = await fetch(`/api/worker/tariffs?${q}`, {
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function listLocations(search?: string): Promise<Location[]> {
-  const q = search ? `?search=${encodeURIComponent(search)}` : "";
+  const q = search ? `?search=${encodeURIComponent(search)}` : '';
   const res = await fetch(`/api/worker/tariffs/locations${q}`, {
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -294,15 +294,15 @@ export async function uploadTariffSource(
   },
 ): Promise<TariffSource> {
   const form = new FormData();
-  form.append("file", file);
-  form.append("name", meta.name);
-  form.append("office", meta.office);
-  form.append("category", meta.category);
-  form.append("transportTypes", meta.transportTypes.join(","));
-  if (meta.validFrom) form.append("validFrom", meta.validFrom);
-  if (meta.validUntil) form.append("validUntil", meta.validUntil);
-  const res = await fetch("/api/worker/tariffs/sources", {
-    method: "POST",
+  form.append('file', file);
+  form.append('name', meta.name);
+  form.append('office', meta.office);
+  form.append('category', meta.category);
+  form.append('transportTypes', meta.transportTypes.join(','));
+  if (meta.validFrom) form.append('validFrom', meta.validFrom);
+  if (meta.validUntil) form.append('validUntil', meta.validUntil);
+  const res = await fetch('/api/worker/tariffs/sources', {
+    method: 'POST',
     headers: authHeaders(),
     body: form,
   });
@@ -311,7 +311,7 @@ export async function uploadTariffSource(
 }
 
 export function listTariffSources(): Promise<TariffSource[]> {
-  return req<TariffSource[]>("/worker/tariffs/sources");
+  return req<TariffSource[]>('/worker/tariffs/sources');
 }
 
 export function setTariffSourceActive(
@@ -319,14 +319,14 @@ export function setTariffSourceActive(
   isActive: boolean,
 ): Promise<TariffSource> {
   return req<TariffSource>(`/worker/tariffs/sources/${id}`, {
-    method: "PATCH",
+    method: 'PATCH',
     body: JSON.stringify({ isActive }),
   });
 }
 
 export function deleteTariffSource(id: string): Promise<TariffSource> {
   return req<TariffSource>(`/worker/tariffs/sources/${id}`, {
-    method: "DELETE",
+    method: 'DELETE',
   });
 }
 
@@ -337,19 +337,19 @@ export const workerApi = {
     list(q: OrderQuery = {}): Promise<OrderListResponse> {
       const params = new URLSearchParams();
       Object.entries(q).forEach(([k, v]) => {
-        if (v !== undefined && v !== "") params.set(k, String(v));
+        if (v !== undefined && v !== '') params.set(k, String(v));
       });
       const qs = params.toString();
-      return req<OrderListResponse>(`/worker/orders${qs ? `?${qs}` : ""}`);
+      return req<OrderListResponse>(`/worker/orders${qs ? `?${qs}` : ''}`);
     },
     get(id: string): Promise<OrderRow> {
       return req<OrderRow>(`/worker/orders/${id}`);
     },
     stats(): Promise<OrderStats> {
-      return req<OrderStats>("/worker/orders/stats");
+      return req<OrderStats>('/worker/orders/stats');
     },
     map(): Promise<MapOrderRow[]> {
-      return req<MapOrderRow[]>("/worker/orders/map");
+      return req<MapOrderRow[]>('/worker/orders/map');
     },
   },
 };
@@ -367,7 +367,7 @@ export interface CustomerRow {
 
 export const customersApi = {
   list(search?: string): Promise<CustomerRow[]> {
-    const q = search ? `?search=${encodeURIComponent(search)}` : "";
+    const q = search ? `?search=${encodeURIComponent(search)}` : '';
     return req<CustomerRow[]>(`/worker/customers${q}`);
   },
   updateReports(
@@ -375,9 +375,9 @@ export const customersApi = {
     patch: { reportEmails?: string; reportsEnabled?: boolean },
   ) {
     return req<
-      Pick<CustomerRow, "id" | "name" | "reportEmails" | "reportsEnabled">
+      Pick<CustomerRow, 'id' | 'name' | 'reportEmails' | 'reportsEnabled'>
     >(`/worker/customers/${id}/reports`, {
-      method: "PATCH",
+      method: 'PATCH',
       body: JSON.stringify(patch),
     });
   },
@@ -385,60 +385,60 @@ export const customersApi = {
 
 // ── Contractor tenders (выбор подрядчика) ─────────────────────────────────────
 
-export type TenderMode = "auto" | "rail" | "air" | "sea";
+export type TenderMode = 'auto' | 'rail' | 'air' | 'sea';
 export const TENDER_MODE_LABELS: Record<TenderMode, string> = {
-  auto: "Авто",
-  rail: "Ж/Д",
-  air: "Авиа",
-  sea: "Море",
+  auto: 'Авто',
+  rail: 'Ж/Д',
+  air: 'Авиа',
+  sea: 'Море',
 };
 
 export type TenderStatus =
-  | "draft"
-  | "sent"
-  | "collecting"
+  | 'draft'
+  | 'sent'
+  | 'collecting'
   /** Победителю предложили перевозку — ждём подтверждения до дедлайна. */
-  | "award_pending"
-  | "decided"
-  | "cancelled";
+  | 'award_pending'
+  | 'decided'
+  | 'cancelled';
 
 /** Ход подтверждения после выбора подрядчика. */
-export type AwardStatus = "pending" | "confirmed" | "refused" | "expired";
+export type AwardStatus = 'pending' | 'confirmed' | 'refused' | 'expired';
 export const AWARD_STATUS_LABELS: Record<AwardStatus, string> = {
-  pending: "ждём подтверждения",
-  confirmed: "подтвердил",
-  refused: "отказался",
-  expired: "не ответил",
+  pending: 'ждём подтверждения',
+  confirmed: 'подтвердил',
+  refused: 'отказался',
+  expired: 'не ответил',
 };
 
 /** Причина отказа, распознанная из свободного текста. */
 export type DeclineReason =
-  | "no_vehicle"
-  | "route_not_served"
-  | "date_not_suitable"
-  | "price_too_low"
-  | "other";
+  | 'no_vehicle'
+  | 'route_not_served'
+  | 'date_not_suitable'
+  | 'price_too_low'
+  | 'other';
 export const DECLINE_REASON_LABELS: Record<DeclineReason, string> = {
-  no_vehicle: "нет машины",
-  route_not_served: "не возят это направление",
-  date_not_suitable: "не подходит дата",
-  price_too_low: "цена не интересна",
-  other: "другое",
+  no_vehicle: 'нет машины',
+  route_not_served: 'не возят это направление',
+  date_not_suitable: 'не подходит дата',
+  price_too_low: 'цена не интересна',
+  other: 'другое',
 };
-export type DeliveryStatus = "pending" | "sent" | "error";
+export type DeliveryStatus = 'pending' | 'sent' | 'error';
 
-export type ContactChannel = "telegram" | "email" | "both";
+export type ContactChannel = 'telegram' | 'email' | 'both';
 export const CONTACT_CHANNEL_LABELS: Record<ContactChannel, string> = {
-  telegram: "Telegram",
-  email: "Почта",
-  both: "Оба",
+  telegram: 'Telegram',
+  email: 'Почта',
+  both: 'Оба',
 };
 
-export type ContactLanguage = "RU" | "EN" | "UZ";
+export type ContactLanguage = 'RU' | 'EN' | 'UZ';
 export const CONTACT_LANGUAGE_LABELS: Record<ContactLanguage, string> = {
-  RU: "Русский",
-  EN: "English",
-  UZ: "Oʻzbekcha",
+  RU: 'Русский',
+  EN: 'English',
+  UZ: 'Oʻzbekcha',
 };
 
 export interface SupplierRow {
@@ -479,7 +479,7 @@ export interface PhoneResolveResponse {
     supplierId: string;
     name: string;
     phone: string;
-    status: "resolved" | "id_mismatch" | "duplicate" | "not_found" | "error";
+    status: 'resolved' | 'id_mismatch' | 'duplicate' | 'not_found' | 'error';
     username?: string | null;
     message?: string;
     note?: string;
@@ -514,13 +514,13 @@ export interface TenderInviteRow {
   telegramAccount: { id: string; label: string; phone: string } | null;
 }
 
-export type PriceBasis = "with_vat" | "without_vat" | "cash" | "other";
+export type PriceBasis = 'with_vat' | 'without_vat' | 'cash' | 'other';
 
 export const PRICE_BASIS_LABELS: Record<PriceBasis, string> = {
-  with_vat: "с НДС",
-  without_vat: "без НДС",
-  cash: "наличными",
-  other: "иное",
+  with_vat: 'с НДС',
+  without_vat: 'без НДС',
+  cash: 'наличными',
+  other: 'иное',
 };
 
 /** Один ценовой вариант из ответа: «1600 с НДС», «1450 налом». */
@@ -612,7 +612,7 @@ export interface TenderDetail {
 }
 
 /** Откуда взяты цифры бенчмарка — данных по маршрутам мало, поэтому показываем. */
-export type BenchmarkLevel = "route" | "country" | "global";
+export type BenchmarkLevel = 'route' | 'country' | 'global';
 
 export interface RouteBenchmark {
   level: BenchmarkLevel;
@@ -732,40 +732,40 @@ export interface TenderListRow {
 }
 
 export const CARGO_TYPES = [
-  "генеральный",
-  "температурный",
-  "опасный",
-  "акцизный",
+  'генеральный',
+  'температурный',
+  'опасный',
+  'акцизный',
 ] as const;
 export type CargoType = (typeof CARGO_TYPES)[number];
 
 /** Кузова. REF — только для температурного груза. */
 export const VEHICLE_TYPES = [
-  "10 т. тент",
-  "10 т. box",
-  "10 т. ISO",
-  "10 т. тент 90м3",
-  "120м3 сцепка",
-  "box trailer 90 м3",
-  "ISO 90 м3",
-  "Мега",
+  '10 т. тент',
+  '10 т. box',
+  '10 т. ISO',
+  '10 т. тент 90м3',
+  '120м3 сцепка',
+  'box trailer 90 м3',
+  'ISO 90 м3',
+  'Мега',
 ] as const;
-export const REF_VEHICLE_TYPE = "REF 90 м3";
+export const REF_VEHICLE_TYPE = 'REF 90 м3';
 
-export const LOADING_METHODS = ["задняя", "верхняя", "боковая"] as const;
+export const LOADING_METHODS = ['задняя', 'верхняя', 'боковая'] as const;
 
 export const INCOTERMS = [
-  "EXW",
-  "FCA",
-  "FAS",
-  "FOB",
-  "CFR",
-  "CIF",
-  "CPT",
-  "CIP",
-  "DAP",
-  "DPU",
-  "DDP",
+  'EXW',
+  'FCA',
+  'FAS',
+  'FOB',
+  'CFR',
+  'CIF',
+  'CPT',
+  'CIP',
+  'DAP',
+  'DPU',
+  'DDP',
 ] as const;
 
 export interface CreateTenderInput {
@@ -805,8 +805,8 @@ export interface CreateTenderInput {
 
 export interface ConversationMessage {
   id: string;
-  channel: "telegram" | "email";
-  direction: "outgoing" | "incoming";
+  channel: 'telegram' | 'email';
+  direction: 'outgoing' | 'incoming';
   text: string;
   subject: string | null;
   status: string | null;
@@ -817,7 +817,7 @@ export interface TelegramAccountRow {
   id: string;
   label: string;
   phone: string;
-  status: "active" | "cooldown" | "blocked" | "loggedout";
+  status: 'active' | 'cooldown' | 'blocked' | 'loggedout';
   dailySentCount: number;
   lastSentAt: string | null;
   floodWaitUntil: string | null;
@@ -827,12 +827,12 @@ export interface TelegramAccountRow {
 /** Админ-раздел: сотрудники и их доступ. Требует прав администратора. */
 export const employeeApi = {
   list(search?: string): Promise<EmployeeAdminRow[]> {
-    const q = search ? `?search=${encodeURIComponent(search)}` : "";
+    const q = search ? `?search=${encodeURIComponent(search)}` : '';
     return req<EmployeeAdminRow[]>(`/worker/admin/employees${q}`);
   },
   create(input: CreateEmployeeInput): Promise<EmployeeAdminRow> {
-    return req<EmployeeAdminRow>("/worker/admin/employees", {
-      method: "POST",
+    return req<EmployeeAdminRow>('/worker/admin/employees', {
+      method: 'POST',
       body: JSON.stringify(input),
     });
   },
@@ -847,17 +847,17 @@ export const employeeApi = {
     },
   ): Promise<EmployeeAdminRow> {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}/credentials`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(input),
     });
   },
   revokeAccess(id: string): Promise<EmployeeAdminRow> {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}/credentials`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
   },
   departments(): Promise<DepartmentRow[]> {
-    return req<DepartmentRow[]>("/worker/admin/employees/departments");
+    return req<DepartmentRow[]>('/worker/admin/employees/departments');
   },
   update(
     id: string,
@@ -872,7 +872,7 @@ export const employeeApi = {
     },
   ): Promise<EmployeeAdminRow> {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}`, {
-      method: "PATCH",
+      method: 'PATCH',
       body: JSON.stringify(patch),
     });
   },
@@ -881,12 +881,12 @@ export const employeeApi = {
 export const tenderApi = {
   suppliers: {
     list(search?: string): Promise<SupplierRow[]> {
-      const q = search ? `?search=${encodeURIComponent(search)}` : "";
+      const q = search ? `?search=${encodeURIComponent(search)}` : '';
       return req<SupplierRow[]>(`/worker/suppliers${q}`);
     },
     create(input: CreateSupplierInput): Promise<SupplierRow> {
-      return req<SupplierRow>("/worker/suppliers", {
-        method: "POST",
+      return req<SupplierRow>('/worker/suppliers', {
+        method: 'POST',
         body: JSON.stringify(input),
       });
     },
@@ -905,7 +905,7 @@ export const tenderApi = {
       },
     ) {
       return req(`/worker/suppliers/${id}/telegram`, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify(patch),
       });
     },
@@ -915,7 +915,7 @@ export const tenderApi = {
      */
     remove(id: string): Promise<{ name: string }> {
       return req<{ name: string }>(`/worker/suppliers/${id}`, {
-        method: "DELETE",
+        method: 'DELETE',
       });
     },
     /**
@@ -923,8 +923,8 @@ export const tenderApi = {
      * Без этого юзербот не может написать тем, у кого только числовой ID.
      */
     resolveByPhone(supplierIds?: string[]): Promise<PhoneResolveResponse> {
-      return req<PhoneResolveResponse>("/worker/suppliers/resolve-by-phone", {
-        method: "POST",
+      return req<PhoneResolveResponse>('/worker/suppliers/resolve-by-phone', {
+        method: 'POST',
         body: JSON.stringify(supplierIds?.length ? { supplierIds } : {}),
       });
     },
@@ -937,32 +937,32 @@ export const tenderApi = {
   },
   tenders: {
     list(): Promise<TenderListRow[]> {
-      return req<TenderListRow[]>("/worker/tenders");
+      return req<TenderListRow[]>('/worker/tenders');
     },
     get(id: string): Promise<TenderDetail> {
       return req<TenderDetail>(`/worker/tenders/${id}`);
     },
     create(input: CreateTenderInput): Promise<TenderDetail> {
-      return req<TenderDetail>("/worker/tenders", {
-        method: "POST",
+      return req<TenderDetail>('/worker/tenders', {
+        method: 'POST',
         body: JSON.stringify(input),
       });
     },
     send(id: string, supplierIds?: string[]): Promise<TenderDetail> {
       return req<TenderDetail>(`/worker/tenders/${id}/send`, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify(supplierIds ? { supplierIds } : {}),
       });
     },
     select(id: string, supplierId: string): Promise<TenderDetail> {
       return req<TenderDetail>(`/worker/tenders/${id}/select`, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify({ supplierId }),
       });
     },
     /** Сделки воронки офиса на этапе «Расчет ставки» (свои первыми). */
     bitrixDeals(): Promise<BitrixDealRow[]> {
-      return req<BitrixDealRow[]>("/worker/tenders/bitrix-deals");
+      return req<BitrixDealRow[]>('/worker/tenders/bitrix-deals');
     },
     /** Поля запроса из выбранной сделки. */
     dealPrefill(dealId: number): Promise<DealPrefill> {
@@ -971,7 +971,7 @@ export const tenderApi = {
     /** Один раунд торга: тем, кто дороже лидера, уходит «готовы улучшить?». */
     requestImprovement(id: string, deadline?: string): Promise<TenderDetail> {
       return req<TenderDetail>(`/worker/tenders/${id}/request-improvement`, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify(deadline ? { deadline } : {}),
       });
     },
@@ -993,7 +993,7 @@ export const tenderApi = {
   },
   telegramAccounts: {
     list(): Promise<TelegramAccountRow[]> {
-      return req<TelegramAccountRow[]>("/worker/telegram-accounts");
+      return req<TelegramAccountRow[]>('/worker/telegram-accounts');
     },
     create(input: {
       label: string;
@@ -1001,19 +1001,19 @@ export const tenderApi = {
       apiId: number;
       apiHash: string;
     }) {
-      return req<TelegramAccountRow>("/worker/telegram-accounts", {
-        method: "POST",
+      return req<TelegramAccountRow>('/worker/telegram-accounts', {
+        method: 'POST',
         body: JSON.stringify(input),
       });
     },
     sendCode(id: string): Promise<{ ok: boolean }> {
       return req(`/worker/telegram-accounts/${id}/send-code`, {
-        method: "POST",
+        method: 'POST',
       });
     },
     verify(id: string, code: string): Promise<{ ok: boolean }> {
       return req(`/worker/telegram-accounts/${id}/verify`, {
-        method: "POST",
+        method: 'POST',
         body: JSON.stringify({ code }),
       });
     },
