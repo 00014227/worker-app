@@ -161,6 +161,8 @@ export default function ContractorsPage() {
   const [creating, setCreating] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [resolveInfo, setResolveInfo] = useState<string | null>(null);
+  /** id подрядчика, для которого сейчас идёт ручное подтверждение номера. */
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   /** Быстрые фильтры: всё | доступные | без связи | без направлений. */
   const [tab, setTab] = useState<'all' | 'ready' | 'nocontact' | 'nodir'>('all');
   const [dir, setDir] = useState('');
@@ -259,6 +261,35 @@ export default function ContractorsPage() {
       setResolveInfo((e as Error).message);
     } finally {
       setResolving(false);
+    }
+  };
+
+  /**
+   * Логист вручную подтверждает: номер принадлежит именно этому подрядчику,
+   * даже если сохранённый Telegram-ID устарел. Разрешение идёт заново, без
+   * сверки со старым ID — то же, что и обычный поиск, просто без охранника.
+   */
+  const confirmTelegram = async (supplierId: string) => {
+    setConfirmingId(supplierId);
+    try {
+      const { result, supplier } = await tenderApi.suppliers.confirmTelegram(supplierId);
+      setRows((prev) => prev.map((r) => (r.id === supplierId ? supplier : r)));
+      if (selected?.id === supplierId) setSelected(supplier);
+      if (result.status !== 'resolved') {
+        setResolveInfo(
+          `«${supplier.name}»: ${
+            result.status === 'not_found'
+              ? 'номер скрыт настройками приватности'
+              : result.status === 'duplicate'
+                ? result.note || 'этот Telegram уже привязан к другому подрядчику'
+                : 'проверка не удалась, попробуйте ещё раз'
+          }`,
+        );
+      }
+    } catch (e) {
+      setResolveInfo((e as Error).message);
+    } finally {
+      setConfirmingId(null);
     }
   };
 
@@ -415,9 +446,26 @@ export default function ContractorsPage() {
                   </div>
                   {c.telegramUsername && <div className="flex items-center gap-1 text-blue-600"><Send size={11} /> @{c.telegramUsername.replace('@', '')}</div>}
                   {hasNoContact(c) && (
-                    <div className="flex items-center gap-1 text-amber-700">
-                      <AlertTriangle size={11} className="shrink-0" />
-                      {noContactReason(c)}
+                    <div className="flex items-start gap-1 text-amber-700">
+                      <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+                      <span className="min-w-0">
+                        {noContactReason(c)}
+                        {/* Telegram нашёл владельца номера, но он не тот, что записан
+                            у нас — здесь нужно решение человека, а не автоматика. */}
+                        {(c.telegramResolveStatus === 'id_mismatch' ||
+                          c.telegramResolveStatus === 'duplicate') && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void confirmTelegram(c.id);
+                            }}
+                            disabled={confirmingId === c.id}
+                            className="ml-1.5 underline decoration-dotted hover:text-amber-900 disabled:opacity-50"
+                          >
+                            {confirmingId === c.id ? 'обновляю…' : 'это точно он — обновить'}
+                          </button>
+                        )}
+                      </span>
                     </div>
                   )}
                   {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}

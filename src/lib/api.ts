@@ -1040,6 +1040,18 @@ export const tenderApi = {
         body: JSON.stringify(supplierIds?.length ? { supplierIds } : {}),
       });
     },
+    /**
+     * Логист вручную подтверждает: номер принадлежит этому подрядчику, даже
+     * если сохранённый Telegram-ID разошёлся с тем, что сейчас отдаёт Telegram
+     * по телефону.
+     */
+    confirmTelegram(
+      supplierId: string,
+    ): Promise<{ result: PhoneResolveResponse["results"][number]; supplier: SupplierRow }> {
+      return req(`/worker/suppliers/${supplierId}/confirm-telegram`, {
+        method: "POST",
+      });
+    },
     /** Страна по названию города (справочник пунктов) — для автозаполнения формы. */
     resolveCountry(city: string): Promise<{ country: string | null }> {
       return req<{ country: string | null }>(
