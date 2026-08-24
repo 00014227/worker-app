@@ -458,6 +458,14 @@ export interface SupplierRow {
    * публичного username нет, но связь работает по числовому ID.
    */
   telegramResolved?: boolean;
+  /**
+   * Причина последнего неудачного поиска по телефону: not_found (скрыт
+   * приватностью) | id_mismatch (номер уже принадлежит другому Telegram-ID) |
+   * duplicate (этот Telegram занят другой карточкой) | error. Пусто, если
+   * попытки не было или последняя удалась.
+   */
+  telegramResolveStatus?: string | null;
+  telegramResolveNote?: string | null;
   /** Страны, которые возит подрядчик — основа автоподбора. Пусто = не задано. */
   directions: string[];
   /** Виды транспорта (auto|rail|air|sea). Пусто = не задано. */

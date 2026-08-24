@@ -111,6 +111,27 @@ function hasNoContact(s: SupplierRow): boolean {
 }
 
 /**
+ * Почему именно нет связи — раньше любая причина показывалась одной фразой
+ * «не найден в Telegram», хотя «ещё не проверяли» и «нашли, но номер уже
+ * привязан к другому Telegram-аккаунту» требуют разных действий от логиста.
+ */
+function noContactReason(s: SupplierRow): string {
+  if (!s.phone) return 'нет способа связи: добавьте телефон';
+  switch (s.telegramResolveStatus) {
+    case 'id_mismatch':
+      return 'номер найден в Telegram, но привязан к другому аккаунту — проверьте номер';
+    case 'not_found':
+      return 'номер скрыт настройками приватности в Telegram';
+    case 'duplicate':
+      return s.telegramResolveNote || 'этот Telegram уже привязан к другому подрядчику';
+    case 'error':
+      return 'ошибка проверки — попробуйте «Найти по телефонам» ещё раз';
+    default:
+      return 'ещё не проверяли — нажмите «Найти по телефонам»';
+  }
+}
+
+/**
  * Цвет рейтинга надёжности. Отсутствие рейтинга (null) — это «не проверен», а не
  * «плохой»: новичок без истории не должен выглядеть хуже, чем сорвавший рейс.
  */
@@ -396,7 +417,7 @@ export default function ContractorsPage() {
                   {hasNoContact(c) && (
                     <div className="flex items-center gap-1 text-amber-700">
                       <AlertTriangle size={11} className="shrink-0" />
-                      {c.phone ? 'не найден в Telegram — проверьте номер' : 'нет способа связи: добавьте телефон'}
+                      {noContactReason(c)}
                     </div>
                   )}
                   {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}
