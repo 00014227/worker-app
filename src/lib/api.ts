@@ -481,6 +481,8 @@ export interface PhoneResolveResponse {
     duplicate: number;
     errors: number;
   };
+  /** Telegram остановил прогон лимитом — причина и сколько ждать. */
+  flood?: string | null;
   results: Array<{
     supplierId: string;
     name: string;

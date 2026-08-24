@@ -219,6 +219,13 @@ export default function ContractorsPage() {
       const r = await tenderApi.suppliers.resolveByPhone();
       const s = r.summary;
       const dup = r.results.find((x) => x.status === 'duplicate');
+      // Ограничение Telegram показываем первым и отдельно: это не деталь итога,
+      // а причина, по которой жать кнопку снова нельзя.
+      if (r.flood) {
+        setResolveInfo(r.flood);
+        load();
+        return;
+      }
       setResolveInfo(
         `Проверено ${s.total}: найдено ${s.resolved} (username ${s.withUsername}), ` +
           `скрыто приватностью ${s.notFound}, чужой номер ${s.idMismatch}` +
