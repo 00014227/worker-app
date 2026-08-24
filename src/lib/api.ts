@@ -502,6 +502,16 @@ export interface PhoneResolveResponse {
   }>;
 }
 
+/** Похожий подрядчик, найденный при проверке на дубли — и по какому полю. */
+export interface DuplicateSupplierMatch {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  telegramUsername: string | null;
+  matchedOn: ("name" | "phone" | "email" | "telegramUsername")[];
+}
+
 export interface CreateSupplierInput {
   name: string;
   contactChannel?: ContactChannel;
@@ -515,6 +525,8 @@ export interface CreateSupplierInput {
   email?: string;
   inn?: string;
   code?: string;
+  /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
+  force?: boolean;
 }
 
 export interface TenderInviteRow {
@@ -996,8 +1008,13 @@ export const tenderApi = {
       const q = search ? `?search=${encodeURIComponent(search)}` : "";
       return req<SupplierRow[]>(`/worker/suppliers${q}`);
     },
-    create(input: CreateSupplierInput): Promise<SupplierRow> {
-      return req<SupplierRow>("/worker/suppliers", {
+    create(
+      input: CreateSupplierInput,
+    ): Promise<
+      | { status: "created"; supplier: SupplierRow }
+      | { status: "duplicates"; duplicates: DuplicateSupplierMatch[] }
+    > {
+      return req("/worker/suppliers", {
         method: "POST",
         body: JSON.stringify(input),
       });
@@ -1014,8 +1031,13 @@ export const tenderApi = {
         phone?: string;
         directions?: string[];
         transportModes?: string[];
+        /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
+        force?: boolean;
       },
-    ) {
+    ): Promise<
+      | { status: "updated"; supplier: SupplierRow }
+      | { status: "duplicates"; duplicates: DuplicateSupplierMatch[] }
+    > {
       return req(`/worker/suppliers/${id}/telegram`, {
         method: "POST",
         body: JSON.stringify(patch),

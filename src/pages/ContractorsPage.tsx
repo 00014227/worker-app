@@ -4,6 +4,7 @@ import {
   tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput,
   ContactChannel, CONTACT_CHANNEL_LABELS,
   ContactLanguage, CONTACT_LANGUAGE_LABELS,
+  DuplicateSupplierMatch,
 } from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -129,6 +130,64 @@ function noContactReason(s: SupplierRow): string {
     default:
       return 'ещё не проверяли — нажмите «Найти по телефонам»';
   }
+}
+
+const MATCH_FIELD_LABEL: Record<DuplicateSupplierMatch['matchedOn'][number], string> = {
+  name: 'название',
+  phone: 'телефон',
+  email: 'email',
+  telegramUsername: '@username',
+};
+
+/**
+ * Список похожих подрядчиков перед сохранением — общий для формы создания и
+ * панели правки. Показывает, ПО ЧЕМУ именно совпало: логисту нужно видеть
+ * телефон/почту, а не только имя, чтобы понять, реальный это дубль или нет.
+ */
+function DuplicateWarning({
+  duplicates, onConfirm, onCancel, busy,
+}: {
+  duplicates: DuplicateSupplierMatch[];
+  onConfirm: () => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
+        <AlertTriangle size={14} className="shrink-0" /> Похоже, такой подрядчик уже есть
+      </div>
+      <div className="space-y-1.5">
+        {duplicates.map((d) => (
+          <div key={d.id} className="text-xs bg-white/70 rounded-md border border-amber-200 px-2.5 py-1.5">
+            <div className="font-medium">{d.name}</div>
+            <div className="text-muted-foreground">
+              совпадает: {d.matchedOn.map((f: DuplicateSupplierMatch['matchedOn'][number]) => MATCH_FIELD_LABEL[f]).join(', ')}
+              {d.phone && ` · ${d.phone}`}
+              {d.email && ` · ${d.email}`}
+              {d.telegramUsername && ` · @${d.telegramUsername}`}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 pt-0.5">
+        <button
+          onClick={onConfirm}
+          disabled={busy}
+          className="flex-1 px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-40 transition-colors"
+        >
+          Это другой подрядчик — сохранить
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          className="px-3 py-1.5 rounded-md border border-amber-300 text-xs hover:bg-amber-100 transition-colors"
+        >
+          Отмена, поправлю
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -554,10 +613,12 @@ function CreateSupplierPanel({
   const [modes, setModes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Похожие подрядчики, найденные сервером — ждут подтверждения логиста. */
+  const [duplicates, setDuplicates] = useState<DuplicateSupplierMatch[] | null>(null);
 
   const set = (patch: Partial<CreateSupplierInput>) => setForm((f) => ({ ...f, ...patch }));
 
-  const save = async () => {
+  const save = async (force = false) => {
     if (!form.name.trim()) return;
     setSaving(true);
     setError(null);
@@ -569,11 +630,17 @@ function CreateSupplierPanel({
         preferredLanguage: form.preferredLanguage,
         directions: parseList(directions),
         transportModes: modes,
+        force,
       };
       (['telegramUsername', 'telegramUserId', 'country', 'phone', 'email', 'inn', 'code'] as const)
         .forEach((k) => { if (form[k]?.trim()) payload[k] = form[k]!.trim(); });
-      const created = await tenderApi.suppliers.create(payload);
-      onCreated(created);
+      const res = await tenderApi.suppliers.create(payload);
+      if (res.status === 'duplicates') {
+        setDuplicates(res.duplicates);
+        setSaving(false);
+        return;
+      }
+      onCreated(res.supplier);
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
@@ -656,13 +723,24 @@ function CreateSupplierPanel({
 
           {error && <div className="text-xs text-red-600">{error}</div>}
 
-          <button
-            onClick={save}
-            disabled={!form.name.trim() || saving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
-          >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Создать подрядчика
-          </button>
+          {duplicates && (
+            <DuplicateWarning
+              duplicates={duplicates}
+              busy={saving}
+              onConfirm={() => save(true)}
+              onCancel={() => setDuplicates(null)}
+            />
+          )}
+
+          {!duplicates && (
+            <button
+              onClick={() => save(false)}
+              disabled={!form.name.trim() || saving}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
+            >
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Создать подрядчика
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -692,6 +770,8 @@ function BindPanel({
   // модалка ради одной кнопки избыточна, но снести подрядчика одним кликом нельзя.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** Похожие подрядчики, найденные сервером — ждут подтверждения логиста. */
+  const [duplicates, setDuplicates] = useState<DuplicateSupplierMatch[] | null>(null);
 
   const remove = async () => {
     setDeleting(true);
@@ -706,12 +786,12 @@ function BindPanel({
     }
   };
 
-  const save = async () => {
+  const save = async (force = false) => {
     setSaving(true);
     setError(null);
     try {
       const dirs = parseList(directions);
-      await tenderApi.suppliers.update(supplier.id, {
+      const res = await tenderApi.suppliers.update(supplier.id, {
         telegramUsername: username.trim() || undefined,
         email: email.trim() || undefined,
         phone,
@@ -720,7 +800,13 @@ function BindPanel({
         directions: dirs,
         transportModes: modes,
         telegramAccountId: accountId || undefined,
+        force,
       });
+      if (res.status === 'duplicates') {
+        setDuplicates(res.duplicates);
+        setSaving(false);
+        return;
+      }
       onSaved({
         id: supplier.id,
         telegramUsername: username.trim().replace('@', '') || null,
@@ -855,13 +941,24 @@ function BindPanel({
 
           {error && <div className="text-xs text-red-600">{error}</div>}
 
-          <button
-            onClick={save}
-            disabled={saving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
-          >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Сохранить
-          </button>
+          {duplicates && (
+            <DuplicateWarning
+              duplicates={duplicates}
+              busy={saving}
+              onConfirm={() => save(true)}
+              onCancel={() => setDuplicates(null)}
+            />
+          )}
+
+          {!duplicates && (
+            <button
+              onClick={() => save(false)}
+              disabled={saving}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
+            >
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Сохранить
+            </button>
+          )}
 
           <div className="pt-3 mt-1 border-t">
               {confirmDelete ? (
