@@ -11,6 +11,7 @@ const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
   collecting:    { label: 'Сбор ставок',        cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   award_pending: { label: 'Ждём подтверждения', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
   decided:       { label: 'Выбран',             cls: 'bg-green-50 text-green-700 border-green-200' },
+  closed: { label: 'Закрыт', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
   cancelled:     { label: 'Отменён',            cls: 'bg-red-50 text-red-700 border-red-200' },
 };
 

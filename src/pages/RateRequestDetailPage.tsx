@@ -9,6 +9,7 @@ import {
   MapPin,
   Calendar,
   MessageSquare,
+  X,
   AlertTriangle,
   Clock,
   Sparkles,
@@ -54,6 +55,10 @@ const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
   decided: {
     label: "Выбран",
     cls: "bg-green-50 text-green-700 border-green-200",
+  },
+  closed: {
+    label: "Закрыт",
+    cls: "bg-slate-100 text-slate-600 border-slate-200",
   },
   cancelled: { label: "Отменён", cls: "bg-red-50 text-red-700 border-red-200" },
 };
@@ -187,6 +192,7 @@ export default function RateRequestDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   /** Ответ, у которого раскрыт исходный текст сообщения. */
   const [openRawId, setOpenRawId] = useState<string | null>(null);
@@ -289,6 +295,25 @@ export default function RateRequestDetailPage() {
     navigate(".", { replace: true, state: null });
   }, [requestedChatId, tender, navigate]);
 
+  const closeTender = async () => {
+    if (!id) return;
+    if (
+      !confirmOnStand(
+        "Запрос будет закрыт: напоминания подрядчикам по нему больше не уйдут.",
+      )
+    )
+      return;
+    setClosing(true);
+    setError(null);
+    try {
+      setTender(await tenderApi.tenders.close(id));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setClosing(false);
+    }
+  };
+
   const send = async () => {
     if (!id) return;
     // Счётчик считаем здесь, а не берём pendingCount ниже: тот объявлен после
@@ -304,6 +329,9 @@ export default function RateRequestDetailPage() {
     setSending(true);
     setError(null);
     try {
+      // Ответ приходит сразу: рассылка идёт в фоне, а её ход показывает счётчик
+      // ниже — он обновляется событиями из сокета. Ждать здесь нельзя, прокси
+      // Netlify рвёт соединение на 26-й секунде.
       setTender(await tenderApi.tenders.send(id));
     } catch (e) {
       setError((e as Error).message);
@@ -367,10 +395,21 @@ export default function RateRequestDetailPage() {
   const pendingCount = tender.invites.filter(
     (i) => i.deliveryStatus !== "sent",
   ).length;
+  const isClosed = tender.status === "closed" || tender.closedAt != null;
   const canSend =
     tender.status !== "decided" &&
     tender.status !== "cancelled" &&
+    !isClosed &&
     pendingCount > 0;
+  const sentCount = tender.invites.length - pendingCount;
+  // Приглашение с ошибкой уже отработано — если считать его «в очереди»,
+  // счётчик прогресса застынет и будет крутиться вечно.
+  const queuedCount = tender.invites.filter(
+    (i) => i.deliveryStatus !== "sent" && i.deliveryStatus !== "error",
+  ).length;
+  // Рассылка идёт в фоне: пока не все разосланы, показываем прогресс, который
+  // растёт сам по событиям из сокета.
+  const sendingInBackground = queuedCount > 0 && sentCount > 0;
   const decided = tender.status === "decided";
   const awardPending = tender.status === "award_pending";
   // Торг возможен один раз и только пока есть с чем работать.
@@ -509,6 +548,23 @@ export default function RateRequestDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {sendingInBackground && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin" />
+                  отправлено {sentCount} из {tender.invites.length}
+                </span>
+              )}
+              {!isClosed && !decided && (
+                <button
+                  onClick={closeTender}
+                  disabled={closing}
+                  title="Закрыть запрос — напоминания по нему больше не уходят"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-muted/50 disabled:opacity-40 transition-colors"
+                >
+                  {closing ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                  Закрыть запрос
+                </button>
+              )}
               {canSend && (
                 <button
                   onClick={send}

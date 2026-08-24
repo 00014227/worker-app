@@ -400,6 +400,8 @@ export type TenderStatus =
   /** Победителю предложили перевозку — ждём подтверждения до дедлайна. */
   | "award_pending"
   | "decided"
+  /** Запрос закрыт — вручную или автоматически как брошенный. */
+  | "closed"
   | "cancelled";
 
 /** Ход подтверждения после выбора подрядчика. */
@@ -625,6 +627,10 @@ export interface TenderDetail {
   comment: string | null;
   currency: string | null;
   status: TenderStatus;
+  /** Непусто = запрос закрыт: напоминания по нему больше не уходят. */
+  closedAt: string | null;
+  /** Рассылка запущена и идёт в фоне — прогресс приходит по сокету. */
+  sending?: boolean;
   recommendedSupplierId: string | null;
   /** До какого момента ждём подтверждения от выбранного подрядчика. */
   awardDeadline: string | null;
@@ -1099,6 +1105,10 @@ export const tenderApi = {
         method: "POST",
         body: JSON.stringify(supplierIds ? { supplierIds } : {}),
       });
+    },
+    /** Закрыть запрос: напоминания по нему прекращаются. */
+    close(id: string): Promise<TenderDetail> {
+      return req<TenderDetail>(`/worker/tenders/${id}/close`, { method: "POST" });
     },
     select(id: string, supplierId: string): Promise<TenderDetail> {
       return req<TenderDetail>(`/worker/tenders/${id}/select`, {
