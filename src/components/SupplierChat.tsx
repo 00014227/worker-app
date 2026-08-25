@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Send, Mail, X, Loader2, AlertTriangle } from "lucide-react";
-import { tenderApi, ConversationMessage } from "@/lib/api";
+import { tenderApi, notificationApi, ConversationMessage } from "@/lib/api";
 import { subscribeToChat } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 
@@ -17,10 +17,13 @@ export default function SupplierChat({
   tenderId,
   supplier,
   onClose,
+  onRead,
 }: {
   tenderId: string;
   supplier: { id: string; name: string };
   onClose: () => void;
+  /** Переписку прочитали — карточке пора обновить значки непрочитанного. */
+  onRead?: () => void;
 }) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,10 +45,38 @@ export default function SupplierChat({
     [tenderId, supplier.id],
   );
 
-  useEffect(() => load(), [load]);
+  /**
+   * Открытая переписка — прочитанная переписка. Гасим по ней всё непрочитанное:
+   * каждое входящее сообщение заводит своё уведомление, а прочитаны они здесь
+   * все разом. Молча при сбое — уведомления вспомогательные, чат важнее.
+   */
+  // Через ref, а не через зависимость: родитель передаёт обработчик встроенной
+  // стрелкой, и от неё эффект пересоздавался бы на каждую отрисовку.
+  const onReadRef = useRef(onRead);
+  onReadRef.current = onRead;
+
+  const markRead = useCallback(() => {
+    notificationApi
+      .markThreadRead(tenderId, supplier.id)
+      .then(() => onReadRef.current?.())
+      .catch(() => undefined);
+  }, [tenderId, supplier.id]);
+
+  useEffect(() => {
+    load();
+    markRead();
+  }, [load, markRead]);
 
   // Живые сообщения: и ответ подрядчика, и то, что отправила сама система.
-  useEffect(() => subscribeToChat(supplier.id, () => load(true)), [supplier.id, load]);
+  // Пришедшее в открытый чат сразу и прочитано — гасим и его.
+  useEffect(
+    () =>
+      subscribeToChat(supplier.id, () => {
+        load(true);
+        markRead();
+      }),
+    [supplier.id, load, markRead],
+  );
 
   // Лента растёт снизу — держим взгляд на последнем сообщении.
   useEffect(() => {

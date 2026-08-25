@@ -950,6 +950,19 @@ export const notificationApi = {
       method: "POST",
     });
   },
+  /** Переписку с подрядчиком открыли — гасим всё непрочитанное по ней. */
+  markThreadRead(tenderId: string, supplierId: string): Promise<NotificationFeed> {
+    return req<NotificationFeed>("/worker/notifications/read-thread", {
+      method: "POST",
+      body: JSON.stringify({ tenderId, supplierId }),
+    });
+  },
+  /** Сколько непрочитанного по каждому подрядчику запроса: supplierId → число. */
+  unreadBySupplier(tenderId: string): Promise<Record<string, number>> {
+    return req<Record<string, number>>(
+      `/worker/notifications/unread-by-supplier?tenderId=${tenderId}`,
+    );
+  },
 };
 
 export type RiskLevel = "low" | "medium" | "high" | "unknown";

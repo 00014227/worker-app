@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import {
   tenderApi,
+  notificationApi,
   TenderDetail,
   TenderStatus,
   DeliveryStatus,
@@ -183,6 +184,44 @@ function deviationPct(
   return ((price - b.medianPurchase) / b.medianPurchase) * 100;
 }
 
+/**
+ * Кнопка переписки со значком непрочитанного. Значок висит именно на ней, а не
+ * отдельной колонкой: логист и так щёлкает сюда, чтобы прочитать, — и после
+ * открытия чата значок гаснет сам.
+ */
+function ChatButton({
+  unread,
+  onClick,
+  className,
+}: {
+  unread: number;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={
+        unread > 0
+          ? `Новых сообщений: ${unread}`
+          : "Переписка с подрядчиком"
+      }
+      className={cn(
+        "relative text-muted-foreground hover:text-foreground transition-colors",
+        unread > 0 && "text-blue-600",
+        className,
+      )}
+    >
+      <MessageSquare size={14} />
+      {unread > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-1 rounded-full bg-red-500 text-white text-[9px] font-medium flex items-center justify-center">
+          {unread > 9 ? "9+" : unread}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function RateRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -200,6 +239,14 @@ export default function RateRequestDetailPage() {
   const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
   /** Подрядчик, с которым открыт чат. */
   const [chatWith, setChatWith] = useState<{ id: string; name: string } | null>(null);
+  /**
+   * Список приглашённых свёрнут по умолчанию: на запросе в полсотни подрядчиков
+   * он отодвигал таблицу ответов на две тысячи пикселей вниз, а открывают
+   * карточку ради неё.
+   */
+  const [invitesOpen, setInvitesOpen] = useState(false);
+  /** Непрочитанное по подрядчикам: supplierId → сколько. Считает сервер. */
+  const [unread, setUnread] = useState<Record<string, number>>({});
   /** Из уведомления пришли «в переписку с подрядчиком» — открываем её сразу. */
   const requestedChatId = (location.state as { openChatWith?: string } | null)?.openChatWith;
 
@@ -219,10 +266,23 @@ export default function RateRequestDetailPage() {
    * моргнувшая сеть не должна подменять таблицу со ставками текстом ошибки,
    * а мигающий спиннер раз в цикл раздражал бы больше, чем помогал.
    */
+  /**
+   * Непрочитанное — отдельным запросом, а не полем карточки: ответ `getTender`
+   * кладётся в состояние целиком после отправки и выбора победителя, и
+   * персональный счёт затирался бы этими ответами.
+   */
+  const refreshUnread = useCallback(() => {
+    if (!id) return;
+    notificationApi.unreadBySupplier(id).then(setUnread).catch(() => undefined);
+  }, [id]);
+
+  useEffect(refreshUnread, [refreshUnread]);
+
   const refresh = useCallback(() => {
     if (!id) return;
     tenderApi.tenders.get(id).then(setTender).catch(() => undefined);
-  }, [id]);
+    refreshUnread();
+  }, [id, refreshUnread]);
 
   // Живые ставки: сервер сам сообщает, что по запросу что-то изменилось.
   // Перечитываем карточку целиком — ранги считает бэкенд, и собирать их на
@@ -407,6 +467,13 @@ export default function RateRequestDetailPage() {
   const queuedCount = tender.invites.filter(
     (i) => i.deliveryStatus !== "sent" && i.deliveryStatus !== "error",
   ).length;
+  const errorCount = tender.invites.filter(
+    (i) => i.deliveryStatus === "error",
+  ).length;
+  // Считаем по всем подрядчикам запроса, а не только по строкам в таблице
+  // ответов: подрядчик мог написать что-то, что не разобралось в ставку, — и
+  // тогда в свёрнутом виде его сообщение не видно больше нигде.
+  const unreadTotal = Object.values(unread).reduce((a, b) => a + b, 0);
   // Рассылка идёт в фоне: пока не все разосланы, показываем прогресс, который
   // растёт сам по событиям из сокета.
   const sendingInBackground = queuedCount > 0 && sentCount > 0;
@@ -586,12 +653,49 @@ export default function RateRequestDetailPage() {
 
       {/* Invites / delivery */}
       <Card>
-        <CardHeader className="border-b pb-3">
-          <CardTitle className="text-sm">
+        {/* Заголовок — переключатель: список свёрнут, но всё, ради чего в него
+            заглядывают (доставка, ошибки, новые сообщения), видно в сводке. */}
+        <CardHeader
+          className={cn("pb-3", invitesOpen && "border-b")}
+          onClick={() => setInvitesOpen((v) => !v)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setInvitesOpen((v) => !v);
+            }
+          }}
+        >
+          <CardTitle className="text-sm flex items-center gap-2 cursor-pointer select-none">
+            {invitesOpen ? (
+              <ChevronDown size={14} className="text-muted-foreground" />
+            ) : (
+              <ChevronRight size={14} className="text-muted-foreground" />
+            )}
             Подрядчики ({tender.invites.length})
+            <span className="ml-auto flex items-center gap-2.5 text-xs font-normal">
+              {sentCount > 0 && (
+                <span className="text-muted-foreground">
+                  доставлено {sentCount}
+                </span>
+              )}
+              {/* Ошибки доставки не прячем: именно невидимые ошибки однажды
+                  и создали ощущение, что рассылка «уходит по частям». */}
+              {errorCount > 0 && (
+                <span className="text-red-600 flex items-center gap-1">
+                  <AlertTriangle size={11} /> ошибок {errorCount}
+                </span>
+              )}
+              {unreadTotal > 0 && (
+                <span className="text-blue-600 flex items-center gap-1">
+                  <MessageSquare size={11} /> новых {unreadTotal}
+                </span>
+              )}
+            </span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className={cn("pt-0", !invitesOpen && "hidden")}>
           <div className="divide-y">
             {tender.invites.map((inv) => {
               const d = DELIVERY[inv.deliveryStatus];
@@ -634,15 +738,12 @@ export default function RateRequestDetailPage() {
                       </span>
                     )}
                     <span className={cn("font-medium", d.cls)}>{d.label}</span>
-                    <button
+                    <ChatButton
+                      unread={unread[inv.supplier.id] ?? 0}
                       onClick={() =>
                         setChatWith({ id: inv.supplier.id, name: inv.supplier.name })
                       }
-                      title="Переписка с подрядчиком"
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <MessageSquare size={14} />
-                    </button>
+                    />
                   </div>
                 </div>
               );
@@ -1007,18 +1108,16 @@ export default function RateRequestDetailPage() {
                                 Выбрать
                               </button>
                             ) : null}
-                            <button
+                            <ChatButton
+                              unread={unread[r.supplierId] ?? 0}
+                              className="ml-2 align-middle"
                               onClick={() =>
                                 setChatWith({
                                   id: r.supplierId,
                                   name: r.supplier.name,
                                 })
                               }
-                              title="Переписка с подрядчиком"
-                              className="ml-2 text-muted-foreground hover:text-foreground transition-colors align-middle"
-                            >
-                              <MessageSquare size={14} />
-                            </button>
+                            />
                           </td>
                         </tr>
                         {open && (
@@ -1054,6 +1153,7 @@ export default function RateRequestDetailPage() {
           tenderId={id}
           supplier={chatWith}
           onClose={() => setChatWith(null)}
+          onRead={refreshUnread}
         />
       )}
 

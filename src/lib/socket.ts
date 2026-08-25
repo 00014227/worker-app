@@ -116,10 +116,17 @@ export interface NotificationEvent {
  * при подключении, по идентификатору из токена.
  */
 export function subscribeToNotifications(
-  onNotification: (n: NotificationEvent) => void,
+  onNotification: (n?: NotificationEvent) => void,
 ): () => void {
   const s = getSocket();
   if (!s) return () => {};
+  const onRead = () => onNotification();
   s.on("notification", onNotification);
-  return () => s.off("notification", onNotification);
+  // Ленту меняет не только приход нового: прочитанное в другой вкладке или на
+  // другой странице тоже должно погасить этот колокольчик.
+  s.on("notifications-read", onRead);
+  return () => {
+    s.off("notification", onNotification);
+    s.off("notifications-read", onRead);
+  };
 }
