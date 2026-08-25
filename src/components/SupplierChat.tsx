@@ -51,9 +51,12 @@ export default function SupplierChat({
    * все разом. Молча при сбое — уведомления вспомогательные, чат важнее.
    */
   // Через ref, а не через зависимость: родитель передаёт обработчик встроенной
-  // стрелкой, и от неё эффект пересоздавался бы на каждую отрисовку.
+  // стрелкой, и от неё эффект пересоздавался бы на каждую отрисовку. Обновляем
+  // ref в эффекте, а не по ходу отрисовки — во время рендера ref трогать нельзя.
   const onReadRef = useRef(onRead);
-  onReadRef.current = onRead;
+  useEffect(() => {
+    onReadRef.current = onRead;
+  }, [onRead]);
 
   const markRead = useCallback(() => {
     notificationApi
