@@ -939,8 +939,8 @@ export const tenderApi = {
     list(): Promise<TenderListRow[]> {
       return req<TenderListRow[]>('/worker/tenders');
     },
-    get(id: string): Promise<TenderDetail> {
-      return req<TenderDetail>(`/worker/tenders/${id}`);
+    get(id: string, signal?: AbortSignal): Promise<TenderDetail> {
+      return req<TenderDetail>(`/worker/tenders/${id}`, { signal });
     },
     create(input: CreateTenderInput): Promise<TenderDetail> {
       return req<TenderDetail>('/worker/tenders', {

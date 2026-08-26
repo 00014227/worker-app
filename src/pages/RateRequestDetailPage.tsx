@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, Fragment, useRef } from 'react';
 import {
   ArrowLeft,
   Trophy,
@@ -204,6 +204,18 @@ export default function RateRequestDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const refresh = useCallback(
+    (signal?: AbortSignal) => {
+      if (!id) return;
+      tenderApi.tenders
+        .get(id, signal)
+        .then(setTender)
+        //Обработка ошибки для фонового запроса, данные актуальные лежат, поэтому глушим ошибку
+        .catch(() => {});
+    },
+    [id],
+  );
+
   useEffect(load, [load]);
 
   // Рыночный ориентир по маршруту — грузим отдельно, чтобы пустая история
@@ -221,6 +233,40 @@ export default function RateRequestDetailPage() {
       .then(setBenchmark)
       .catch(() => setBenchmark(null));
   }, [tender?.id, tender?.origin, tender?.destination]);
+
+  const canPollingRef = useRef(false);
+
+  const isCancelled = tender?.status === 'cancelled';
+  const isDecided = tender?.status === 'decided';
+  const isSelecting = selectingId !== null;
+
+  useEffect(() => {
+    canPollingRef.current =
+      !!tender &&
+      !isCancelled &&
+      !isDecided &&
+      !isSelecting &&
+      !sending &&
+      !improving;
+  });
+
+  useEffect(() => {
+    let controller: AbortController | null = null;
+    function refreshVisibility() {
+      if (document.visibilityState !== 'visible') return;
+      if (!canPollingRef.current) return;
+      controller?.abort();
+      controller = new AbortController();
+      refresh(controller.signal);
+    }
+    const idTimer = setInterval(refreshVisibility, 3000);
+    document.addEventListener('visibilitychange', refreshVisibility);
+    return () => {
+      clearInterval(idTimer);
+      document.removeEventListener('visibilitychange', refreshVisibility);
+      controller?.abort();
+    };
+  }, [refresh]);
 
   const send = async () => {
     if (!id) return;
