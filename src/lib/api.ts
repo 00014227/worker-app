@@ -848,6 +848,27 @@ export interface ConversationMessage {
   subject: string | null;
   status: string | null;
   createdAt: string;
+  /** voice | photo | document — пусто у обычного текстового сообщения. */
+  mediaKind: "voice" | "photo" | "document" | null;
+  mediaName: string | null;
+  mediaSize: number | null;
+  /** Длительность голосового в секундах — видна до нажатия «слушать». */
+  mediaDuration: number | null;
+  /** Файл удалён по сроку хранения: сообщение осталось, вложения уже нет. */
+  mediaPurged: boolean;
+}
+
+/**
+ * Вложение переписки. Грузим запросом с токеном и отдаём `blob:`-ссылку:
+ * `<img src>` и `<audio src>` заголовок с авторизацией слать не умеют, а
+ * открывать фото грузов и накладные наружу без проверки прав нельзя.
+ */
+export async function fetchMediaUrl(messageId: string): Promise<string> {
+  const res = await fetch(`/api/worker/tenders/media/${messageId}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Вложение недоступно");
+  return URL.createObjectURL(await res.blob());
 }
 
 export interface TelegramAccountRow {
@@ -1250,6 +1271,29 @@ export const tenderApi = {
       return req<ConversationMessage[]>(
         `/worker/tenders/${tenderId}/suppliers/${supplierId}/messages`,
       );
+    },
+    /** Логист отправляет подрядчику файл или фото; подпись необязательна. */
+    async sendSupplierFile(
+      tenderId: string,
+      supplierId: string,
+      file: File,
+      caption?: string,
+    ): Promise<{ ok: boolean; messages: ConversationMessage[] }> {
+      const form = new FormData();
+      form.append("file", file);
+      if (caption?.trim()) form.append("caption", caption.trim());
+      const res = await fetch(
+        `/api/worker/tenders/${tenderId}/suppliers/${supplierId}/file`,
+        { method: "POST", headers: authHeaders(), body: form },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const raw = body?.message ?? body?.error;
+        throw new Error(
+          Array.isArray(raw) ? raw.join("; ") : typeof raw === "string" ? raw : "Не удалось отправить файл",
+        );
+      }
+      return res.json();
     },
     /** Логист пишет подрядчику вручную. Возвращает обновлённую переписку. */
     sendSupplierMessage(

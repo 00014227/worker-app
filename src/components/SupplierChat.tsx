@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Send, Mail, X, Loader2, AlertTriangle } from "lucide-react";
+import { Send, Mail, X, Loader2, AlertTriangle, Paperclip } from "lucide-react";
 import { tenderApi, notificationApi, ConversationMessage } from "@/lib/api";
 import { subscribeToChat } from "@/lib/socket";
+import MessageMedia from "./MessageMedia";
 import { cn } from "@/lib/utils";
 
 /**
@@ -29,6 +30,10 @@ export default function SupplierChat({
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  /** Выбранный файл — уходит вместе с текстом как подписью. */
+  const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -88,13 +93,18 @@ export default function SupplierChat({
 
   const send = async () => {
     const body = text.trim();
-    if (!body || sending) return;
+    if ((!body && !file) || sending) return;
     setSending(true);
     setError(null);
     try {
-      const res = await tenderApi.tenders.sendSupplierMessage(tenderId, supplier.id, body);
+      // Файл уходит одним сообщением с подписью — два отдельных сообщения
+      // и выглядят хуже, и тратят вдвое больше квоты аккаунта.
+      const res = file
+        ? await tenderApi.tenders.sendSupplierFile(tenderId, supplier.id, file, body)
+        : await tenderApi.tenders.sendSupplierMessage(tenderId, supplier.id, body);
       setMessages(res.messages);
       setText("");
+      setFile(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -105,9 +115,33 @@ export default function SupplierChat({
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex justify-end" onClick={onClose}>
       <div
-        className="w-full max-w-md h-full bg-background shadow-xl flex flex-col"
+        className={cn(
+          "w-full max-w-md h-full bg-background shadow-xl flex flex-col relative",
+          dragOver && "ring-2 ring-primary ring-inset",
+        )}
         onClick={(e) => e.stopPropagation()}
+        // Перетаскивание в окно чата: логист приходит из Проводника и из почты,
+        // и заставлять его каждый раз идти через скрепку незачем.
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          // Уход на дочерний элемент — не выход из окна.
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f) setFile(f);
+        }}
       >
+        {dragOver && (
+          <div className="absolute inset-0 z-10 bg-primary/5 flex items-center justify-center pointer-events-none">
+            <span className="text-sm font-medium text-primary">Отпустите файл</span>
+          </div>
+        )}
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
           <div className="min-w-0">
             <h2 className="font-semibold text-sm truncate">{supplier.name}</h2>
@@ -142,7 +176,10 @@ export default function SupplierChat({
                     <span className="text-[10px] text-muted-foreground truncate">{m.subject}</span>
                   )}
                 </div>
-                <div className="whitespace-pre-wrap break-words">{m.text}</div>
+                {m.text && (
+                  <div className="whitespace-pre-wrap break-words">{m.text}</div>
+                )}
+                <MessageMedia message={m} />
                 <div className="text-[10px] text-muted-foreground mt-1">
                   {new Date(m.createdAt).toLocaleString("ru-RU")}
                   {m.status === "error" && <span className="text-red-500 ml-1">· не доставлено</span>}
@@ -160,7 +197,41 @@ export default function SupplierChat({
               {error}
             </div>
           )}
+          {file && (
+            <div className="flex items-center gap-2 text-xs rounded-lg border bg-muted/40 px-2.5 py-1.5">
+              <Paperclip size={12} className="shrink-0" />
+              <span className="truncate">{file.name}</span>
+              <span className="text-muted-foreground shrink-0">
+                {Math.max(1, Math.round(file.size / 1024))} КБ
+              </span>
+              <button
+                onClick={() => setFile(null)}
+                className="ml-auto text-muted-foreground hover:text-foreground shrink-0"
+                title="Убрать файл"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
           <div className="flex items-end gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setFile(f);
+                e.target.value = "";
+              }}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={sending}
+              title="Прикрепить файл или фото"
+              className="h-9 px-2.5 rounded-lg border hover:bg-muted/50 disabled:opacity-40 transition-colors"
+            >
+              <Paperclip size={14} />
+            </button>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -178,7 +249,7 @@ export default function SupplierChat({
             />
             <button
               onClick={send}
-              disabled={!text.trim() || sending}
+              disabled={(!text.trim() && !file) || sending}
               className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors flex items-center gap-1.5"
             >
               {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
