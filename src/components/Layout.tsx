@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   FileText, Users, Package, Sparkles, LogOut,
-  LayoutDashboard, Shield, User, Map, Database, Send, Building2, UserCog, Scale,
+  LayoutDashboard, Shield, User, Map, Database, Send, Building2, UserCog, Scale, FileDiff,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 import { closeSocket } from '../lib/socket';
@@ -30,6 +30,7 @@ const adminNav = [
 /** Разделы юристов. Админ видит их тоже — иначе некому проверить настройку. */
 const lawyerNav = [
   { to: '/counterparty-check', label: 'Проверка контрагентов', icon: Scale },
+  { to: '/contract-diff',      label: 'Сверка договоров',      icon: FileDiff },
 ];
 
 export default function Layout() {

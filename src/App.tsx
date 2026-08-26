@@ -18,6 +18,7 @@ import MapPage from './pages/MapPage';
 import TariffSourcesPage from './pages/TariffSourcesPage';
 import EmployeesPage from './pages/EmployeesPage';
 import CounterpartyCheckPage from './pages/CounterpartyCheckPage';
+import ContractDiffPage from './pages/ContractDiffPage';
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/tariff-sources" element={<TariffSourcesPage />} />
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/counterparty-check" element={<CounterpartyCheckPage />} />
+          <Route path="/contract-diff" element={<ContractDiffPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

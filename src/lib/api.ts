@@ -965,6 +965,104 @@ export const notificationApi = {
   },
 };
 
+// ── Сверка договоров ─────────────────────────────────────────────────────────
+
+/** Чей документ считаем исходным: наш шаблон или просто две версии. */
+export type DiffMode = "ours" | "neutral";
+export type DiffRisk = "high" | "medium" | "low";
+export type DiffSide = "us" | "counterparty" | "neutral";
+export type DiffAdvice = "accept" | "discuss" | "reject";
+export type DiffKind = "same" | "modified" | "added" | "removed" | "moved";
+
+/** Кусок пословной разметки внутри изменённого пункта. */
+export interface WordPart {
+  kind: "same" | "added" | "removed";
+  text: string;
+}
+
+/** Одна правка: что нашла механика плюс толкование модели. */
+export interface DiffItem {
+  id: string;
+  kind: DiffKind;
+  clauseNumber: string | null;
+  before: string | null;
+  after: string | null;
+  parts: WordPart[] | null;
+  summary: string | null;
+  side: DiffSide | null;
+  risk: DiffRisk | null;
+  reason: string | null;
+  advice: DiffAdvice | null;
+  adviceText: string | null;
+}
+
+/** Пункт в общем выравнивании — включая совпавшие, для показа текстов рядом. */
+export interface DiffClause {
+  kind: DiffKind;
+  leftNumber: string | null;
+  rightNumber: string | null;
+  before: string | null;
+  after: string | null;
+  parts: WordPart[] | null;
+}
+
+export interface ContractDiff {
+  id: string;
+  leftName: string;
+  rightName: string;
+  mode: DiffMode;
+  leftClauseCount: number;
+  rightClauseCount: number;
+  changeCount: number;
+  highRiskCount: number;
+  items: DiffItem[];
+  clauses: DiffClause[];
+  createdAt: string;
+}
+
+export interface ContractDiffRow {
+  id: string;
+  leftName: string;
+  rightName: string;
+  mode: DiffMode;
+  changeCount: number;
+  highRiskCount: number;
+  createdAt: string;
+  employee: { name: string } | null;
+}
+
+export const contractDiffApi = {
+  status(): Promise<{ enabled: boolean }> {
+    return req<{ enabled: boolean }>("/worker/contract-diff/status");
+  },
+  history(): Promise<ContractDiffRow[]> {
+    return req<ContractDiffRow[]>("/worker/contract-diff");
+  },
+  byId(id: string): Promise<ContractDiff> {
+    return req<ContractDiff>(`/worker/contract-diff/${id}`);
+  },
+  /** Два файла одним запросом: порядок задаёт, с чьей стороны будет оценка. */
+  async compare(left: File, right: File, mode: DiffMode): Promise<ContractDiff> {
+    const form = new FormData();
+    form.append("left", left);
+    form.append("right", right);
+    form.append("mode", mode);
+    const res = await fetch("/api/worker/contract-diff", {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const raw = body?.message ?? body?.error;
+      throw new Error(
+        Array.isArray(raw) ? raw.join("; ") : typeof raw === "string" ? raw : `Ошибка ${res.status}`,
+      );
+    }
+    return res.json();
+  },
+};
+
 export type RiskLevel = "low" | "medium" | "high" | "unknown";
 
 export interface CheckSource {
