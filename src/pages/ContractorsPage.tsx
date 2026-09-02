@@ -1,9 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Send, Search, RefreshCw, Check, Loader2, Clock, Zap, Plus, Mail, Globe, ShieldCheck, PhoneCall, AlertTriangle, Trash2 } from 'lucide-react';
 import {
-  tenderApi, SupplierRow, TelegramAccountRow, CreateSupplierInput,
-  ContactChannel, CONTACT_CHANNEL_LABELS,
-  ContactLanguage, CONTACT_LANGUAGE_LABELS,
+  Users,
+  Send,
+  Search,
+  RefreshCw,
+  Check,
+  Loader2,
+  Clock,
+  Zap,
+  Plus,
+  Mail,
+  Globe,
+  ShieldCheck,
+  PhoneCall,
+  AlertTriangle,
+  Trash2,
+} from 'lucide-react';
+import {
+  tenderApi,
+  SupplierRow,
+  TelegramAccountRow,
+  CreateSupplierInput,
+  ContactChannel,
+  CONTACT_CHANNEL_LABELS,
+  ContactLanguage,
+  CONTACT_LANGUAGE_LABELS,
   DuplicateSupplierMatch,
 } from '../lib/api';
 import { Input } from '@/components/ui/input';
@@ -20,13 +41,25 @@ const MODES: { value: string; label: string }[] = [
   { value: 'air', label: 'Авиа' },
   { value: 'sea', label: 'Море' },
 ];
-const MODE_LABEL: Record<string, string> = Object.fromEntries(MODES.map((m) => [m.value, m.label]));
+const MODE_LABEL: Record<string, string> = Object.fromEntries(
+  MODES.map((m) => [m.value, m.label]),
+);
 
 /** «Россия, Казахстан» ⇄ ['Россия','Казахстан'] — ввод через запятую, как у ТНВЭД. */
-const parseList = (s: string) => s.split(',').map((v) => v.trim()).filter(Boolean);
+const parseList = (s: string) =>
+  s
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
 
 /** Переключатели видов транспорта — общие для формы создания и редактирования. */
-function ModePicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+function ModePicker({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
   const toggle = (m: string) =>
     onChange(value.includes(m) ? value.filter((v) => v !== m) : [...value, m]);
   return (
@@ -51,7 +84,13 @@ function ModePicker({ value, onChange }: { value: string[]; onChange: (v: string
 }
 
 /** Small segmented channel selector reused by create + bind panels. */
-function ChannelSelect({ value, onChange }: { value: ContactChannel; onChange: (c: ContactChannel) => void }) {
+function ChannelSelect({
+  value,
+  onChange,
+}: {
+  value: ContactChannel;
+  onChange: (c: ContactChannel) => void;
+}) {
   return (
     <div className="flex gap-2">
       {CHANNELS.map((c) => (
@@ -61,7 +100,9 @@ function ChannelSelect({ value, onChange }: { value: ContactChannel; onChange: (
           onClick={() => onChange(c)}
           className={cn(
             'flex-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all',
-            value === c ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted/50',
+            value === c
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'border-border text-muted-foreground hover:bg-muted/50',
           )}
         >
           {CONTACT_CHANNEL_LABELS[c]}
@@ -72,7 +113,13 @@ function ChannelSelect({ value, onChange }: { value: ContactChannel; onChange: (
 }
 
 /** Segmented language selector — the language outbound tender messages go out in. */
-function LangSelect({ value, onChange }: { value: ContactLanguage; onChange: (l: ContactLanguage) => void }) {
+function LangSelect({
+  value,
+  onChange,
+}: {
+  value: ContactLanguage;
+  onChange: (l: ContactLanguage) => void;
+}) {
   return (
     <div className="flex gap-2">
       {LANGUAGES.map((l) => (
@@ -82,7 +129,9 @@ function LangSelect({ value, onChange }: { value: ContactLanguage; onChange: (l:
           onClick={() => onChange(l)}
           className={cn(
             'flex-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all',
-            value === l ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted/50',
+            value === l
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'border-border text-muted-foreground hover:bg-muted/50',
           )}
         >
           {CONTACT_LANGUAGE_LABELS[l]}
@@ -124,7 +173,10 @@ function noContactReason(s: SupplierRow): string {
     case 'not_found':
       return 'номер скрыт настройками приватности в Telegram';
     case 'duplicate':
-      return s.telegramResolveNote || 'этот Telegram уже привязан к другому подрядчику';
+      return (
+        s.telegramResolveNote ||
+        'этот Telegram уже привязан к другому подрядчику'
+      );
     case 'error':
       return 'ошибка проверки — попробуйте «Найти по телефонам» ещё раз';
     default:
@@ -132,7 +184,10 @@ function noContactReason(s: SupplierRow): string {
   }
 }
 
-const MATCH_FIELD_LABEL: Record<DuplicateSupplierMatch['matchedOn'][number], string> = {
+const MATCH_FIELD_LABEL: Record<
+  DuplicateSupplierMatch['matchedOn'][number],
+  string
+> = {
   name: 'название',
   phone: 'телефон',
   email: 'email',
@@ -145,7 +200,10 @@ const MATCH_FIELD_LABEL: Record<DuplicateSupplierMatch['matchedOn'][number], str
  * телефон/почту, а не только имя, чтобы понять, реальный это дубль или нет.
  */
 function DuplicateWarning({
-  duplicates, onConfirm, onCancel, busy,
+  duplicates,
+  onConfirm,
+  onCancel,
+  busy,
 }: {
   duplicates: DuplicateSupplierMatch[];
   onConfirm: () => void;
@@ -155,14 +213,24 @@ function DuplicateWarning({
   return (
     <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
       <div className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
-        <AlertTriangle size={14} className="shrink-0" /> Похоже, такой подрядчик уже есть
+        <AlertTriangle size={14} className="shrink-0" /> Похоже, такой подрядчик
+        уже есть
       </div>
       <div className="space-y-1.5">
         {duplicates.map((d) => (
-          <div key={d.id} className="text-xs bg-white/70 rounded-md border border-amber-200 px-2.5 py-1.5">
+          <div
+            key={d.id}
+            className="text-xs bg-white/70 rounded-md border border-amber-200 px-2.5 py-1.5"
+          >
             <div className="font-medium">{d.name}</div>
             <div className="text-muted-foreground">
-              совпадает: {d.matchedOn.map((f: DuplicateSupplierMatch['matchedOn'][number]) => MATCH_FIELD_LABEL[f]).join(', ')}
+              совпадает:{' '}
+              {d.matchedOn
+                .map(
+                  (f: DuplicateSupplierMatch['matchedOn'][number]) =>
+                    MATCH_FIELD_LABEL[f],
+                )
+                .join(', ')}
               {d.phone && ` · ${d.phone}`}
               {d.email && ` · ${d.email}`}
               {d.telegramUsername && ` · @${d.telegramUsername}`}
@@ -203,7 +271,8 @@ function reliabilityCls(score: number): string {
 function slaLabel(s: SupplierRow): string | null {
   if (s.responseRate == null && s.avgResponseTimeSec == null) return null;
   const parts: string[] = [];
-  if (s.responseRate != null) parts.push(`${Math.round(s.responseRate)}% ответов`);
+  if (s.responseRate != null)
+    parts.push(`${Math.round(s.responseRate)}% ответов`);
   if (s.avgResponseTimeSec != null) {
     const min = Math.round(s.avgResponseTimeSec / 60);
     parts.push(min < 60 ? `~${min} мин` : `~${Math.round(min / 60)} ч`);
@@ -223,18 +292,26 @@ export default function ContractorsPage() {
   /** id подрядчика, для которого сейчас идёт ручное подтверждение номера. */
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   /** Быстрые фильтры: всё | доступные | без связи | без направлений. */
-  const [tab, setTab] = useState<'all' | 'ready' | 'nocontact' | 'nodir'>('all');
+  const [tab, setTab] = useState<'all' | 'ready' | 'nocontact' | 'nodir'>(
+    'all',
+  );
   const [dir, setDir] = useState('');
   /** Только что добавленный — держим наверху, иначе он тонет среди сотни. */
   const [justAdded, setJustAdded] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
-    tenderApi.suppliers.list().then(setRows).finally(() => setLoading(false));
+    tenderApi.suppliers
+      .list()
+      .then(setRows)
+      .finally(() => setLoading(false));
   };
   useEffect(() => {
     load();
-    tenderApi.telegramAccounts.list().then(setAccounts).catch(() => {});
+    tenderApi.telegramAccounts
+      .list()
+      .then(setAccounts)
+      .catch(() => {});
   }, []);
 
   /** Список направлений для фильтра — берём из самих подрядчиков. */
@@ -263,7 +340,10 @@ export default function ContractorsPage() {
           .join(' ')
           .toLowerCase();
         if (haystack.includes(q)) return true;
-        return digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits);
+        return (
+          digits.length >= 3 &&
+          (c.phone ?? '').replace(/\D/g, '').includes(digits)
+        );
       });
     }
 
@@ -282,7 +362,9 @@ export default function ContractorsPage() {
   }, [rows, search, dir, tab, justAdded]);
 
   const noContact = rows.filter(hasNoContact).length;
-  const needResolve = rows.filter((c) => c.phone && !c.telegramUsername && !c.telegramResolved).length;
+  const needResolve = rows.filter(
+    (c) => c.phone && !c.telegramUsername && !c.telegramResolved,
+  ).length;
 
   /**
    * Ищет подрядчиков в Telegram по телефонам. Массовый импорт контактов Telegram
@@ -331,7 +413,8 @@ export default function ContractorsPage() {
   const confirmTelegram = async (supplierId: string) => {
     setConfirmingId(supplierId);
     try {
-      const { result, supplier } = await tenderApi.suppliers.confirmTelegram(supplierId);
+      const { result, supplier } =
+        await tenderApi.suppliers.confirmTelegram(supplierId);
       setRows((prev) => prev.map((r) => (r.id === supplierId ? supplier : r)));
       if (selected?.id === supplierId) setSelected(supplier);
       if (result.status !== 'resolved') {
@@ -340,7 +423,8 @@ export default function ContractorsPage() {
             result.status === 'not_found'
               ? 'номер скрыт настройками приватности'
               : result.status === 'duplicate'
-                ? result.note || 'этот Telegram уже привязан к другому подрядчику'
+                ? result.note ||
+                  'этот Telegram уже привязан к другому подрядчику'
                 : 'проверка не удалась, попробуйте ещё раз'
           }`,
         );
@@ -360,12 +444,18 @@ export default function ContractorsPage() {
           <p className="text-xs text-muted-foreground mt-0.5">
             {loading ? 'Загрузка…' : `${rows.length} компаний`}
             {!loading && noContact > 0 && (
-              <span className="text-amber-700"> · без способа связи {noContact}</span>
+              <span className="text-amber-700">
+                {' '}
+                · без способа связи {noContact}
+              </span>
             )}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={load} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5">
+          <button
+            onClick={load}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+          >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
           {needResolve > 0 && (
@@ -375,7 +465,11 @@ export default function ContractorsPage() {
               title="Telegram найдёт подрядчиков по номеру и вернёт @username — после этого им можно писать"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 disabled:opacity-40 transition-colors"
             >
-              {resolving ? <Loader2 size={13} className="animate-spin" /> : <PhoneCall size={13} />}
+              {resolving ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <PhoneCall size={13} />
+              )}
               Найти по телефонам ({needResolve})
             </button>
           )}
@@ -389,12 +483,17 @@ export default function ContractorsPage() {
       </div>
 
       {resolveInfo && (
-        <div className="rounded-lg border bg-muted/40 px-4 py-2.5 text-xs">{resolveInfo}</div>
+        <div className="rounded-lg border bg-muted/40 px-4 py-2.5 text-xs">
+          {resolveInfo}
+        </div>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-80">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            size={13}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
           <Input
             className="pl-8 h-8 text-sm"
             placeholder="Название, @username, телефон, страна, направление…"
@@ -405,12 +504,18 @@ export default function ContractorsPage() {
 
         {/* Разрезы, по которым логист ищет чаще всего. Счётчики сразу говорят,
             сколько подрядчиков в каждом — не приходится проверять вслепую. */}
-        {([
-          ['all', 'Все', rows.length],
-          ['ready', 'Со связью', rows.length - noContact],
-          ['nocontact', 'Без связи', noContact],
-          ['nodir', 'Без направлений', rows.filter((c) => c.directions.length === 0).length],
-        ] as const).map(([key, label, count]) => (
+        {(
+          [
+            ['all', 'Все', rows.length],
+            ['ready', 'Со связью', rows.length - noContact],
+            ['nocontact', 'Без связи', noContact],
+            [
+              'nodir',
+              'Без направлений',
+              rows.filter((c) => c.directions.length === 0).length,
+            ],
+          ] as const
+        ).map(([key, label, count]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -433,14 +538,20 @@ export default function ContractorsPage() {
           >
             <option value="">Любое направление</option>
             {allDirections.map((d) => (
-              <option key={d} value={d}>{d}</option>
+              <option key={d} value={d}>
+                {d}
+              </option>
             ))}
           </select>
         )}
 
         {(search || dir || tab !== 'all') && (
           <button
-            onClick={() => { setSearch(''); setDir(''); setTab('all'); }}
+            onClick={() => {
+              setSearch('');
+              setDir('');
+              setTab('all');
+            }}
             className="text-xs text-muted-foreground hover:text-foreground"
           >
             Сбросить
@@ -454,11 +565,15 @@ export default function ContractorsPage() {
 
       {!loading && filtered.length === 0 && (
         <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
-          Ничего не нашлось. Попробуйте часть названия, номер телефона или сбросьте фильтры.
+          Ничего не нашлось. Попробуйте часть названия, номер телефона или
+          сбросьте фильтры.
         </div>
       )}
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
+      >
         {filtered.map((c) => {
           const sla = slaLabel(c);
           return (
@@ -483,11 +598,14 @@ export default function ContractorsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground">{c.country ?? '—'}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {c.country ?? '—'}
+                    </div>
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-1">
                     <span className="px-1.5 py-0.5 rounded bg-muted text-xs text-muted-foreground">
-                      {CONTACT_CHANNEL_LABELS[c.contactChannel] ?? c.contactChannel}
+                      {CONTACT_CHANNEL_LABELS[c.contactChannel] ??
+                        c.contactChannel}
                     </span>
                     <span className="px-1.5 py-0.5 rounded bg-primary/10 text-xs text-primary font-medium">
                       {c.preferredLanguage}
@@ -496,14 +614,26 @@ export default function ContractorsPage() {
                 </div>
                 <div className="mt-2 pt-2 border-t text-xs text-muted-foreground space-y-1">
                   {/* Направления показываем всегда: пустые сразу видно — такие не подберутся автоматически */}
-                  <div className={cn('flex items-start gap-1', c.directions.length === 0 && 'text-amber-600')}>
+                  <div
+                    className={cn(
+                      'flex items-start gap-1',
+                      c.directions.length === 0 && 'text-amber-600',
+                    )}
+                  >
                     <Globe size={11} className="mt-0.5 shrink-0" />
                     <span className="truncate">
-                      {c.directions.length > 0 ? c.directions.join(', ') : 'направления не заданы'}
-                      {c.transportModes.length > 0 && ` · ${c.transportModes.map((m) => MODE_LABEL[m] ?? m).join('/')}`}
+                      {c.directions.length > 0
+                        ? c.directions.join(', ')
+                        : 'направления не заданы'}
+                      {c.transportModes.length > 0 &&
+                        ` · ${c.transportModes.map((m) => MODE_LABEL[m] ?? m).join('/')}`}
                     </span>
                   </div>
-                  {c.telegramUsername && <div className="flex items-center gap-1 text-blue-600"><Send size={11} /> @{c.telegramUsername.replace('@', '')}</div>}
+                  {c.telegramUsername && (
+                    <div className="flex items-center gap-1 text-blue-600">
+                      <Send size={11} /> @{c.telegramUsername.replace('@', '')}
+                    </div>
+                  )}
                   {hasNoContact(c) && (
                     <div className="flex items-start gap-1 text-amber-700">
                       <AlertTriangle size={11} className="mt-0.5 shrink-0" />
@@ -521,22 +651,41 @@ export default function ContractorsPage() {
                             disabled={confirmingId === c.id}
                             className="ml-1.5 underline decoration-dotted hover:text-amber-900 disabled:opacity-50"
                           >
-                            {confirmingId === c.id ? 'обновляю…' : 'это точно он — обновить'}
+                            {confirmingId === c.id
+                              ? 'обновляю…'
+                              : 'это точно он — обновить'}
                           </button>
                         )}
                       </span>
                     </div>
                   )}
-                  {c.email && <div className="flex items-center gap-1"><Mail size={11} /> {c.email}</div>}
-                  {c.phone && <div className="flex items-center gap-1"><PhoneCall size={11} /> {c.phone}</div>}
-                  {sla && <div className="flex items-center gap-1"><Zap size={11} /> {sla}</div>}
+                  {c.email && (
+                    <div className="flex items-center gap-1">
+                      <Mail size={11} /> {c.email}
+                    </div>
+                  )}
+                  {c.phone && (
+                    <div className="flex items-center gap-1">
+                      <PhoneCall size={11} /> {c.phone}
+                    </div>
+                  )}
+                  {sla && (
+                    <div className="flex items-center gap-1">
+                      <Zap size={11} /> {sla}
+                    </div>
+                  )}
                   {/* Надёжность: считается по выполненным подтверждениям, поэтому
                       у новых подрядчиков честно пусто, а не ноль. */}
                   {c.scorecard && (
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <ShieldCheck size={11} className="shrink-0" />
                       {c.scorecard.reliability != null ? (
-                        <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-medium border', reliabilityCls(c.scorecard.reliability))}>
+                        <span
+                          className={cn(
+                            'px-1.5 py-0.5 rounded text-[10px] font-medium border',
+                            reliabilityCls(c.scorecard.reliability),
+                          )}
+                        >
                           надёжность {c.scorecard.reliability}
                         </span>
                       ) : (
@@ -547,12 +696,19 @@ export default function ContractorsPage() {
                       <span className="truncate">{c.scorecard.note}</span>
                     </div>
                   )}
-                  {c.scorecard && (c.scorecard.invites > 0 || c.scorecard.wins > 0) && (
-                    <div className="text-[11px] text-muted-foreground/80">
-                      приглашений {c.scorecard.invites} · ответов {c.scorecard.replies} · перевозок {c.scorecard.wins}
-                      {c.scorecard.breaks > 0 && <span className="text-red-600"> · срывов {c.scorecard.breaks}</span>}
-                    </div>
-                  )}
+                  {c.scorecard &&
+                    (c.scorecard.invites > 0 || c.scorecard.wins > 0) && (
+                      <div className="text-[11px] text-muted-foreground/80">
+                        приглашений {c.scorecard.invites} · ответов{' '}
+                        {c.scorecard.replies} · перевозок {c.scorecard.wins}
+                        {c.scorecard.breaks > 0 && (
+                          <span className="text-red-600">
+                            {' '}
+                            · срывов {c.scorecard.breaks}
+                          </span>
+                        )}
+                      </div>
+                    )}
                 </div>
               </CardContent>
             </Card>
@@ -560,7 +716,8 @@ export default function ContractorsPage() {
         })}
         {!loading && filtered.length === 0 && (
           <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
-            <Users size={26} className="mx-auto mb-2 opacity-30" /> Подрядчики не найдены
+            <Users size={26} className="mx-auto mb-2 opacity-30" /> Подрядчики
+            не найдены
           </div>
         )}
       </div>
@@ -571,7 +728,9 @@ export default function ContractorsPage() {
           accounts={accounts}
           onClose={() => setSelected(null)}
           onSaved={(updated) => {
-            setRows((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+            setRows((prev) =>
+              prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)),
+            );
             setSelected(null);
           }}
           onDeleted={(id) => {
@@ -603,20 +762,28 @@ export default function ContractorsPage() {
 }
 
 function CreateSupplierPanel({
-  onClose, onCreated,
+  onClose,
+  onCreated,
 }: {
   onClose: () => void;
   onCreated: (s: SupplierRow) => void;
 }) {
-  const [form, setForm] = useState<CreateSupplierInput>({ name: '', contactChannel: 'telegram', preferredLanguage: 'RU' });
+  const [form, setForm] = useState<CreateSupplierInput>({
+    name: '',
+    contactChannel: 'telegram',
+    preferredLanguage: 'RU',
+  });
   const [directions, setDirections] = useState('');
   const [modes, setModes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Похожие подрядчики, найденные сервером — ждут подтверждения логиста. */
-  const [duplicates, setDuplicates] = useState<DuplicateSupplierMatch[] | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicateSupplierMatch[] | null>(
+    null,
+  );
 
-  const set = (patch: Partial<CreateSupplierInput>) => setForm((f) => ({ ...f, ...patch }));
+  const set = (patch: Partial<CreateSupplierInput>) =>
+    setForm((f) => ({ ...f, ...patch }));
 
   const save = async (force = false) => {
     if (!form.name.trim()) return;
@@ -632,8 +799,19 @@ function CreateSupplierPanel({
         transportModes: modes,
         force,
       };
-      (['telegramUsername', 'telegramUserId', 'country', 'phone', 'email', 'inn', 'code'] as const)
-        .forEach((k) => { if (form[k]?.trim()) payload[k] = form[k]!.trim(); });
+      (
+        [
+          'telegramUsername',
+          'telegramUserId',
+          'country',
+          'phone',
+          'email',
+          'inn',
+          'code',
+        ] as const
+      ).forEach((k) => {
+        if (form[k]?.trim()) payload[k] = form[k]!.trim();
+      });
       const res = await tenderApi.suppliers.create(payload);
       if (res.status === 'duplicates') {
         setDuplicates(res.duplicates);
@@ -648,36 +826,67 @@ function CreateSupplierPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex justify-end" onClick={onClose}>
-      <div className="w-full max-w-sm h-full bg-background shadow-xl p-5 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm h-full bg-background shadow-xl p-5 overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-sm">Новый подрядчик</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label>Название *</Label>
-            <Input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="ТрансЛогист ООО" />
+            <Input
+              value={form.name}
+              onChange={(e) => set({ name: e.target.value })}
+              placeholder="ТрансЛогист ООО"
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label>Канал связи</Label>
-            <ChannelSelect value={form.contactChannel ?? 'telegram'} onChange={(c) => set({ contactChannel: c })} />
-            <p className="text-xs text-muted-foreground">По этому каналу пойдёт рассылка тендеров. Для «Почта» заполните email, для Telegram — @username.</p>
+            <ChannelSelect
+              value={form.contactChannel ?? 'telegram'}
+              onChange={(c) => set({ contactChannel: c })}
+            />
+            <p className="text-xs text-muted-foreground">
+              По этому каналу пойдёт рассылка тендеров. Для «Почта» заполните
+              email, для Telegram — @username.
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <Label>Язык общения</Label>
-            <LangSelect value={form.preferredLanguage ?? 'RU'} onChange={(l) => set({ preferredLanguage: l })} />
-            <p className="text-xs text-muted-foreground">Запросы, напоминания и уведомления будут уходить на этом языке.</p>
+            <LangSelect
+              value={form.preferredLanguage ?? 'RU'}
+              onChange={(l) => set({ preferredLanguage: l })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Запросы, напоминания и уведомления будут уходить на этом языке.
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <Label>Направления (страны)</Label>
-            <Input value={directions} onChange={(e) => setDirections(e.target.value)} placeholder="Россия, Казахстан, Узбекистан" />
+            <Input
+              value={directions}
+              onChange={(e) => setDirections(e.target.value)}
+              placeholder="Россия, Казахстан, Узбекистан"
+            />
             <p className="text-xs text-muted-foreground">
-              Через запятую. По ним запрос будет автоматически подбирать подрядчиков под маршрут.
+              Через запятую. По ним запрос будет автоматически подбирать
+              подрядчиков под маршрут.
             </p>
           </div>
 
@@ -688,36 +897,66 @@ function CreateSupplierPanel({
 
           <div className="space-y-1.5">
             <Label>Telegram @username</Label>
-            <Input value={form.telegramUsername ?? ''} onChange={(e) => set({ telegramUsername: e.target.value })} placeholder="@contractor" />
-            <p className="text-xs text-muted-foreground">Нужно для первого контакта в Telegram.</p>
+            <Input
+              value={form.telegramUsername ?? ''}
+              onChange={(e) => set({ telegramUsername: e.target.value })}
+              placeholder="@contractor"
+            />
+            <p className="text-xs text-muted-foreground">
+              Нужно для первого контакта в Telegram.
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <Label>Telegram ID (числовой)</Label>
-            <Input value={form.telegramUserId ?? ''} onChange={(e) => set({ telegramUserId: e.target.value })} placeholder="напр. 123456789" />
-            <p className="text-xs text-muted-foreground">Если знаете ID — впишите, тогда ответы сопоставятся сразу.</p>
+            <Input
+              value={form.telegramUserId ?? ''}
+              onChange={(e) => set({ telegramUserId: e.target.value })}
+              placeholder="напр. 123456789"
+            />
+            <p className="text-xs text-muted-foreground">
+              Если знаете ID — впишите, тогда ответы сопоставятся сразу.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Страна</Label>
-              <Input value={form.country ?? ''} onChange={(e) => set({ country: e.target.value })} placeholder="Казахстан" />
+              <Input
+                value={form.country ?? ''}
+                onChange={(e) => set({ country: e.target.value })}
+                placeholder="Казахстан"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Телефон</Label>
-              <Input value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} placeholder="+7…" />
+              <Input
+                value={form.phone ?? ''}
+                onChange={(e) => set({ phone: e.target.value })}
+                placeholder="+7…"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
-              <Input value={form.email ?? ''} onChange={(e) => set({ email: e.target.value })} placeholder="mail@…" />
+              <Input
+                value={form.email ?? ''}
+                onChange={(e) => set({ email: e.target.value })}
+                placeholder="mail@…"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>ИНН</Label>
-              <Input value={form.inn ?? ''} onChange={(e) => set({ inn: e.target.value })} />
+              <Input
+                value={form.inn ?? ''}
+                onChange={(e) => set({ inn: e.target.value })}
+              />
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Код компании</Label>
-              <Input value={form.code ?? ''} onChange={(e) => set({ code: e.target.value })} />
+              <Input
+                value={form.code ?? ''}
+                onChange={(e) => set({ code: e.target.value })}
+              />
             </div>
           </div>
 
@@ -738,7 +977,12 @@ function CreateSupplierPanel({
               disabled={!form.name.trim() || saving}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
             >
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Создать подрядчика
+              {saving ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Plus size={15} />
+              )}{' '}
+              Создать подрядчика
             </button>
           )}
         </div>
@@ -748,7 +992,11 @@ function CreateSupplierPanel({
 }
 
 function BindPanel({
-  supplier, accounts, onClose, onSaved, onDeleted,
+  supplier,
+  accounts,
+  onClose,
+  onSaved,
+  onDeleted,
 }: {
   supplier: SupplierRow;
   accounts: TelegramAccountRow[];
@@ -759,9 +1007,15 @@ function BindPanel({
   const [username, setUsername] = useState(supplier.telegramUsername ?? '');
   const [email, setEmail] = useState(supplier.email ?? '');
   const [phone, setPhone] = useState(supplier.phone ?? '');
-  const [channel, setChannel] = useState<ContactChannel>(supplier.contactChannel ?? 'telegram');
-  const [language, setLanguage] = useState<ContactLanguage>(supplier.preferredLanguage ?? 'RU');
-  const [directions, setDirections] = useState((supplier.directions ?? []).join(', '));
+  const [channel, setChannel] = useState<ContactChannel>(
+    supplier.contactChannel ?? 'telegram',
+  );
+  const [language, setLanguage] = useState<ContactLanguage>(
+    supplier.preferredLanguage ?? 'RU',
+  );
+  const [directions, setDirections] = useState(
+    (supplier.directions ?? []).join(', '),
+  );
   const [modes, setModes] = useState<string[]>(supplier.transportModes ?? []);
   const [accountId, setAccountId] = useState(supplier.telegramAccountId ?? '');
   const [saving, setSaving] = useState(false);
@@ -771,7 +1025,9 @@ function BindPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   /** Похожие подрядчики, найденные сервером — ждут подтверждения логиста. */
-  const [duplicates, setDuplicates] = useState<DuplicateSupplierMatch[] | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicateSupplierMatch[] | null>(
+    null,
+  );
 
   const remove = async () => {
     setDeleting(true);
@@ -825,11 +1081,22 @@ function BindPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex justify-end" onClick={onClose}>
-      <div className="w-full max-w-sm h-full bg-background shadow-xl p-5 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm h-full bg-background shadow-xl p-5 overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-sm">{supplier.name}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="space-y-1 mb-4 text-sm">
@@ -841,13 +1108,22 @@ function BindPanel({
         {supplier.scorecard && (
           <div className="mb-4 rounded-lg border p-3 text-xs space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground flex items-center gap-1"><ShieldCheck size={11} /> Надёжность</span>
+              <span className="text-muted-foreground flex items-center gap-1">
+                <ShieldCheck size={11} /> Надёжность
+              </span>
               {supplier.scorecard.reliability != null ? (
-                <span className={cn('px-1.5 py-0.5 rounded text-[11px] font-medium border', reliabilityCls(supplier.scorecard.reliability))}>
+                <span
+                  className={cn(
+                    'px-1.5 py-0.5 rounded text-[11px] font-medium border',
+                    reliabilityCls(supplier.scorecard.reliability),
+                  )}
+                >
                   {supplier.scorecard.reliability} / 100
                 </span>
               ) : (
-                <span className="px-1.5 py-0.5 rounded text-[11px] bg-muted text-muted-foreground border">не проверен</span>
+                <span className="px-1.5 py-0.5 rounded text-[11px] bg-muted text-muted-foreground border">
+                  не проверен
+                </span>
               )}
             </div>
             <p className="text-muted-foreground">{supplier.scorecard.note}</p>
@@ -861,18 +1137,24 @@ function BindPanel({
               {supplier.scorecard.breaks > 0 && (
                 <>
                   <span className="text-red-600">Срывов после выбора</span>
-                  <span className="text-right text-red-600 font-medium">{supplier.scorecard.breaks}</span>
+                  <span className="text-right text-red-600 font-medium">
+                    {supplier.scorecard.breaks}
+                  </span>
                 </>
               )}
               {supplier.scorecard.responseRate != null && (
                 <>
                   <span className="text-muted-foreground">Отвечает</span>
-                  <span className="text-right">{Math.round(supplier.scorecard.responseRate)}%</span>
+                  <span className="text-right">
+                    {Math.round(supplier.scorecard.responseRate)}%
+                  </span>
                 </>
               )}
               {supplier.scorecard.avgResponseMin != null && (
                 <>
-                  <span className="text-muted-foreground flex items-center gap-1"><Clock size={10} /> Среднее время</span>
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Clock size={10} /> Среднее время
+                  </span>
                   <span className="text-right">
                     {supplier.scorecard.avgResponseMin < 60
                       ? `~${supplier.scorecard.avgResponseMin} мин`
@@ -893,13 +1175,21 @@ function BindPanel({
           <div className="space-y-1.5">
             <Label>Язык общения</Label>
             <LangSelect value={language} onChange={setLanguage} />
-            <p className="text-xs text-muted-foreground">Запросы и уведомления уходят на этом языке.</p>
+            <p className="text-xs text-muted-foreground">
+              Запросы и уведомления уходят на этом языке.
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <Label>Направления (страны)</Label>
-            <Input value={directions} onChange={(e) => setDirections(e.target.value)} placeholder="Россия, Казахстан, Узбекистан" />
-            <p className="text-xs text-muted-foreground">Через запятую — для автоподбора под маршрут запроса.</p>
+            <Input
+              value={directions}
+              onChange={(e) => setDirections(e.target.value)}
+              placeholder="Россия, Казахстан, Узбекистан"
+            />
+            <p className="text-xs text-muted-foreground">
+              Через запятую — для автоподбора под маршрут запроса.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -909,21 +1199,36 @@ function BindPanel({
 
           <div className="space-y-1.5">
             <Label>Telegram @username</Label>
-            <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@contractor" />
-            <p className="text-xs text-muted-foreground">Нужно для первого контакта. Дальше система запомнит подрядчика по его ID.</p>
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="@contractor"
+            />
+            <p className="text-xs text-muted-foreground">
+              Нужно для первого контакта. Дальше система запомнит подрядчика по
+              его ID.
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <Label>Email</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="mail@company.com" />
+            <Input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="mail@company.com"
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label>Телефон</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123-45-67" />
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+998 90 123-45-67"
+            />
             <p className="text-xs text-muted-foreground">
-              По номеру Telegram находит подрядчика и отдаёт @username — без него
-              нельзя написать тому, у кого есть только числовой ID.
+              По номеру Telegram находит подрядчика и отдаёт @username — без
+              него нельзя написать тому, у кого есть только числовой ID.
             </p>
           </div>
 
@@ -935,7 +1240,11 @@ function BindPanel({
               className="w-full h-8 rounded-md border border-border bg-background px-2 text-sm outline-none"
             >
               <option value="">Авто-выбор</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.label} ({a.phone})</option>)}
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label} ({a.phone})
+                </option>
+              ))}
             </select>
           </div>
 
@@ -956,42 +1265,53 @@ function BindPanel({
               disabled={saving}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
             >
-              {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Сохранить
+              {saving ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Check size={15} />
+              )}{' '}
+              Сохранить
             </button>
           )}
 
           <div className="pt-3 mt-1 border-t">
-              {confirmDelete ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    Удалить «{supplier.name}» безвозвратно? Вместе с ним пропадут его ставки и
-                    ответы в прошлых запросах — и его вклад в статистику цен по маршрутам.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={remove}
-                      disabled={deleting}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-40 transition-colors"
-                    >
-                      {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Удалить
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete(false)}
-                      disabled={deleting}
-                      className="px-3 py-2 rounded-lg border text-sm hover:bg-muted transition-colors"
-                    >
-                      Отмена
-                    </button>
-                  </div>
+            {confirmDelete ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Удалить «{supplier.name}» безвозвратно? Вместе с ним пропадут
+                  его ставки и ответы в прошлых запросах — и его вклад в
+                  статистику цен по маршрутам.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={remove}
+                    disabled={deleting}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-40 transition-colors"
+                  >
+                    {deleting ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}{' '}
+                    Удалить
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
+                    className="px-3 py-2 rounded-lg border text-sm hover:bg-muted transition-colors"
+                  >
+                    Отмена
+                  </button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-red-200 text-red-600 text-sm hover:bg-red-50 transition-colors"
-                >
-                  <Trash2 size={14} /> Удалить подрядчика
-                </button>
-              )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-red-200 text-red-600 text-sm hover:bg-red-50 transition-colors"
+              >
+                <Trash2 size={14} /> Удалить подрядчика
+              </button>
+            )}
           </div>
         </div>
       </div>
