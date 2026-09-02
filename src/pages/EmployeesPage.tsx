@@ -258,6 +258,8 @@ function EmployeePanel({
   const [phone, setPhone] = useState(employee.phone ?? '');
   const [departmentId, setDepartmentId] = useState(employee.departmentId ?? '');
   const [bitrixId, setBitrixId] = useState(employee.bitrix24Id ? String(employee.bitrix24Id) : '');
+  /** Личный вебхук: вводим ссылку целиком, обратно приходит только маска. */
+  const [webhook, setWebhook] = useState('');
   const [isAdmin, setIsAdmin] = useState(employee.isAdmin);
   const [isLawyer, setIsLawyer] = useState(employee.isLawyer ?? false);
   const [reportsEnabled, setReportsEnabled] = useState(employee.reportsEnabled);
@@ -280,12 +282,26 @@ function EmployeePanel({
     bitrixId !== (employee.bitrix24Id ? String(employee.bitrix24Id) : '') ||
     isAdmin !== employee.isAdmin ||
     isLawyer !== (employee.isLawyer ?? false) ||
-    reportsEnabled !== employee.reportsEnabled;
+    reportsEnabled !== employee.reportsEnabled ||
+    webhook.trim() !== '';
 
   const copy = async () => {
     await navigator.clipboard.writeText(`Логин: ${login}\nПароль: ${password}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  };
+
+  /** Снятие ссылки отдельным действием: случайно стереть её сохранением нельзя. */
+  const clearWebhook = async () => {
+    setSavingCard(true);
+    setError(null);
+    try {
+      onSaved(await employeeApi.update(employee.id, { bitrixWebhookUrl: '' }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSavingCard(false);
+    }
   };
 
   const saveCard = async () => {
@@ -302,7 +318,11 @@ function EmployeePanel({
         ...(isSelf ? {} : { isAdmin }),
         isLawyer,
         ...(bitrixId ? { bitrix24Id: Number(bitrixId) } : {}),
+        // Пустое поле ничего не меняет: ссылка снимается отдельной кнопкой,
+        // иначе любое сохранение карточки стирало бы её по недосмотру.
+        ...(webhook.trim() ? { bitrixWebhookUrl: webhook.trim() } : {}),
       });
+      setWebhook('');
       onSaved(row);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -390,7 +410,39 @@ function EmployeePanel({
               placeholder="напр. 2999"
             />
             <p className="text-xs text-muted-foreground">
-              Нужен, чтобы сделки создавались от имени сотрудника.
+              Ответственный в сделке. Автора задаёт личный вебхук ниже.
+            </p>
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Личный вебхук Битрикса</Label>
+            {employee.bitrixWebhookConnected ? (
+              <div className="flex items-center gap-2 text-xs rounded-lg border bg-green-50/60 border-green-200 px-2.5 py-1.5">
+                <span className="text-green-700 font-medium">Подключён</span>
+                <span className="text-muted-foreground truncate">
+                  {employee.bitrixWebhookMasked}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void clearWebhook()}
+                  disabled={savingCard}
+                  className="ml-auto text-muted-foreground hover:text-red-600 shrink-0"
+                  title="Снять ссылку — сделки снова пойдут от общего аккаунта"
+                >
+                  Снять
+                </button>
+              </div>
+            ) : (
+              <Input
+                value={webhook}
+                onChange={(e) => setWebhook(e.target.value)}
+                placeholder="https://b24.transasia.co/rest/2999/токен/"
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              Автором сделки в Битриксе становится владелец токена. Без личного
+              вебхука сделки создаются от общего аккаунта. Ссылка проверяется при
+              сохранении: чужую система не примет.
             </p>
           </div>
 

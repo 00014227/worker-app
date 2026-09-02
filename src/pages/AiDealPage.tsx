@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, FileText, Loader2, CheckCircle2, ExternalLink, Sparkles, X, Search } from 'lucide-react';
 import { authHeaders } from '../lib/auth';
 import { confirmOnStand } from '../lib/env';
+import { aiDealApi } from '../lib/api';
 
 // Empty default → relative `/api` requests go through the Vite dev proxy
 // (and same-origin in production), avoiding the cross-origin CORS failure.
@@ -259,6 +260,12 @@ export default function AiDealPage() {
   const [dragOver, setDragOver] = useState(false);
   const [fields, setFields] = useState<DealFields>(EMPTY_FIELDS);
   const [error, setError] = useState<string | null>(null);
+  /** Есть ли у сотрудника личный вебхук — от этого зависит автор сделки. */
+  const [author, setAuthor] = useState<boolean | null>(null);
+  useEffect(() => {
+    // Признак вспомогательный: его сбой не должен мешать создавать сделку.
+    aiDealApi.author().then((r) => setAuthor(r.personal)).catch(() => undefined);
+  }, []);
   const [dealResult, setDealResult] = useState<{ id: number; url: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -340,6 +347,15 @@ export default function AiDealPage() {
         <p style={{ fontSize: 13, color: '#6b7a99', margin: 0 }}>
           Загрузите документ или вставьте текст — ИИ распознает данные и создаст сделку в Битрикс24
         </p>
+        {/* Автором сделки Битрикс пишет владельца токена, поэтому логист должен
+            знать заранее, чьё имя окажется в истории. */}
+        {author !== null && (
+          <p style={{ fontSize: 12, color: author ? '#15803d' : '#a16207', margin: '6px 0 0' }}>
+            {author
+              ? 'Сделка будет создана от вашего имени'
+              : 'Сделка будет создана от общего аккаунта — попросите администратора внести ваш вебхук'}
+          </p>
+        )}
       </div>
 
       {/* Step indicator */}

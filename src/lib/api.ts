@@ -697,6 +697,10 @@ export interface EmployeeAdminRow {
   /** Доступ к проверке контрагентов. */
   isLawyer: boolean;
   bitrix24Id: number | null;
+  /** Личный вебхук внесён — сделки уходят от имени сотрудника. */
+  bitrixWebhookConnected: boolean;
+  /** Замаскированный вид: сам ключ наружу не отдаётся. */
+  bitrixWebhookMasked: string | null;
   /** Слать ли ежедневный Excel по активным перевозкам этого сотрудника. */
   reportsEnabled: boolean;
 }
@@ -903,6 +907,8 @@ export const employeeApi = {
       isAdmin?: boolean;
   isLawyer?: boolean;
       bitrix24Id?: number;
+      /** Ссылка целиком; пустая строка снимает её. */
+      bitrixWebhookUrl?: string;
     },
   ): Promise<EmployeeAdminRow> {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}/credentials`, {
@@ -927,6 +933,8 @@ export const employeeApi = {
       isAdmin?: boolean;
   isLawyer?: boolean;
       bitrix24Id?: number;
+      /** Ссылка целиком; пустая строка снимает её. */
+      bitrixWebhookUrl?: string;
       departmentId?: string;
       reportsEnabled?: boolean;
     },
@@ -957,6 +965,13 @@ export interface NotificationFeed {
 }
 
 /** Колокольчик логиста. Получатель везде берётся из токена. */
+/** От чьего имени уйдёт сделка: личный вебхук сотрудника или общий аккаунт. */
+export const aiDealApi = {
+  author(): Promise<{ personal: boolean }> {
+    return req<{ personal: boolean }>("/ai-deal/author");
+  },
+};
+
 export const notificationApi = {
   feed(): Promise<NotificationFeed> {
     return req<NotificationFeed>("/worker/notifications");
