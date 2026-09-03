@@ -1,7 +1,20 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
-  FileText, Users, Package, Sparkles, LogOut,
-  LayoutDashboard, Shield, User, Map, Database, Send, Building2, UserCog, Scale, FileDiff,
+  FileText,
+  Users,
+  Package,
+  Sparkles,
+  LogOut,
+  LayoutDashboard,
+  Shield,
+  User,
+  Map,
+  Database,
+  Send,
+  Building2,
+  UserCog,
+  Scale,
+  FileDiff,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 import { closeSocket } from '../lib/socket';
@@ -10,27 +23,25 @@ import { Logo } from './Logo';
 import { StandBanner } from './StandBanner';
 
 const nav = [
-  { to: '/dashboard',     label: 'Дашборд',         icon: LayoutDashboard },
-  { to: '/shipments',     label: 'Перевозки',        icon: Package },
-  { to: '/map',           label: 'Карта',            icon: Map },
-  { to: '/rate-requests', label: 'Запросы ставок',   icon: FileText },
-  { to: '/contractors',   label: 'Подрядчики',       icon: Users },
-  { to: '/customers',     label: 'Клиенты',          icon: Building2 },
-  { to: '/telegram-accounts', label: 'Telegram',     icon: Send },
-  { to: '/tariff-sources',label: 'Тарифы',            icon: Database },
-  { to: '/ai-deal',       label: 'Сделка через ИИ',  icon: Sparkles },
+  { to: '/dashboard', label: 'Дашборд', icon: LayoutDashboard },
+  { to: '/shipments', label: 'Перевозки', icon: Package },
+  { to: '/map', label: 'Карта', icon: Map },
+  { to: '/rate-requests', label: 'Запросы ставок', icon: FileText },
+  { to: '/contractors', label: 'Подрядчики', icon: Users },
+  { to: '/customers', label: 'Клиенты', icon: Building2 },
+  { to: '/telegram-accounts', label: 'Telegram', icon: Send },
+  { to: '/tariff-sources', label: 'Тарифы', icon: Database },
+  { to: '/ai-deal', label: 'Сделка через ИИ', icon: Sparkles },
 ];
 
 /** Разделы только для администраторов. Права всё равно проверяет бэкенд —
     здесь просто не показываем то, чем сотрудник не сможет воспользоваться. */
-const adminNav = [
-  { to: '/employees',     label: 'Сотрудники',       icon: UserCog },
-];
+const adminNav = [{ to: '/employees', label: 'Сотрудники', icon: UserCog }];
 
 /** Разделы юристов. Админ видит их тоже — иначе некому проверить настройку. */
 const lawyerNav = [
   { to: '/counterparty-check', label: 'Проверка контрагентов', icon: Scale },
-  { to: '/contract-diff',      label: 'Сверка договоров',      icon: FileDiff },
+  { to: '/contract-diff', label: 'Сверка договоров', icon: FileDiff },
 ];
 
 export default function Layout() {
@@ -52,7 +63,7 @@ export default function Layout() {
 
       <div className="flex flex-1">
         {/* Sidebar — фирменный синий */}
-        <aside className="w-[220px] shrink-0 flex flex-col bg-[#0c3078] text-white">
+        <aside className="w-[220px] shrink-0 flex flex-col bg-[#0c3078] text-white self-start sticky top-0 h-screen">
           {/* Logo — надпись белая: фирменный синий на синем фоне нечитаем */}
           <div className="px-5 py-5 border-b border-white/10">
             <Logo className="w-full h-auto" textColor="#ffffff" />
@@ -90,13 +101,16 @@ export default function Layout() {
           <div className="p-3 border-t border-white/10">
             <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-white/5 mb-2">
               <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                {user?.isAdmin
-                  ? <Shield size={11} className="text-[#ef3f22]" />
-                  : <User size={11} className="text-white/60" />
-                }
+                {user?.isAdmin ? (
+                  <Shield size={11} className="text-[#ef3f22]" />
+                ) : (
+                  <User size={11} className="text-white/60" />
+                )}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium truncate leading-none">{user?.name ?? ''}</p>
+                <p className="text-xs font-medium truncate leading-none">
+                  {user?.name ?? ''}
+                </p>
                 <p className="text-[10px] text-white/40 mt-0.5 leading-none">
                   {user?.isAdmin ? 'Администратор' : 'Сотрудник'}
                 </p>
