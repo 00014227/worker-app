@@ -1,14 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  UserCog, Search, RefreshCw, Loader2, Plus, KeyRound, ShieldCheck, Copy, Check, X, Mail, Phone,
-  Pencil, Save,
+  UserCog,
+  Search,
+  RefreshCw,
+  Loader2,
+  Plus,
+  KeyRound,
+  ShieldCheck,
+  Copy,
+  Check,
+  X,
+  Mail,
+  Phone,
+  Pencil,
+  Save,
 } from 'lucide-react';
-import { employeeApi, EmployeeAdminRow, CreateEmployeeInput, DepartmentRow } from '../lib/api';
+import {
+  employeeApi,
+  EmployeeAdminRow,
+  CreateEmployeeInput,
+  DepartmentRow,
+} from '../lib/api';
 import { getUser } from '../lib/auth';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 
 /**
  * Пароль показывается ОДИН раз — на сервере хранится только его хеш, и «посмотреть
@@ -25,12 +43,42 @@ function generatePassword(length = 12): string {
 /** Логин по умолчанию из имени: «Наталья Мышакина» → «myshakina». */
 function suggestLogin(name: string): string {
   const translit: Record<string, string> = {
-    а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i',
-    й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't',
-    у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '',
-    э: 'e', ю: 'yu', я: 'ya',
+    а: 'a',
+    б: 'b',
+    в: 'v',
+    г: 'g',
+    д: 'd',
+    е: 'e',
+    ё: 'e',
+    ж: 'zh',
+    з: 'z',
+    и: 'i',
+    й: 'y',
+    к: 'k',
+    л: 'l',
+    м: 'm',
+    н: 'n',
+    о: 'o',
+    п: 'p',
+    р: 'r',
+    с: 's',
+    т: 't',
+    у: 'u',
+    ф: 'f',
+    х: 'h',
+    ц: 'c',
+    ч: 'ch',
+    ш: 'sh',
+    щ: 'sch',
+    ъ: '',
+    ы: 'y',
+    ь: '',
+    э: 'e',
+    ю: 'yu',
+    я: 'ya',
   };
-  const surname = name.trim().split(/\s+/)[1] ?? name.trim().split(/\s+/)[0] ?? '';
+  const surname =
+    name.trim().split(/\s+/)[1] ?? name.trim().split(/\s+/)[0] ?? '';
   return surname
     .toLowerCase()
     .split('')
@@ -43,14 +91,20 @@ const selectCls =
 
 /** Выбор офиса. Пустое значение допустимо — тогда действуют настройки по умолчанию. */
 function DepartmentSelect({
-  value, options, onChange,
+  value,
+  options,
+  onChange,
 }: {
   value: string;
   options: DepartmentRow[];
   onChange: (id: string) => void;
 }) {
   return (
-    <select className={selectCls} value={value} onChange={(e) => onChange(e.target.value)}>
+    <select
+      className={selectCls}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
       <option value="">— не указано —</option>
       {options.map((d) => (
         <option key={d.id} value={d.id}>
@@ -81,7 +135,10 @@ export default function EmployeesPage() {
   };
   useEffect(load, []);
   useEffect(() => {
-    employeeApi.departments().then(setDepartments).catch(() => setDepartments([]));
+    employeeApi
+      .departments()
+      .then(setDepartments)
+      .catch(() => setDepartments([]));
   }, []);
 
   const filtered = useMemo(() => {
@@ -96,6 +153,11 @@ export default function EmployeesPage() {
   }, [rows, search]);
 
   const withAccess = rows.filter((e) => e.hasAccess).length;
+
+  const { visible: visibleEmployees, ref } = useInfiniteScroll(
+    filtered,
+    `${search}|${rows}`,
+  );
 
   const upsertRow = (row: EmployeeAdminRow) =>
     setRows((prev) => {
@@ -112,11 +174,16 @@ export default function EmployeesPage() {
         <div>
           <h1 className="text-xl font-bold">Сотрудники</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {loading ? 'Загрузка…' : `${rows.length} человек · с доступом ${withAccess}`}
+            {loading
+              ? 'Загрузка…'
+              : `${rows.length} человек · с доступом ${withAccess}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={load} className="text-xs text-muted-foreground hover:text-foreground">
+          <button
+            onClick={load}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
@@ -135,7 +202,10 @@ export default function EmployeesPage() {
       )}
 
       <div className="relative max-w-sm">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Search
+          size={13}
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+        />
         <Input
           className="pl-8 h-8 text-sm"
           placeholder="Поиск по имени, логину или почте…"
@@ -151,14 +221,16 @@ export default function EmployeesPage() {
               <thead>
                 <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
                   <th className="px-4 py-2 text-left font-medium">Сотрудник</th>
-                  <th className="px-4 py-2 text-left font-medium hidden md:table-cell">Подразделение</th>
+                  <th className="px-4 py-2 text-left font-medium hidden md:table-cell">
+                    Подразделение
+                  </th>
                   <th className="px-4 py-2 text-left font-medium">Логин</th>
                   <th className="px-4 py-2 text-center font-medium">Доступ</th>
                   <th className="px-4 py-2 text-right font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filtered.map((e) => (
+                {visibleEmployees.map((e) => (
                   <tr key={e.id} className="hover:bg-muted/20">
                     <td className="px-4 py-2.5">
                       <div className="font-medium flex items-center gap-1.5">
@@ -170,14 +242,24 @@ export default function EmployeesPage() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-                        {e.email && <span className="inline-flex items-center gap-1"><Mail size={10} /> {e.email}</span>}
-                        {e.phone && <span className="inline-flex items-center gap-1"><Phone size={10} /> {e.phone}</span>}
+                        {e.email && (
+                          <span className="inline-flex items-center gap-1">
+                            <Mail size={10} /> {e.email}
+                          </span>
+                        )}
+                        {e.phone && (
+                          <span className="inline-flex items-center gap-1">
+                            <Phone size={10} /> {e.phone}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-2.5 hidden md:table-cell text-xs text-muted-foreground">
                       {e.department ?? '—'}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-xs">{e.login ?? '—'}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs">
+                      {e.login ?? '—'}
+                    </td>
                     <td className="px-4 py-2.5 text-center">
                       {e.hasAccess ? (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
@@ -199,10 +281,14 @@ export default function EmployeesPage() {
                     </td>
                   </tr>
                 ))}
-                {!loading && filtered.length === 0 && (
+                {!loading && visibleEmployees.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-sm text-muted-foreground">
-                      <UserCog size={26} className="mx-auto mb-2 opacity-30" /> Сотрудники не найдены
+                    <td
+                      colSpan={5}
+                      className="py-12 text-center text-sm text-muted-foreground"
+                    >
+                      <UserCog size={26} className="mx-auto mb-2 opacity-30" />{' '}
+                      Сотрудники не найдены
                     </td>
                   </tr>
                 )}
@@ -211,6 +297,8 @@ export default function EmployeesPage() {
           </div>
         </CardContent>
       </Card>
+
+      <div ref={ref} />
 
       {selected && (
         <EmployeePanel
@@ -244,7 +332,11 @@ export default function EmployeesPage() {
  * не должна требовать смены пароля, а смена пароля не должна трогать остальное.
  */
 function EmployeePanel({
-  employee, departments, isSelf, onClose, onSaved,
+  employee,
+  departments,
+  isSelf,
+  onClose,
+  onSaved,
 }: {
   employee: EmployeeAdminRow;
   departments: DepartmentRow[];
@@ -257,13 +349,17 @@ function EmployeePanel({
   const [email, setEmail] = useState(employee.email ?? '');
   const [phone, setPhone] = useState(employee.phone ?? '');
   const [departmentId, setDepartmentId] = useState(employee.departmentId ?? '');
-  const [bitrixId, setBitrixId] = useState(employee.bitrix24Id ? String(employee.bitrix24Id) : '');
+  const [bitrixId, setBitrixId] = useState(
+    employee.bitrix24Id ? String(employee.bitrix24Id) : '',
+  );
   const [isAdmin, setIsAdmin] = useState(employee.isAdmin);
   const [isLawyer, setIsLawyer] = useState(employee.isLawyer ?? false);
   const [reportsEnabled, setReportsEnabled] = useState(employee.reportsEnabled);
 
   // ── Доступ ──
-  const [login, setLogin] = useState(employee.login ?? suggestLogin(employee.name));
+  const [login, setLogin] = useState(
+    employee.login ?? suggestLogin(employee.name),
+  );
   const [password, setPassword] = useState(() => generatePassword());
 
   const [savingCard, setSavingCard] = useState(false);
@@ -317,7 +413,12 @@ function EmployeePanel({
     setSavingAccess(true);
     setError(null);
     try {
-      onSaved(await employeeApi.issueCredentials(employee.id, { login: login.trim(), password }));
+      onSaved(
+        await employeeApi.issueCredentials(employee.id, {
+          login: login.trim(),
+          password,
+        }),
+      );
     } catch (e) {
       setError((e as Error).message);
       setSavingAccess(false);
@@ -336,19 +437,27 @@ function EmployeePanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex justify-end" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-sm h-full bg-background shadow-xl p-5 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold text-sm">{employee.name}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <X size={18} />
           </button>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          {employee.hasAccess ? `Доступ выдан · логин ${employee.login}` : 'Доступа пока нет'}
+          {employee.hasAccess
+            ? `Доступ выдан · логин ${employee.login}`
+            : 'Доступа пока нет'}
         </p>
 
         {error && <div className="mb-3 text-xs text-red-600">{error}</div>}
@@ -376,7 +485,11 @@ function EmployeePanel({
 
           <div className="space-y-1.5">
             <Label>Подразделение (офис)</Label>
-            <DepartmentSelect value={departmentId} options={departments} onChange={setDepartmentId} />
+            <DepartmentSelect
+              value={departmentId}
+              options={departments}
+              onChange={setDepartmentId}
+            />
             <p className="text-xs text-muted-foreground">
               Определяет воронку Битрикса и импорт/экспорт для сотрудника.
             </p>
@@ -430,7 +543,8 @@ function EmployeePanel({
             <span>Слать отчёты по активным перевозкам</span>
           </label>
           <p className="text-xs text-muted-foreground -mt-1">
-            Ежедневный Excel на почту (если пусто — на логин) по перевозкам, где сотрудник КАМ.
+            Ежедневный Excel на почту (если пусто — на логин) по перевозкам, где
+            сотрудник КАМ.
           </p>
 
           <button
@@ -457,7 +571,11 @@ function EmployeePanel({
 
           <div className="space-y-1.5">
             <Label>Логин</Label>
-            <Input value={login} onChange={(e) => setLogin(e.target.value)} placeholder="ivanov" />
+            <Input
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
+              placeholder="ivanov"
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -482,12 +600,17 @@ function EmployeePanel({
                 title="Скопировать логин и пароль"
                 className="px-2 rounded-md border border-border hover:bg-muted/50 transition-colors"
               >
-                {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+                {copied ? (
+                  <Check size={13} className="text-green-600" />
+                ) : (
+                  <Copy size={13} />
+                )}
               </button>
             </div>
             {/* Хеш необратим: после сохранения пароль восстановить нельзя, только сбросить. */}
             <p className="text-xs text-amber-700">
-              Скопируйте пароль сейчас — посмотреть его позже будет нельзя, только задать новый.
+              Скопируйте пароль сейчас — посмотреть его позже будет нельзя,
+              только задать новый.
             </p>
           </div>
 
@@ -496,7 +619,11 @@ function EmployeePanel({
             disabled={savingAccess || !login.trim() || password.length < 8}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
           >
-            {savingAccess ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
+            {savingAccess ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <KeyRound size={15} />
+            )}
             {employee.hasAccess ? 'Сохранить новый пароль' : 'Выдать доступ'}
           </button>
 
@@ -515,10 +642,11 @@ function EmployeePanel({
   );
 }
 
-
 /** Новый сотрудник — для тех, кого нет в выгрузке из 1С. */
 function CreateEmployeePanel({
-  departments, onClose, onCreated,
+  departments,
+  onClose,
+  onCreated,
 }: {
   departments: DepartmentRow[];
   onClose: () => void;
@@ -530,7 +658,8 @@ function CreateEmployeePanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const set = (patch: Partial<CreateEmployeeInput>) => setForm((f) => ({ ...f, ...patch }));
+  const set = (patch: Partial<CreateEmployeeInput>) =>
+    setForm((f) => ({ ...f, ...patch }));
 
   const save = async () => {
     setSaving(true);
@@ -546,7 +675,10 @@ function CreateEmployeePanel({
           bitrix24Id: form.bitrix24Id,
           departmentId: form.departmentId || undefined,
           ...(withAccess
-            ? { login: (form.login || suggestLogin(form.name)).trim(), password }
+            ? {
+                login: (form.login || suggestLogin(form.name)).trim(),
+                password,
+              }
             : {}),
         }),
       );
@@ -557,14 +689,20 @@ function CreateEmployeePanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex justify-end" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-sm h-full bg-background shadow-xl p-5 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-sm">Новый сотрудник</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <X size={18} />
           </button>
         </div>
@@ -581,11 +719,17 @@ function CreateEmployeePanel({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Email</Label>
-              <Input value={form.email ?? ''} onChange={(e) => set({ email: e.target.value })} />
+              <Input
+                value={form.email ?? ''}
+                onChange={(e) => set({ email: e.target.value })}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Телефон</Label>
-              <Input value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} />
+              <Input
+                value={form.phone ?? ''}
+                onChange={(e) => set({ phone: e.target.value })}
+              />
             </div>
           </div>
           <div className="space-y-1.5">
@@ -605,7 +749,11 @@ function CreateEmployeePanel({
             <Input
               value={form.bitrix24Id ? String(form.bitrix24Id) : ''}
               onChange={(e) =>
-                set({ bitrix24Id: e.target.value ? Number(e.target.value.replace(/\D/g, '')) : undefined })
+                set({
+                  bitrix24Id: e.target.value
+                    ? Number(e.target.value.replace(/\D/g, ''))
+                    : undefined,
+                })
               }
               placeholder="напр. 2999"
             />
@@ -678,13 +826,21 @@ function CreateEmployeePanel({
 
           <button
             onClick={save}
-            disabled={saving || form.name.trim().length < 2 || (withAccess && password.length < 8)}
+            disabled={
+              saving ||
+              form.name.trim().length < 2 ||
+              (withAccess && password.length < 8)
+            }
             className={cn(
               'w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
               'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40',
             )}
           >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+            {saving ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Plus size={15} />
+            )}
             Создать сотрудника
           </button>
         </div>
