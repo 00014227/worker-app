@@ -32,6 +32,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { confirmOnStand } from '../lib/env';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 
 const CHANNELS: ContactChannel[] = ['telegram', 'email', 'both'];
 const LANGUAGES: ContactLanguage[] = ['RU', 'EN', 'UZ'];
@@ -361,6 +362,11 @@ export default function ContractorsPage() {
     return out;
   }, [rows, search, dir, tab, justAdded]);
 
+  const { visible: visibleSuppliers, ref } = useInfiniteScroll(
+    filtered,
+    `${search}|${tab}|${dir}`,
+  );
+
   const noContact = rows.filter(hasNoContact).length;
   const needResolve = rows.filter(
     (c) => c.phone && !c.telegramUsername && !c.telegramResolved,
@@ -574,7 +580,7 @@ export default function ContractorsPage() {
         className="grid gap-3"
         style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
       >
-        {filtered.map((c) => {
+        {visibleSuppliers.map((c) => {
           const sla = slaLabel(c);
           return (
             <Card
@@ -721,6 +727,8 @@ export default function ContractorsPage() {
           </div>
         )}
       </div>
+      {/* Don`t remove, it`s need for intersection observer */}
+      <div ref={ref} />
 
       {selected && (
         <BindPanel
