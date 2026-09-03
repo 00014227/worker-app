@@ -853,7 +853,7 @@ export interface ConversationMessage {
   status: string | null;
   createdAt: string;
   /** voice | photo | document — пусто у обычного текстового сообщения. */
-  mediaKind: "voice" | "photo" | "document" | null;
+  mediaKind: 'voice' | 'photo' | 'document' | null;
   mediaName: string | null;
   mediaSize: number | null;
   /** Длительность голосового в секундах — видна до нажатия «слушать». */
@@ -871,7 +871,7 @@ export async function fetchMediaUrl(messageId: string): Promise<string> {
   const res = await fetch(`/api/worker/tenders/media/${messageId}`, {
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error("Вложение недоступно");
+  if (!res.ok) throw new Error('Вложение недоступно');
   return URL.createObjectURL(await res.blob());
 }
 
@@ -968,7 +968,7 @@ export interface NotificationFeed {
 /** От чьего имени уйдёт сделка: личный вебхук сотрудника или общий аккаунт. */
 export const aiDealApi = {
   author(): Promise<{ personal: boolean }> {
-    return req<{ personal: boolean }>("/ai-deal/author");
+    return req<{ personal: boolean }>('/ai-deal/author');
   },
 };
 
@@ -1309,17 +1309,21 @@ export const tenderApi = {
       caption?: string,
     ): Promise<{ ok: boolean; messages: ConversationMessage[] }> {
       const form = new FormData();
-      form.append("file", file);
-      if (caption?.trim()) form.append("caption", caption.trim());
+      form.append('file', file);
+      if (caption?.trim()) form.append('caption', caption.trim());
       const res = await fetch(
         `/api/worker/tenders/${tenderId}/suppliers/${supplierId}/file`,
-        { method: "POST", headers: authHeaders(), body: form },
+        { method: 'POST', headers: authHeaders(), body: form },
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         const raw = body?.message ?? body?.error;
         throw new Error(
-          Array.isArray(raw) ? raw.join("; ") : typeof raw === "string" ? raw : "Не удалось отправить файл",
+          Array.isArray(raw)
+            ? raw.join('; ')
+            : typeof raw === 'string'
+              ? raw
+              : 'Не удалось отправить файл',
         );
       }
       return res.json();

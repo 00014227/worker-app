@@ -1,12 +1,23 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Upload, CheckCircle, AlertTriangle, AlertCircle,
-  ChevronLeft, Check, Pencil, X, Save,
+  Upload,
+  CheckCircle,
+  AlertTriangle,
+  AlertCircle,
+  ChevronLeft,
+  Check,
+  Pencil,
+  X,
+  Save,
 } from 'lucide-react';
 import {
-  uploadTariffFile, getTariffBatch, updateTariffRow, commitTariffBatch,
-  type TariffUploadBatch, type TariffUploadRow,
+  uploadTariffFile,
+  getTariffBatch,
+  updateTariffRow,
+  commitTariffBatch,
+  type TariffUploadBatch,
+  type TariffUploadRow,
 } from '../lib/api';
 
 type Step = 'upload' | 'preview' | 'done';
@@ -23,20 +34,23 @@ function StatusBadge({ status }: { status: TariffUploadRow['rowStatus'] }) {
   if (status === 'ok') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-        <CheckCircle className="h-3 w-3" />OK
+        <CheckCircle className="h-3 w-3" />
+        OK
       </span>
     );
   }
   if (status === 'warning') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-yellow-700">
-        <AlertTriangle className="h-3 w-3" />Предупрежд.
+        <AlertTriangle className="h-3 w-3" />
+        Предупрежд.
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-      <AlertCircle className="h-3 w-3" />Ошибка
+      <AlertCircle className="h-3 w-3" />
+      Ошибка
     </span>
   );
 }
@@ -60,37 +74,48 @@ export default function TariffUploadPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('upload');
-  const [sourceType, setSourceType] = useState<'indicative' | 'b24'>('indicative');
+  const [sourceType, setSourceType] = useState<'indicative' | 'b24'>(
+    'indicative',
+  );
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [batch, setBatch] = useState<TariffUploadBatch | null>(null);
   const [committing, setCommitting] = useState(false);
-  const [commitResult, setCommitResult] = useState<{ committed: number; skipped: number } | null>(null);
+  const [commitResult, setCommitResult] = useState<{
+    committed: number;
+    skipped: number;
+  } | null>(null);
   const [editingRow, setEditingRow] = useState<EditingRow | null>(null);
   const [savingRow, setSavingRow] = useState(false);
 
-  const handleFile = useCallback(async (file: File) => {
-    setError(null);
-    setUploading(true);
-    try {
-      const result = await uploadTariffFile(file, sourceType);
-      const batchData = await getTariffBatch(result.batchId);
-      setBatch(batchData);
-      setStep('preview');
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setUploading(false);
-    }
-  }, [sourceType]);
+  const handleFile = useCallback(
+    async (file: File) => {
+      setError(null);
+      setUploading(true);
+      try {
+        const result = await uploadTariffFile(file, sourceType);
+        const batchData = await getTariffBatch(result.batchId);
+        setBatch(batchData);
+        setStep('preview');
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setUploading(false);
+      }
+    },
+    [sourceType],
+  );
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    },
+    [handleFile],
+  );
 
   const startEdit = (row: TariffUploadRow) => {
     setEditingRow({
@@ -119,8 +144,12 @@ export default function TariffUploadPage() {
         transportType: editingRow.transportType || undefined,
         currency: editingRow.currency || undefined,
         ratePerKg: editingRow.ratePerKg ? Number(editingRow.ratePerKg) : null,
-        ratePerCbm: editingRow.ratePerCbm ? Number(editingRow.ratePerCbm) : null,
-        ratePerContainer: editingRow.ratePerContainer ? Number(editingRow.ratePerContainer) : null,
+        ratePerCbm: editingRow.ratePerCbm
+          ? Number(editingRow.ratePerCbm)
+          : null,
+        ratePerContainer: editingRow.ratePerContainer
+          ? Number(editingRow.ratePerContainer)
+          : null,
         minCost: editingRow.minCost ? Number(editingRow.minCost) : null,
         validFrom: editingRow.validFrom || undefined,
         validUntil: editingRow.validUntil || undefined,
@@ -159,9 +188,12 @@ export default function TariffUploadPage() {
           <Check className="h-8 w-8 text-green-600" />
         </div>
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-slate-900">Тарифы загружены</h2>
+          <h2 className="text-xl font-semibold text-slate-900">
+            Тарифы загружены
+          </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Добавлено: {commitResult.committed}, пропущено: {commitResult.skipped}
+            Добавлено: {commitResult.committed}, пропущено:{' '}
+            {commitResult.skipped}
           </p>
         </div>
         <button
@@ -178,42 +210,56 @@ export default function TariffUploadPage() {
   if (step === 'preview' && batch) {
     const okCount = batch.rows.filter((r) => r.rowStatus === 'ok').length;
     const errCount = batch.rows.filter((r) => r.rowStatus === 'error').length;
-    const warnCount = batch.rows.filter((r) => r.rowStatus === 'warning').length;
+    const warnCount = batch.rows.filter(
+      (r) => r.rowStatus === 'warning',
+    ).length;
 
     return (
       <div className="flex flex-col gap-4 p-6">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => { setStep('upload'); setBatch(null); }}
+            onClick={() => {
+              setStep('upload');
+              setBatch(null);
+            }}
             className="text-slate-500 hover:text-slate-700"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Предпросмотр тарифов</h1>
-            <p className="text-sm text-slate-500">{batch.fileName} · {batch.totalRows} строк</p>
+            <h1 className="text-xl font-semibold text-slate-900">
+              Предпросмотр тарифов
+            </h1>
+            <p className="text-sm text-slate-500">
+              {batch.fileName} · {batch.totalRows} строк
+            </p>
           </div>
         </div>
 
         {/* Stats */}
         <div className="flex gap-3">
           <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-            <CheckCircle className="h-4 w-4" />{okCount} OK
+            <CheckCircle className="h-4 w-4" />
+            {okCount} OK
           </div>
           {warnCount > 0 && (
             <div className="flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
-              <AlertTriangle className="h-4 w-4" />{warnCount} предупреждений
+              <AlertTriangle className="h-4 w-4" />
+              {warnCount} предупреждений
             </div>
           )}
           {errCount > 0 && (
             <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              <AlertCircle className="h-4 w-4" />{errCount} ошибок
+              <AlertCircle className="h-4 w-4" />
+              {errCount} ошибок
             </div>
           )}
         </div>
 
         {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+          </div>
         )}
 
         {/* Preview table */}
@@ -239,37 +285,64 @@ export default function TariffUploadPage() {
                 const isEditing = editingRow?.rowId === row.id;
                 if (isEditing && editingRow) {
                   return (
-                    <tr key={row.id} className="border-b border-slate-100 bg-blue-50/30">
-                      <td className="px-3 py-2 text-slate-400">{row.rowIndex + 1}</td>
+                    <tr
+                      key={row.id}
+                      className="border-b border-slate-100 bg-blue-50/30"
+                    >
+                      <td className="px-3 py-2 text-slate-400">
+                        {row.rowIndex + 1}
+                      </td>
                       <td className="px-3 py-2">
                         <input
                           value={editingRow.departure}
-                          onChange={(e) => setEditingRow({ ...editingRow, departure: e.target.value })}
+                          onChange={(e) =>
+                            setEditingRow({
+                              ...editingRow,
+                              departure: e.target.value,
+                            })
+                          }
                           className="w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-primary focus:outline-none"
                         />
                       </td>
                       <td className="px-3 py-2">
                         <input
                           value={editingRow.destination}
-                          onChange={(e) => setEditingRow({ ...editingRow, destination: e.target.value })}
+                          onChange={(e) =>
+                            setEditingRow({
+                              ...editingRow,
+                              destination: e.target.value,
+                            })
+                          }
                           className="w-full rounded border border-slate-300 px-2 py-1 text-xs focus:border-primary focus:outline-none"
                         />
                       </td>
                       <td className="px-3 py-2">
                         <select
                           value={editingRow.transportType}
-                          onChange={(e) => setEditingRow({ ...editingRow, transportType: e.target.value })}
+                          onChange={(e) =>
+                            setEditingRow({
+                              ...editingRow,
+                              transportType: e.target.value,
+                            })
+                          }
                           className="rounded border border-slate-300 px-1 py-1 text-xs focus:border-primary focus:outline-none"
                         >
                           {TRANSPORT_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
                           ))}
                         </select>
                       </td>
                       <td className="px-3 py-2">
                         <input
                           value={editingRow.currency}
-                          onChange={(e) => setEditingRow({ ...editingRow, currency: e.target.value })}
+                          onChange={(e) =>
+                            setEditingRow({
+                              ...editingRow,
+                              currency: e.target.value,
+                            })
+                          }
                           className="w-16 rounded border border-slate-300 px-2 py-1 text-xs focus:border-primary focus:outline-none"
                         />
                       </td>
@@ -277,7 +350,12 @@ export default function TariffUploadPage() {
                         <input
                           type="number"
                           value={editingRow.ratePerKg}
-                          onChange={(e) => setEditingRow({ ...editingRow, ratePerKg: e.target.value })}
+                          onChange={(e) =>
+                            setEditingRow({
+                              ...editingRow,
+                              ratePerKg: e.target.value,
+                            })
+                          }
                           className="w-20 rounded border border-slate-300 px-2 py-1 text-xs focus:border-primary focus:outline-none"
                         />
                       </td>
@@ -285,7 +363,12 @@ export default function TariffUploadPage() {
                         <input
                           type="number"
                           value={editingRow.ratePerCbm}
-                          onChange={(e) => setEditingRow({ ...editingRow, ratePerCbm: e.target.value })}
+                          onChange={(e) =>
+                            setEditingRow({
+                              ...editingRow,
+                              ratePerCbm: e.target.value,
+                            })
+                          }
                           className="w-20 rounded border border-slate-300 px-2 py-1 text-xs focus:border-primary focus:outline-none"
                         />
                       </td>
@@ -293,7 +376,12 @@ export default function TariffUploadPage() {
                         <input
                           type="number"
                           value={editingRow.ratePerContainer}
-                          onChange={(e) => setEditingRow({ ...editingRow, ratePerContainer: e.target.value })}
+                          onChange={(e) =>
+                            setEditingRow({
+                              ...editingRow,
+                              ratePerContainer: e.target.value,
+                            })
+                          }
                           className="w-24 rounded border border-slate-300 px-2 py-1 text-xs focus:border-primary focus:outline-none"
                         />
                       </td>
@@ -302,13 +390,23 @@ export default function TariffUploadPage() {
                           <input
                             type="date"
                             value={editingRow.validFrom}
-                            onChange={(e) => setEditingRow({ ...editingRow, validFrom: e.target.value })}
+                            onChange={(e) =>
+                              setEditingRow({
+                                ...editingRow,
+                                validFrom: e.target.value,
+                              })
+                            }
                             className="rounded border border-slate-300 px-1 py-1 text-xs focus:border-primary focus:outline-none"
                           />
                           <input
                             type="date"
                             value={editingRow.validUntil}
-                            onChange={(e) => setEditingRow({ ...editingRow, validUntil: e.target.value })}
+                            onChange={(e) =>
+                              setEditingRow({
+                                ...editingRow,
+                                validUntil: e.target.value,
+                              })
+                            }
                             className="rounded border border-slate-300 px-1 py-1 text-xs focus:border-primary focus:outline-none"
                           />
                         </div>
@@ -341,19 +439,25 @@ export default function TariffUploadPage() {
                       row.rowStatus === 'error'
                         ? 'bg-red-50/30'
                         : row.rowStatus === 'warning'
-                        ? 'bg-yellow-50/20'
-                        : 'hover:bg-slate-50/50'
+                          ? 'bg-yellow-50/20'
+                          : 'hover:bg-slate-50/50'
                     }`}
                   >
-                    <td className="px-3 py-2.5 text-slate-400">{row.rowIndex + 1}</td>
+                    <td className="px-3 py-2.5 text-slate-400">
+                      {row.rowIndex + 1}
+                    </td>
                     <td className="px-3 py-2.5 font-medium text-slate-800">
                       {row.departureLocation?.name ?? row.departure ?? '—'}
                     </td>
                     <td className="px-3 py-2.5 text-slate-700">
                       {row.destinationLocation?.name ?? row.destination ?? '—'}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600">{row.transportType ?? '—'}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{row.currency ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-slate-600">
+                      {row.transportType ?? '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-600">
+                      {row.currency ?? '—'}
+                    </td>
                     <td className="px-3 py-2.5 text-slate-600">
                       {row.ratePerKg ? Number(row.ratePerKg).toFixed(2) : '—'}
                     </td>
@@ -361,16 +465,21 @@ export default function TariffUploadPage() {
                       {row.ratePerCbm ? Number(row.ratePerCbm).toFixed(2) : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-slate-600">
-                      {row.ratePerContainer ? Number(row.ratePerContainer).toFixed(2) : '—'}
+                      {row.ratePerContainer
+                        ? Number(row.ratePerContainer).toFixed(2)
+                        : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-slate-500">
-                      {row.validFrom?.slice(0, 10) ?? '—'} — {row.validUntil?.slice(0, 10) ?? '—'}
+                      {row.validFrom?.slice(0, 10) ?? '—'} —{' '}
+                      {row.validUntil?.slice(0, 10) ?? '—'}
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-col gap-0.5">
                         <StatusBadge status={row.rowStatus} />
                         {row.errorMessage && (
-                          <span className="text-xs text-red-500">{row.errorMessage}</span>
+                          <span className="text-xs text-red-500">
+                            {row.errorMessage}
+                          </span>
                         )}
                       </div>
                     </td>
@@ -422,13 +531,17 @@ export default function TariffUploadPage() {
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-xl font-semibold text-slate-900">Загрузить тарифы</h1>
+        <h1 className="text-xl font-semibold text-slate-900">
+          Загрузить тарифы
+        </h1>
       </div>
 
       <div className="mx-auto w-full max-w-lg space-y-5">
         {/* Source type */}
         <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <p className="mb-3 text-sm font-medium text-slate-700">Источник тарифов</p>
+          <p className="mb-3 text-sm font-medium text-slate-700">
+            Источник тарифов
+          </p>
           <div className="flex gap-3">
             {(['indicative', 'b24'] as const).map((type) => (
               <button
@@ -448,7 +561,10 @@ export default function TariffUploadPage() {
 
         {/* Dropzone */}
         <div
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
@@ -463,7 +579,10 @@ export default function TariffUploadPage() {
             type="file"
             accept=".csv,.xlsx,.xls"
             className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+            }}
           />
           {uploading ? (
             <>
@@ -486,7 +605,9 @@ export default function TariffUploadPage() {
         </div>
 
         {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+          </div>
         )}
       </div>
     </div>

@@ -25,7 +25,13 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/shipments" element={<ShipmentsPage />} />
@@ -34,7 +40,10 @@ export default function App() {
           <Route path="/shipments/:id/edit" element={<EditShipmentPage />} />
           <Route path="/rate-requests" element={<RateRequestsPage />} />
           <Route path="/rate-requests/new" element={<NewRateRequestPage />} />
-          <Route path="/rate-requests/:id" element={<RateRequestDetailPage />} />
+          <Route
+            path="/rate-requests/:id"
+            element={<RateRequestDetailPage />}
+          />
           <Route path="/contractors" element={<ContractorsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/telegram-accounts" element={<TelegramAccountsPage />} />
@@ -42,7 +51,10 @@ export default function App() {
           <Route path="/ai-deal" element={<AiDealPage />} />
           <Route path="/tariff-sources" element={<TariffSourcesPage />} />
           <Route path="/employees" element={<EmployeesPage />} />
-          <Route path="/counterparty-check" element={<CounterpartyCheckPage />} />
+          <Route
+            path="/counterparty-check"
+            element={<CounterpartyCheckPage />}
+          />
           <Route path="/contract-diff" element={<ContractDiffPage />} />
         </Route>
       </Routes>

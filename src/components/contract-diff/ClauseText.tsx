@@ -1,5 +1,5 @@
-import { WordPart } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { WordPart } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 /**
  * Пункт с пословной разметкой. Ради этого юрист и открывает сравнение: видно
@@ -17,14 +17,14 @@ export default function ClauseText({
 }: {
   parts: WordPart[] | null;
   text: string | null;
-  side: "left" | "right";
+  side: 'left' | 'right';
   className?: string;
 }) {
   if (!parts?.length) {
-    return <span className={className}>{text ?? "—"}</span>;
+    return <span className={className}>{text ?? '—'}</span>;
   }
 
-  const skip = side === "left" ? "added" : "removed";
+  const skip = side === 'left' ? 'added' : 'removed';
   return (
     <span className={className}>
       {parts
@@ -33,8 +33,9 @@ export default function ClauseText({
           <span
             key={i}
             className={cn(
-              p.kind === "added" && "bg-green-100 text-green-900 rounded-[2px]",
-              p.kind === "removed" && "bg-red-100 text-red-900 line-through rounded-[2px]",
+              p.kind === 'added' && 'bg-green-100 text-green-900 rounded-[2px]',
+              p.kind === 'removed' &&
+                'bg-red-100 text-red-900 line-through rounded-[2px]',
             )}
           >
             {p.text}

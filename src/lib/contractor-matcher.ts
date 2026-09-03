@@ -69,16 +69,26 @@ function covers(directions: string[], country?: string): boolean {
  *    Исключение — когда в плоском списке РОВНО две страны: тогда других
  *    комбинаций просто не существует, и это те самые origin/destination.
  */
-function hasExactRoute(directions: string[], origin: string, destination: string): boolean {
+function hasExactRoute(
+  directions: string[],
+  origin: string,
+  destination: string,
+): boolean {
   const o = norm(origin);
   const d = norm(destination);
 
   const flatTokens: string[] = [];
   for (const raw of directions) {
-    const parts = raw.split(/\s*[-–—]\s*/).map(norm).filter(Boolean);
+    const parts = raw
+      .split(/\s*[-–—]\s*/)
+      .map(norm)
+      .filter(Boolean);
     if (parts.length === 2) {
       const [a, b] = parts;
-      if ((sideMatches(a, o) && sideMatches(b, d)) || (sideMatches(a, d) && sideMatches(b, o))) {
+      if (
+        (sideMatches(a, o) && sideMatches(b, d)) ||
+        (sideMatches(a, d) && sideMatches(b, o))
+      ) {
         return true;
       }
     } else {
@@ -93,77 +103,86 @@ function hasExactRoute(directions: string[], origin: string, destination: string
   );
 }
 
-export function matchSuppliers(params: MatchParams, suppliers: SupplierRow[]): MatchedSupplier[] {
+export function matchSuppliers(
+  params: MatchParams,
+  suppliers: SupplierRow[],
+): MatchedSupplier[] {
   const { originCountry, destinationCountry, mode } = params;
   const routeKnown = !!(originCountry?.trim() || destinationCountry?.trim());
 
-  return suppliers
-    .map((supplier): MatchedSupplier => {
-      const reasons: string[] = [];
-      let score = 0;
+  return (
+    suppliers
+      .map((supplier): MatchedSupplier => {
+        const reasons: string[] = [];
+        let score = 0;
 
-      const hasDirections = supplier.directions.length > 0;
-      // Каждая нога маршрута отдельно — только чтобы понять «не возит вообще»
-      // (для partial/none) и посчитать очки. За автовыбор она не отвечает.
-      const coversFrom = covers(supplier.directions, originCountry);
-      const coversTo = covers(supplier.directions, destinationCountry);
-      // А вот `full` и автовыбор — только если у подрядчика есть запись именно
-      // про ЭТУ пару стран, а не про origin и destination порознь в разных
-      // записях. См. hasExactRoute: иначе подрядчик, возящий «Испания —
-      // Узбекистан» и отдельно «Китай — Узбекистан», подставлялся бы на
-      // маршрут «Испания → Китай», которого у него нет.
-      const exactRoute =
-        !!originCountry?.trim() &&
-        !!destinationCountry?.trim() &&
-        hasExactRoute(supplier.directions, originCountry, destinationCountry);
+        const hasDirections = supplier.directions.length > 0;
+        // Каждая нога маршрута отдельно — только чтобы понять «не возит вообще»
+        // (для partial/none) и посчитать очки. За автовыбор она не отвечает.
+        const coversFrom = covers(supplier.directions, originCountry);
+        const coversTo = covers(supplier.directions, destinationCountry);
+        // А вот `full` и автовыбор — только если у подрядчика есть запись именно
+        // про ЭТУ пару стран, а не про origin и destination порознь в разных
+        // записях. См. hasExactRoute: иначе подрядчик, возящий «Испания —
+        // Узбекистан» и отдельно «Китай — Узбекистан», подставлялся бы на
+        // маршрут «Испания → Китай», которого у него нет.
+        const exactRoute =
+          !!originCountry?.trim() &&
+          !!destinationCountry?.trim() &&
+          hasExactRoute(supplier.directions, originCountry, destinationCountry);
 
-      const hasModes = supplier.transportModes.length > 0;
-      const modeConflict = !!mode && hasModes && !supplier.transportModes.includes(mode);
-      const modeOk = !modeConflict;
+        const hasModes = supplier.transportModes.length > 0;
+        const modeConflict =
+          !!mode && hasModes && !supplier.transportModes.includes(mode);
+        const modeOk = !modeConflict;
 
-      if (exactRoute) {
-        score += 60;
-        reasons.push(`Возит ${originCountry} → ${destinationCountry}`);
-      } else if (coversFrom || coversTo) {
-        score += 25;
-        reasons.push(`Возит ${coversFrom ? originCountry : destinationCountry}`);
-      }
+        if (exactRoute) {
+          score += 60;
+          reasons.push(`Возит ${originCountry} → ${destinationCountry}`);
+        } else if (coversFrom || coversTo) {
+          score += 25;
+          reasons.push(
+            `Возит ${coversFrom ? originCountry : destinationCountry}`,
+          );
+        }
 
-      if (mode && hasModes && !modeConflict) {
-        score += 20;
-        reasons.push(TENDER_MODE_LABELS[mode]);
-      }
+        if (mode && hasModes && !modeConflict) {
+          score += 20;
+          reasons.push(TENDER_MODE_LABELS[mode]);
+        }
 
-      // Небольшой бонус за надёжность — при прочих равных выше тот, кто отвечает.
-      if (supplier.responseRate != null) score += Math.round(supplier.responseRate / 10);
+        // Небольшой бонус за надёжность — при прочих равных выше тот, кто отвечает.
+        if (supplier.responseRate != null)
+          score += Math.round(supplier.responseRate / 10);
 
-      let matchType: MatchType;
-      if (modeConflict) {
-        matchType = 'none';
-        reasons.length = 0;
-        reasons.push('Другой вид транспорта');
-      } else if (routeKnown && hasDirections && !coversFrom && !coversTo) {
-        matchType = 'none';
-        reasons.length = 0;
-        reasons.push('Не возит это направление');
-      } else if (exactRoute && modeOk) {
-        matchType = 'full';
-      } else if (coversFrom || coversTo) {
-        matchType = 'partial';
-      } else {
-        // Направления не заполнены — подрядчик остаётся доступным вручную.
-        matchType = 'partial';
-        if (!hasDirections) reasons.push('Направления не заданы');
-      }
+        let matchType: MatchType;
+        if (modeConflict) {
+          matchType = 'none';
+          reasons.length = 0;
+          reasons.push('Другой вид транспорта');
+        } else if (routeKnown && hasDirections && !coversFrom && !coversTo) {
+          matchType = 'none';
+          reasons.length = 0;
+          reasons.push('Не возит это направление');
+        } else if (exactRoute && modeOk) {
+          matchType = 'full';
+        } else if (coversFrom || coversTo) {
+          matchType = 'partial';
+        } else {
+          // Направления не заполнены — подрядчик остаётся доступным вручную.
+          matchType = 'partial';
+          if (!hasDirections) reasons.push('Направления не заданы');
+        }
 
-      return { supplier, score, matchType, reasons };
-    })
-    // Сначала по типу совпадения, потом по баллам: иначе подрядчик с высоким
-    // score, но заведомо неподходящий (`none`), всплывал бы выше нейтральных.
-    .sort(
-      (a, b) =>
-        RANK[a.matchType] - RANK[b.matchType] ||
-        b.score - a.score ||
-        a.supplier.name.localeCompare(b.supplier.name),
-    );
+        return { supplier, score, matchType, reasons };
+      })
+      // Сначала по типу совпадения, потом по баллам: иначе подрядчик с высоким
+      // score, но заведомо неподходящий (`none`), всплывал бы выше нейтральных.
+      .sort(
+        (a, b) =>
+          RANK[a.matchType] - RANK[b.matchType] ||
+          b.score - a.score ||
+          a.supplier.name.localeCompare(b.supplier.name),
+      )
+  );
 }

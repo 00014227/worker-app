@@ -1,18 +1,47 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MapPin, Calendar, CalendarPlus, CheckCircle2, Clock, RefreshCw, FileText } from 'lucide-react';
-import { tenderApi, TenderListRow, TenderStatus, TENDER_MODE_LABELS } from '../lib/api';
+import {
+  Plus,
+  MapPin,
+  Calendar,
+  CalendarPlus,
+  CheckCircle2,
+  Clock,
+  RefreshCw,
+  FileText,
+} from 'lucide-react';
+import {
+  tenderApi,
+  TenderListRow,
+  TenderStatus,
+  TENDER_MODE_LABELS,
+} from '../lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
-  draft:         { label: 'Черновик',           cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-  sent:          { label: 'Отправлен',          cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-  collecting:    { label: 'Сбор ставок',        cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-  award_pending: { label: 'Ждём подтверждения', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
-  decided:       { label: 'Выбран',             cls: 'bg-green-50 text-green-700 border-green-200' },
-  closed: { label: 'Закрыт', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-  cancelled:     { label: 'Отменён',            cls: 'bg-red-50 text-red-700 border-red-200' },
+  draft: {
+    label: 'Черновик',
+    cls: 'bg-slate-100 text-slate-600 border-slate-200',
+  },
+  sent: { label: 'Отправлен', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  collecting: {
+    label: 'Сбор ставок',
+    cls: 'bg-amber-50 text-amber-700 border-amber-200',
+  },
+  award_pending: {
+    label: 'Ждём подтверждения',
+    cls: 'bg-violet-50 text-violet-700 border-violet-200',
+  },
+  decided: {
+    label: 'Выбран',
+    cls: 'bg-green-50 text-green-700 border-green-200',
+  },
+  closed: {
+    label: 'Закрыт',
+    cls: 'bg-slate-100 text-slate-600 border-slate-200',
+  },
+  cancelled: { label: 'Отменён', cls: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 export default function RateRequestsPage() {
@@ -59,7 +88,9 @@ export default function RateRequestsPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       {!loading && rows.length === 0 ? (
@@ -88,7 +119,9 @@ export default function RateRequestsPage() {
                       <MapPin size={14} className="text-primary shrink-0" />
                       <span className="font-semibold text-sm">{r.origin}</span>
                       <span className="text-muted-foreground">→</span>
-                      <span className="font-semibold text-sm">{r.destination}</span>
+                      <span className="font-semibold text-sm">
+                        {r.destination}
+                      </span>
                       {r.mode && (
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
                           {TENDER_MODE_LABELS[r.mode]}
@@ -114,22 +147,42 @@ export default function RateRequestsPage() {
                           {/* Дата погрузки — @db.Date (UTC-полночь): без timeZone съезжает на день назад.
                               Подписываем обе даты: рядом без подписей они путаются. */}
                           <Calendar size={11} /> погрузка{' '}
-                          {new Date(r.loadingDate).toLocaleDateString('ru-RU', { timeZone: 'UTC' })}
+                          {new Date(r.loadingDate).toLocaleDateString('ru-RU', {
+                            timeZone: 'UTC',
+                          })}
                         </span>
                       )}
-                      {r.weightKg && <span>{Number(r.weightKg).toLocaleString('ru-RU')} кг</span>}
-                      {r.cargo && <span className="truncate max-w-[220px]">{r.cargo}</span>}
+                      {r.weightKg && (
+                        <span>
+                          {Number(r.weightKg).toLocaleString('ru-RU')} кг
+                        </span>
+                      )}
+                      {r.cargo && (
+                        <span className="truncate max-w-[220px]">
+                          {r.cargo}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', st.cls)}>
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 rounded-full text-xs font-medium border',
+                        st.cls,
+                      )}
+                    >
                       {st.label}
                     </span>
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
                       {r.status === 'decided' ? (
-                        <><CheckCircle2 size={12} className="text-green-600" /> Победитель выбран</>
+                        <>
+                          <CheckCircle2 size={12} className="text-green-600" />{' '}
+                          Победитель выбран
+                        </>
                       ) : (
-                        <><Clock size={12} /> {responded}/{invited} ответов</>
+                        <>
+                          <Clock size={12} /> {responded}/{invited} ответов
+                        </>
                       )}
                     </span>
                   </div>

@@ -1,14 +1,21 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { Bell, Check, Loader2, Trophy, XCircle, MessageSquare } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Bell,
+  Check,
+  Loader2,
+  Trophy,
+  XCircle,
+  MessageSquare,
+} from 'lucide-react';
 import {
   notificationApi,
   NotificationFeed,
   NotificationRow,
   NotificationType,
-} from "@/lib/api";
-import { subscribeToNotifications } from "@/lib/socket";
-import { cn } from "@/lib/utils";
+} from '@/lib/api';
+import { subscribeToNotifications } from '@/lib/socket';
+import { cn } from '@/lib/utils';
 
 const ICON: Record<NotificationType, typeof Bell> = {
   reply: MessageSquare,
@@ -17,20 +24,20 @@ const ICON: Record<NotificationType, typeof Bell> = {
 };
 
 const TONE: Record<NotificationType, string> = {
-  reply: "text-blue-600",
-  award_confirmed: "text-green-600",
+  reply: 'text-blue-600',
+  award_confirmed: 'text-green-600',
   // Отказ выбранного подрядчика — самое срочное: машина не поедет.
-  award_refused: "text-red-600",
+  award_refused: 'text-red-600',
 };
 
 /** «5 минут назад» читается быстрее, чем дата с часами. */
 function ago(iso: string): string {
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (min < 1) return "только что";
+  if (min < 1) return 'только что';
   if (min < 60) return `${min} мин назад`;
   const h = Math.round(min / 60);
   if (h < 24) return `${h} ч назад`;
-  return new Date(iso).toLocaleDateString("ru-RU");
+  return new Date(iso).toLocaleDateString('ru-RU');
 }
 
 /**
@@ -64,15 +71,17 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      if (boxRef.current && !boxRef.current.contains(e.target as Node))
+        setOpen(false);
     };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
   const go = async (n: NotificationRow) => {
     setOpen(false);
-    if (!n.readAt) setFeed(await notificationApi.markRead(n.id).catch(() => feed));
+    if (!n.readAt)
+      setFeed(await notificationApi.markRead(n.id).catch(() => feed));
     if (!n.tenderId) return;
     navigate(`/rate-requests/${n.tenderId}`, {
       state: n.supplierId ? { openChatWith: n.supplierId } : undefined,
@@ -95,7 +104,7 @@ export default function NotificationBell() {
         <Bell size={18} />
         {feed.unread > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-medium flex items-center justify-center">
-            {feed.unread > 99 ? "99+" : feed.unread}
+            {feed.unread > 99 ? '99+' : feed.unread}
           </span>
         )}
       </button>
@@ -110,14 +119,20 @@ export default function NotificationBell() {
                 disabled={busy}
                 className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 disabled:opacity-40"
               >
-                {busy ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                {busy ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <Check size={11} />
+                )}
                 Прочитано
               </button>
             )}
           </div>
 
           {feed.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Пока пусто</p>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Пока пусто
+            </p>
           ) : (
             <div className="divide-y">
               {feed.items.map((n) => {
@@ -127,11 +142,14 @@ export default function NotificationBell() {
                     key={n.id}
                     onClick={() => go(n)}
                     className={cn(
-                      "w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors flex gap-2.5",
-                      !n.readAt && "bg-primary/5",
+                      'w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors flex gap-2.5',
+                      !n.readAt && 'bg-primary/5',
                     )}
                   >
-                    <Icon size={14} className={cn("mt-0.5 shrink-0", TONE[n.type])} />
+                    <Icon
+                      size={14}
+                      className={cn('mt-0.5 shrink-0', TONE[n.type])}
+                    />
                     <div className="min-w-0">
                       <div className="text-sm leading-snug">{n.title}</div>
                       {n.body && (
