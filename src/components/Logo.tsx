@@ -28,7 +28,11 @@ interface LogoProps {
 }
 
 /** Полный логотип: знак + надпись. Пропорции ~7.7:1. */
-export function Logo({ className, markColor = LOGO_ORANGE, textColor = LOGO_NAVY }: LogoProps) {
+export function Logo({
+  className,
+  markColor = LOGO_ORANGE,
+  textColor = LOGO_NAVY,
+}: LogoProps) {
   return (
     <svg
       viewBox="0 0 11608.76 1504.44"
@@ -48,7 +52,12 @@ export function Logo({ className, markColor = LOGO_ORANGE, textColor = LOGO_NAVY
 /** Только знак — для узких мест (иконки, favicon-подобные вставки). Пропорции ~1.74:1. */
 export function LogoMark({ className, markColor = LOGO_ORANGE }: LogoProps) {
   return (
-    <svg viewBox="0 0 2615.54 1504.44" className={className} role="img" aria-label="Транс-Азия">
+    <svg
+      viewBox="0 0 2615.54 1504.44"
+      className={className}
+      role="img"
+      aria-label="Транс-Азия"
+    >
       <path fill={markColor} d={MARK_PATH} />
     </svg>
   );

@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
-import { FileText, Upload, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useRef, useState } from 'react';
+import { FileText, Upload, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-const ACCEPT = ".docx,.doc,.pdf,.txt";
+const ACCEPT = '.docx,.doc,.pdf,.txt';
 
 /**
  * Зона загрузки одного договора.
@@ -52,10 +52,12 @@ export default function UploadZone({
         }}
         onClick={() => !disabled && inputRef.current?.click()}
         className={cn(
-          "rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors cursor-pointer",
-          over ? "border-primary bg-primary/5" : "border-border hover:border-primary/50",
-          file && "border-solid border-green-300 bg-green-50/50",
-          disabled && "opacity-50 pointer-events-none",
+          'rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors cursor-pointer',
+          over
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-primary/50',
+          file && 'border-solid border-green-300 bg-green-50/50',
+          disabled && 'opacity-50 pointer-events-none',
         )}
       >
         <input
@@ -88,7 +90,9 @@ export default function UploadZone({
           <div className="text-muted-foreground">
             <Upload size={18} className="mx-auto mb-1.5" />
             <div className="text-sm">Перетащите файл или нажмите</div>
-            <div className="text-[11px] mt-0.5">docx или PDF с текстовым слоем</div>
+            <div className="text-[11px] mt-0.5">
+              docx или PDF с текстовым слоем
+            </div>
           </div>
         )}
       </div>

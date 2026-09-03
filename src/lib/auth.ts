@@ -1,5 +1,5 @@
 const TOKEN_KEY = 'transasia.worker.token';
-const USER_KEY  = 'transasia.worker.user';
+const USER_KEY = 'transasia.worker.user';
 
 export interface WorkerUser {
   id: string;

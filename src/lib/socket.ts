@@ -1,5 +1,5 @@
-import { io, Socket } from "socket.io-client";
-import { getToken } from "./auth";
+import { io, Socket } from 'socket.io-client';
+import { getToken } from './auth';
 
 /** Пришла (или обновилась) ставка подрядчика. */
 export interface TenderReplyEvent {
@@ -35,7 +35,7 @@ export function getSocket(): Socket | null {
   if (!socket) {
     socket = io(`${WS_URL}/tenders`, {
       auth: { token },
-      transports: ["websocket"],
+      transports: ['websocket'],
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10000,
     });
@@ -61,18 +61,18 @@ export function subscribeToTender(
   const s = getSocket();
   if (!s) return () => {};
 
-  const join = () => s.emit("join", tenderId);
+  const join = () => s.emit('join', tenderId);
   join();
   // При переподключении комната теряется — вступаем заново.
-  s.on("connect", join);
-  s.on("tender-reply", onChange);
-  s.on("tender-updated", onChange);
+  s.on('connect', join);
+  s.on('tender-reply', onChange);
+  s.on('tender-updated', onChange);
 
   return () => {
-    s.emit("leave", tenderId);
-    s.off("connect", join);
-    s.off("tender-reply", onChange);
-    s.off("tender-updated", onChange);
+    s.emit('leave', tenderId);
+    s.off('connect', join);
+    s.off('tender-reply', onChange);
+    s.off('tender-updated', onChange);
   };
 }
 
@@ -88,15 +88,15 @@ export function subscribeToChat(
   const s = getSocket();
   if (!s) return () => {};
 
-  const join = () => s.emit("join-chat", supplierId);
+  const join = () => s.emit('join-chat', supplierId);
   join();
-  s.on("connect", join);
-  s.on("tender-message", onMessage);
+  s.on('connect', join);
+  s.on('tender-message', onMessage);
 
   return () => {
-    s.emit("leave-chat", supplierId);
-    s.off("connect", join);
-    s.off("tender-message", onMessage);
+    s.emit('leave-chat', supplierId);
+    s.off('connect', join);
+    s.off('tender-message', onMessage);
   };
 }
 
@@ -121,12 +121,12 @@ export function subscribeToNotifications(
   const s = getSocket();
   if (!s) return () => {};
   const onRead = () => onNotification();
-  s.on("notification", onNotification);
+  s.on('notification', onNotification);
   // Ленту меняет не только приход нового: прочитанное в другой вкладке или на
   // другой странице тоже должно погасить этот колокольчик.
-  s.on("notifications-read", onRead);
+  s.on('notifications-read', onRead);
   return () => {
-    s.off("notification", onNotification);
-    s.off("notifications-read", onRead);
+    s.off('notification', onNotification);
+    s.off('notifications-read', onRead);
   };
 }

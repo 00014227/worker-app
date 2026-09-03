@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,8 +12,8 @@ import {
   BarChart3,
   Download,
   X,
-} from "lucide-react";
-import { matchSuppliers } from "../lib/contractor-matcher";
+} from 'lucide-react';
+import { matchSuppliers } from '../lib/contractor-matcher';
 import {
   tenderApi,
   SupplierRow,
@@ -30,20 +30,20 @@ import {
   RouteBenchmark,
   BitrixDealRow,
   DealPrefill,
-} from "../lib/api";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+} from '../lib/api';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
-const MODES: TenderMode[] = ["auto", "rail", "air", "sea"];
-const CURRENCIES = ["USD", "EUR", "RUB", "UZS", "KZT", "CNY"];
+const MODES: TenderMode[] = ['auto', 'rail', 'air', 'sea'];
+const CURRENCIES = ['USD', 'EUR', 'RUB', 'UZS', 'KZT', 'CNY'];
 /** Repeat calculations should not start from scratch — remember the last input. */
-const DRAFT_KEY = "transasia.tender.draft";
+const DRAFT_KEY = 'transasia.tender.draft';
 
 type FormState = Omit<
   CreateTenderInput,
-  "weightKg" | "vehicleCount" | "cargoValue" | "selfCost" | "supplierIds"
+  'weightKg' | 'vehicleCount' | 'cargoValue' | 'selfCost' | 'supplierIds'
 > & {
   weightKg: string;
   vehicleCount: string;
@@ -54,36 +54,36 @@ type FormState = Omit<
 };
 
 const emptyForm: FormState = {
-  origin: "",
-  originIndex: "",
-  originCountry: "",
-  destination: "",
-  destinationIndex: "",
-  destinationCountry: "",
-  loadingDate: "",
-  cargoType: "генеральный",
-  hazardClass: "",
-  temperatureRegime: "",
-  vehicleCount: "1",
-  vehicleType: "",
-  hsCodes: "",
-  loadingMethod: "",
-  weightKg: "",
-  exportCustoms: "",
-  importCustoms: "",
-  incoterms: "",
-  cargoValue: "",
-  bidDeadline: "",
-  conditions: "",
-  comment: "",
+  origin: '',
+  originIndex: '',
+  originCountry: '',
+  destination: '',
+  destinationIndex: '',
+  destinationCountry: '',
+  loadingDate: '',
+  cargoType: 'генеральный',
+  hazardClass: '',
+  temperatureRegime: '',
+  vehicleCount: '1',
+  vehicleType: '',
+  hsCodes: '',
+  loadingMethod: '',
+  weightKg: '',
+  exportCustoms: '',
+  importCustoms: '',
+  incoterms: '',
+  cargoValue: '',
+  bidDeadline: '',
+  conditions: '',
+  comment: '',
   mode: undefined,
-  cargo: "",
-  currency: "USD",
-  selfCost: "",
+  cargo: '',
+  currency: 'USD',
+  selfCost: '',
 };
 
 const selectCls =
-  "w-full h-8 rounded-md border border-border bg-background px-2 text-sm outline-none";
+  'w-full h-8 rounded-md border border-border bg-background px-2 text-sm outline-none';
 
 export default function NewRateRequestPage() {
   const navigate = useNavigate();
@@ -98,8 +98,8 @@ export default function NewRateRequestPage() {
         return {
           ...emptyForm,
           ...JSON.parse(saved),
-          loadingDate: "",
-          bidDeadline: "",
+          loadingDate: '',
+          bidDeadline: '',
         };
     } catch {
       /* corrupted draft — start clean */
@@ -112,19 +112,19 @@ export default function NewRateRequestPage() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   /** Кого отметил именно автоподбор — только их он вправе снимать при смене маршрута. */
   const autoPicked = useRef<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   /** Шаг 1 — параметры запроса, шаг 2 — подбор подрядчиков. */
-  const [step, setStep] = useState<"form" | "suppliers">("form");
+  const [step, setStep] = useState<'form' | 'suppliers'>('form');
   /** Рыночный ориентир по маршруту — грузится при переходе на шаг подбора. */
   const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
   /** Модалка выбора сделки Битрикса и её содержимое. */
   const [dealsOpen, setDealsOpen] = useState(false);
   const [deals, setDeals] = useState<BitrixDealRow[] | null>(null);
   const [dealsError, setDealsError] = useState<string | null>(null);
-  const [dealSearch, setDealSearch] = useState("");
+  const [dealSearch, setDealSearch] = useState('');
   const [prefilling, setPrefilling] = useState<number | null>(null);
   /** Из какой сделки заполнена форма (бейдж + список незаполненного). */
   const [prefilledFrom, setPrefilledFrom] = useState<DealPrefill | null>(null);
@@ -145,8 +145,8 @@ export default function NewRateRequestPage() {
     }
   }, [form]);
 
-  const isTemp = form.cargoType === "температурный";
-  const isHazard = form.cargoType === "опасный";
+  const isTemp = form.cargoType === 'температурный';
+  const isHazard = form.cargoType === 'опасный';
   // Temperature cargo travels only in a reefer.
   const vehicleOptions = isTemp ? [REF_VEHICLE_TYPE] : [...VEHICLE_TYPES];
 
@@ -159,11 +159,11 @@ export default function NewRateRequestPage() {
    */
   const fillCountry = async (
     city: string,
-    field: "originCountry" | "destinationCountry",
+    field: 'originCountry' | 'destinationCountry',
   ) => {
     if (!city.trim()) return;
     const current =
-      field === "originCountry" ? form.originCountry : form.destinationCountry;
+      field === 'originCountry' ? form.originCountry : form.destinationCountry;
     if (current?.trim()) return;
     try {
       const { country } = await tenderApi.suppliers.resolveCountry(city);
@@ -181,14 +181,14 @@ export default function NewRateRequestPage() {
       // Keep the body type consistent with the cargo, and drop values that no
       // longer apply so they can't be submitted invisibly.
       vehicleType:
-        cargoType === "температурный"
+        cargoType === 'температурный'
           ? REF_VEHICLE_TYPE
           : f.vehicleType === REF_VEHICLE_TYPE
-            ? ""
+            ? ''
             : f.vehicleType,
-      hazardClass: cargoType === "опасный" ? f.hazardClass : "",
+      hazardClass: cargoType === 'опасный' ? f.hazardClass : '',
       temperatureRegime:
-        cargoType === "температурный" ? f.temperatureRegime : "",
+        cargoType === 'температурный' ? f.temperatureRegime : '',
     }));
   };
 
@@ -208,7 +208,7 @@ export default function NewRateRequestPage() {
 
   const fullMatchIds = useMemo(
     () =>
-      matched.filter((m) => m.matchType === "full").map((m) => m.supplier.id),
+      matched.filter((m) => m.matchType === 'full').map((m) => m.supplier.id),
     [matched],
   );
 
@@ -231,7 +231,7 @@ export default function NewRateRequestPage() {
     return matched.filter(
       (m) =>
         m.supplier.name.toLowerCase().includes(q) ||
-        (m.supplier.telegramUsername ?? "").toLowerCase().includes(q),
+        (m.supplier.telegramUsername ?? '').toLowerCase().includes(q),
     );
   }, [matched, search]);
 
@@ -296,7 +296,7 @@ export default function NewRateRequestPage() {
         temperatureRegime: p.temperatureRegime ?? f.temperatureRegime,
         // Температурный груз возит только реф — держим кузов согласованным.
         vehicleType:
-          p.cargoType === "температурный" ? REF_VEHICLE_TYPE : f.vehicleType,
+          p.cargoType === 'температурный' ? REF_VEHICLE_TYPE : f.vehicleType,
         weightKg: p.weightKg != null ? String(p.weightKg) : f.weightKg,
         hsCodes: p.hsCodes ?? f.hsCodes,
         vehicleCount:
@@ -330,16 +330,16 @@ export default function NewRateRequestPage() {
 
   const missing = useMemo(() => {
     const m: string[] = [];
-    if (!form.origin.trim()) m.push("Город отправления");
-    if (!form.destination.trim()) m.push("Город назначения");
-    if (!form.cargo?.trim()) m.push("Наименование груза");
-    if (isHazard && !form.hazardClass?.trim()) m.push("Класс опасности");
+    if (!form.origin.trim()) m.push('Город отправления');
+    if (!form.destination.trim()) m.push('Город назначения');
+    if (!form.cargo?.trim()) m.push('Наименование груза');
+    if (isHazard && !form.hazardClass?.trim()) m.push('Класс опасности');
     if (isTemp && !form.temperatureRegime?.trim())
-      m.push("Температурный режим");
+      m.push('Температурный режим');
     if (!form.vehicleCount || Number(form.vehicleCount) < 1)
-      m.push("Количество ТС");
-    if (!form.vehicleType) m.push("Вид транспорта");
-    if (!form.weightKg || Number(form.weightKg) <= 0) m.push("Масса брутто");
+      m.push('Количество ТС');
+    if (!form.vehicleType) m.push('Вид транспорта');
+    if (!form.weightKg || Number(form.weightKg) <= 0) m.push('Масса брутто');
     return m;
   }, [form, isHazard, isTemp]);
 
@@ -347,11 +347,11 @@ export default function NewRateRequestPage() {
   const goToSuppliers = () => {
     setTouched(true);
     if (missing.length) {
-      setError(`Заполните обязательные поля: ${missing.join(", ")}`);
+      setError(`Заполните обязательные поля: ${missing.join(', ')}`);
       return;
     }
     setError(null);
-    setStep("suppliers");
+    setStep('suppliers');
     // Ориентир по маршруту нужен именно здесь — перед рассылкой. Ошибку глотаем:
     // отсутствие истории не должно мешать выбрать подрядчиков.
     tenderApi.tenders
@@ -364,21 +364,21 @@ export default function NewRateRequestPage() {
       })
       .then(setBenchmark)
       .catch(() => setBenchmark(null));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const backToForm = () => {
     setError(null);
-    setStep("form");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setStep('form');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const submit = async () => {
     setTouched(true);
     if (missing.length) {
       // Поля правятся на первом шаге — возвращаем туда, иначе ошибку негде исправить.
-      setError(`Заполните обязательные поля: ${missing.join(", ")}`);
-      setStep("form");
+      setError(`Заполните обязательные поля: ${missing.join(', ')}`);
+      setStep('form');
       return;
     }
     setSaving(true);
@@ -419,7 +419,7 @@ export default function NewRateRequestPage() {
     <div className="space-y-4 max-w-4xl">
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate("/rate-requests")}
+          onClick={() => navigate('/rate-requests')}
           className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
         >
           <ArrowLeft size={13} /> К запросам
@@ -431,7 +431,7 @@ export default function NewRateRequestPage() {
             setDismissed(new Set());
             autoPicked.current = new Set();
             setTouched(false);
-            setStep("form");
+            setStep('form');
           }}
           className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
         >
@@ -443,26 +443,26 @@ export default function NewRateRequestPage() {
         <h1 className="text-xl font-bold">Новый запрос ставок</h1>
         {/* Индикатор этапов */}
         <div className="flex items-center gap-2 text-xs">
-          {(["form", "suppliers"] as const).map((s, i) => {
+          {(['form', 'suppliers'] as const).map((s, i) => {
             const active = step === s;
-            const done = step === "suppliers" && s === "form";
+            const done = step === 'suppliers' && s === 'form';
             return (
               <span key={s} className="flex items-center gap-2">
                 {i > 0 && <span className="text-muted-foreground">→</span>}
                 <span
                   className={cn(
-                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full border",
+                    'flex items-center gap-1.5 px-2.5 py-1 rounded-full border',
                     active
-                      ? "bg-primary text-primary-foreground border-primary"
+                      ? 'bg-primary text-primary-foreground border-primary'
                       : done
-                        ? "border-green-200 bg-green-50 text-green-700"
-                        : "border-border text-muted-foreground",
+                        ? 'border-green-200 bg-green-50 text-green-700'
+                        : 'border-border text-muted-foreground',
                   )}
                 >
                   <span className="w-4 h-4 rounded-full bg-black/10 flex items-center justify-center text-[10px]">
                     {done ? <Check size={10} /> : i + 1}
                   </span>
-                  {s === "form" ? "Параметры запроса" : "Подрядчики"}
+                  {s === 'form' ? 'Параметры запроса' : 'Подрядчики'}
                 </span>
               </span>
             );
@@ -476,7 +476,7 @@ export default function NewRateRequestPage() {
         </div>
       )}
 
-      {step === "form" && (
+      {step === 'form' && (
         <>
           {/* Автозаполнение из сделки: логисту не нужно перебивать руками то,
               что уже заведено в Битриксе. */}
@@ -485,18 +485,18 @@ export default function NewRateRequestPage() {
               <div className="text-xs text-muted-foreground">
                 {prefilledFrom ? (
                   <>
-                    Заполнено из сделки{" "}
+                    Заполнено из сделки{' '}
                     <span className="font-medium text-foreground">
                       #{prefilledFrom.dealId} {prefilledFrom.dealTitle}
                     </span>
                     {prefilledFrom.unmapped.length > 0 && (
                       <span className="text-amber-700 block mt-0.5">
-                        Заполните вручную: {prefilledFrom.unmapped.join(", ")}
+                        Заполните вручную: {prefilledFrom.unmapped.join(', ')}
                       </span>
                     )}
                   </>
                 ) : (
-                  "Можно заполнить поля из сделки Битрикса на этапе «Расчет ставки»"
+                  'Можно заполнить поля из сделки Битрикса на этапе «Расчет ставки»'
                 )}
               </div>
               <button
@@ -505,7 +505,9 @@ export default function NewRateRequestPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
               >
                 <Download size={13} />
-                {prefilledFrom ? "Выбрать другую сделку" : "Заполнить из сделки"}
+                {prefilledFrom
+                  ? 'Выбрать другую сделку'
+                  : 'Заполнить из сделки'}
               </button>
             </CardContent>
           </Card>
@@ -518,19 +520,19 @@ export default function NewRateRequestPage() {
             <CardContent className="pt-1 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label>{req("Город отправления")}</Label>
+                  <Label>{req('Город отправления')}</Label>
                   <Input
                     value={form.origin}
                     onChange={(e) => set({ origin: e.target.value })}
                     placeholder="Москва"
-                    onBlur={(e) => fillCountry(e.target.value, "originCountry")}
-                    className={cn(invalid(form.origin) && "border-red-400")}
+                    onBlur={(e) => fillCountry(e.target.value, 'originCountry')}
+                    className={cn(invalid(form.origin) && 'border-red-400')}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Индекс</Label>
                   <Input
-                    value={form.originIndex ?? ""}
+                    value={form.originIndex ?? ''}
                     onChange={(e) => set({ originIndex: e.target.value })}
                     placeholder="101000"
                   />
@@ -538,7 +540,7 @@ export default function NewRateRequestPage() {
                 <div className="space-y-1.5">
                   <Label>Страна</Label>
                   <Input
-                    value={form.originCountry ?? ""}
+                    value={form.originCountry ?? ''}
                     onChange={(e) => set({ originCountry: e.target.value })}
                     placeholder="Россия"
                   />
@@ -546,23 +548,23 @@ export default function NewRateRequestPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label>{req("Город назначения")}</Label>
+                  <Label>{req('Город назначения')}</Label>
                   <Input
                     value={form.destination}
                     onChange={(e) => set({ destination: e.target.value })}
                     placeholder="Ташкент"
                     onBlur={(e) =>
-                      fillCountry(e.target.value, "destinationCountry")
+                      fillCountry(e.target.value, 'destinationCountry')
                     }
                     className={cn(
-                      invalid(form.destination) && "border-red-400",
+                      invalid(form.destination) && 'border-red-400',
                     )}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Индекс</Label>
                   <Input
-                    value={form.destinationIndex ?? ""}
+                    value={form.destinationIndex ?? ''}
                     onChange={(e) => set({ destinationIndex: e.target.value })}
                     placeholder="100000"
                   />
@@ -570,7 +572,7 @@ export default function NewRateRequestPage() {
                 <div className="space-y-1.5">
                   <Label>Страна</Label>
                   <Input
-                    value={form.destinationCountry ?? ""}
+                    value={form.destinationCountry ?? ''}
                     onChange={(e) =>
                       set({ destinationCountry: e.target.value })
                     }
@@ -597,7 +599,7 @@ export default function NewRateRequestPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>{req("Масса брутто, кг")}</Label>
+                  <Label>{req('Масса брутто, кг')}</Label>
                   <Input
                     type="number"
                     value={form.weightKg}
@@ -606,17 +608,17 @@ export default function NewRateRequestPage() {
                     className={cn(
                       touched &&
                         (!form.weightKg || Number(form.weightKg) <= 0) &&
-                        "border-red-400",
+                        'border-red-400',
                     )}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>{req("Наименование груза")}</Label>
+                  <Label>{req('Наименование груза')}</Label>
                   <Input
-                    value={form.cargo ?? ""}
+                    value={form.cargo ?? ''}
                     onChange={(e) => set({ cargo: e.target.value })}
                     placeholder="Оборудование"
-                    className={cn(invalid(form.cargo) && "border-red-400")}
+                    className={cn(invalid(form.cargo) && 'border-red-400')}
                   />
                 </div>
               </div>
@@ -630,10 +632,10 @@ export default function NewRateRequestPage() {
                       type="button"
                       onClick={() => setCargoType(t)}
                       className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize",
+                        'px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize',
                         form.cargoType === t
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border text-muted-foreground hover:bg-muted/50",
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border text-muted-foreground hover:bg-muted/50',
                       )}
                     >
                       {t}
@@ -645,26 +647,26 @@ export default function NewRateRequestPage() {
               {/* Условные поля */}
               {isHazard && (
                 <div className="space-y-1.5">
-                  <Label>{req("Класс опасности")}</Label>
+                  <Label>{req('Класс опасности')}</Label>
                   <Input
-                    value={form.hazardClass ?? ""}
+                    value={form.hazardClass ?? ''}
                     onChange={(e) => set({ hazardClass: e.target.value })}
                     placeholder="напр. 3 (легковоспламеняющиеся жидкости)"
                     className={cn(
-                      invalid(form.hazardClass) && "border-red-400",
+                      invalid(form.hazardClass) && 'border-red-400',
                     )}
                   />
                 </div>
               )}
               {isTemp && (
                 <div className="space-y-1.5">
-                  <Label>{req("Температурный режим")}</Label>
+                  <Label>{req('Температурный режим')}</Label>
                   <Input
-                    value={form.temperatureRegime ?? ""}
+                    value={form.temperatureRegime ?? ''}
                     onChange={(e) => set({ temperatureRegime: e.target.value })}
                     placeholder="напр. +2…+8 °C"
                     className={cn(
-                      invalid(form.temperatureRegime) && "border-red-400",
+                      invalid(form.temperatureRegime) && 'border-red-400',
                     )}
                   />
                 </div>
@@ -692,9 +694,9 @@ export default function NewRateRequestPage() {
                       placeholder="45000"
                     />
                     <select
-                      value={form.currency ?? ""}
+                      value={form.currency ?? ''}
                       onChange={(e) => set({ currency: e.target.value })}
-                      className={cn(selectCls, "w-24")}
+                      className={cn(selectCls, 'w-24')}
                     >
                       {CURRENCIES.map((c) => (
                         <option key={c} value={c}>
@@ -716,7 +718,7 @@ export default function NewRateRequestPage() {
             <CardContent className="pt-1 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label>{req("Количество ТС")}</Label>
+                  <Label>{req('Количество ТС')}</Label>
                   <Input
                     type="number"
                     min={1}
@@ -725,18 +727,18 @@ export default function NewRateRequestPage() {
                     className={cn(
                       touched &&
                         Number(form.vehicleCount) < 1 &&
-                        "border-red-400",
+                        'border-red-400',
                     )}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>{req("Вид транспорта")}</Label>
+                  <Label>{req('Вид транспорта')}</Label>
                   <select
                     value={form.vehicleType}
                     onChange={(e) => set({ vehicleType: e.target.value })}
                     className={cn(
                       selectCls,
-                      invalid(form.vehicleType) && "border-red-400",
+                      invalid(form.vehicleType) && 'border-red-400',
                     )}
                   >
                     <option value="">— выберите —</option>
@@ -755,7 +757,7 @@ export default function NewRateRequestPage() {
                 <div className="space-y-1.5">
                   <Label>Способ погрузки</Label>
                   <select
-                    value={form.loadingMethod ?? ""}
+                    value={form.loadingMethod ?? ''}
                     onChange={(e) => set({ loadingMethod: e.target.value })}
                     className={selectCls}
                   >
@@ -780,10 +782,10 @@ export default function NewRateRequestPage() {
                         set({ mode: form.mode === m ? undefined : m })
                       }
                       className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                        'px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
                         form.mode === m
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border text-muted-foreground hover:bg-muted/50",
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border text-muted-foreground hover:bg-muted/50',
                       )}
                     >
                       {TENDER_MODE_LABELS[m]}
@@ -848,7 +850,7 @@ export default function NewRateRequestPage() {
                 <div className="space-y-1.5">
                   <Label>Особые условия</Label>
                   <Input
-                    value={form.conditions ?? ""}
+                    value={form.conditions ?? ''}
                     onChange={(e) => set({ conditions: e.target.value })}
                     placeholder="Груз на палетах, растентовка…"
                   />
@@ -856,16 +858,16 @@ export default function NewRateRequestPage() {
                 <div className="space-y-1.5">
                   <Label>Комментарий</Label>
                   <Input
-                    value={form.comment ?? ""}
+                    value={form.comment ?? ''}
                     onChange={(e) => set({ comment: e.target.value })}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Ставка, указывается в $</Label>
                   <Input
-                    value={form.selfCost ?? ""}
+                    value={form.selfCost ?? ''}
                     onChange={(e) =>
-                      set({ selfCost: e.target.value.replace("-", "") })
+                      set({ selfCost: e.target.value.replace('-', '') })
                     }
                     placeholder="1000"
                     type="number"
@@ -886,15 +888,15 @@ export default function NewRateRequestPage() {
             </button>
             <span className="text-xs text-muted-foreground">
               {touched && missing.length > 0
-                ? `Не заполнено: ${missing.join(", ")}`
-                : "Подрядчики подберутся автоматически по направлению."}
+                ? `Не заполнено: ${missing.join(', ')}`
+                : 'Подрядчики подберутся автоматически по направлению.'}
             </span>
           </div>
         </>
       )}
 
       {/* ── Шаг 2: подрядчики ── */}
-      {step === "suppliers" && (
+      {step === 'suppliers' && (
         <>
           {/* Сводка запроса — чтобы менеджер видел, под что подбирает */}
           <Card size="sm">
@@ -911,13 +913,13 @@ export default function NewRateRequestPage() {
                     // Дата из <input type=date> — «2026-08-01», парсится как UTC-полночь.
                     // Без timeZone:'UTC' в западных зонах показывался бы предыдущий день.
                     form.loadingDate
-                      ? new Date(form.loadingDate).toLocaleDateString("ru-RU", {
-                          timeZone: "UTC",
+                      ? new Date(form.loadingDate).toLocaleDateString('ru-RU', {
+                          timeZone: 'UTC',
                         })
                       : null,
                     form.cargoType,
                     form.weightKg
-                      ? `${Number(form.weightKg).toLocaleString("ru-RU")} кг`
+                      ? `${Number(form.weightKg).toLocaleString('ru-RU')} кг`
                       : null,
                     form.vehicleType
                       ? `${form.vehicleType} × ${form.vehicleCount}`
@@ -925,7 +927,7 @@ export default function NewRateRequestPage() {
                     form.incoterms,
                   ]
                     .filter(Boolean)
-                    .join(" · ")}
+                    .join(' · ')}
                 </div>
               </div>
               <button
@@ -937,34 +939,45 @@ export default function NewRateRequestPage() {
               {/* Рыночный ориентир до рассылки: видно, адекватна ли будущая ставка. */}
               {benchmark && (
                 <div className="w-full pt-2 border-t flex items-start gap-1.5 text-xs">
-                  <BarChart3 size={12} className="mt-0.5 shrink-0 text-muted-foreground" />
-                  {benchmark.level !== "global" && benchmark.medianPurchase != null ? (
+                  <BarChart3
+                    size={12}
+                    className="mt-0.5 shrink-0 text-muted-foreground"
+                  />
+                  {benchmark.level !== 'global' &&
+                  benchmark.medianPurchase != null ? (
                     <p className="text-muted-foreground">
                       Ориентир
-                      {benchmark.level === "country"
+                      {benchmark.level === 'country'
                         ? ` по направлению ${benchmark.scope}`
-                        : " по маршруту"}
-                      :{" "}
+                        : ' по маршруту'}
+                      :{' '}
                       <span className="font-medium text-foreground">
-                        {Number(benchmark.medianPurchase).toLocaleString("ru-RU")}{" "}
+                        {Number(benchmark.medianPurchase).toLocaleString(
+                          'ru-RU',
+                        )}{' '}
                         {benchmark.currency}
                       </span>
                       {benchmark.minBid != null && benchmark.maxBid != null && (
                         <>
-                          {" "}· ставки {Number(benchmark.minBid).toLocaleString("ru-RU")}–
-                          {Number(benchmark.maxBid).toLocaleString("ru-RU")}
+                          {' '}
+                          · ставки{' '}
+                          {Number(benchmark.minBid).toLocaleString('ru-RU')}–
+                          {Number(benchmark.maxBid).toLocaleString('ru-RU')}
                         </>
                       )}
-                      {" · "}
-                      <span className={cn(!benchmark.reliable && "text-amber-700")}>
+                      {' · '}
+                      <span
+                        className={cn(!benchmark.reliable && 'text-amber-700')}
+                      >
                         {benchmark.reliable
                           ? `по ${benchmark.purchases} закупкам`
-                          : `мало данных: ${benchmark.purchases} закупк${benchmark.purchases === 1 ? "а" : "и"}`}
+                          : `мало данных: ${benchmark.purchases} закупк${benchmark.purchases === 1 ? 'а' : 'и'}`}
                       </span>
                     </p>
                   ) : (
                     <p className="text-muted-foreground">
-                      По этому маршруту истории закупок пока нет — сравнивать ставки будет не с чем.
+                      По этому маршруту истории закупок пока нет — сравнивать
+                      ставки будет не с чем.
                     </p>
                   )}
                 </div>
@@ -975,7 +988,7 @@ export default function NewRateRequestPage() {
           <Card>
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
-                Подрядчики{" "}
+                Подрядчики{' '}
                 {selected.size > 0 && (
                   <span className="text-primary font-normal">
                     · выбрано {selected.size}
@@ -1002,15 +1015,15 @@ export default function NewRateRequestPage() {
                     <Wand2 size={12} className="text-primary" />
                     {fullMatchIds.length > 0 ? (
                       <>
-                        Подобрано{" "}
-                        <b className="text-foreground">{fullMatchIds.length}</b>{" "}
-                        по направлению {form.originCountry || "?"} →{" "}
-                        {form.destinationCountry || "?"}
+                        Подобрано{' '}
+                        <b className="text-foreground">{fullMatchIds.length}</b>{' '}
+                        по направлению {form.originCountry || '?'} →{' '}
+                        {form.destinationCountry || '?'}
                       </>
                     ) : (
                       <>
-                        По направлению {form.originCountry || "?"} →{" "}
-                        {form.destinationCountry || "?"} совпадений нет —
+                        По направлению {form.originCountry || '?'} →{' '}
+                        {form.destinationCountry || '?'} совпадений нет —
                         отметьте вручную
                       </>
                     )}
@@ -1051,25 +1064,25 @@ export default function NewRateRequestPage() {
                     const tgOk = !!(s.telegramUsername || s.telegramBound);
                     const emailOk = !!s.email;
                     const unreachable =
-                      (s.contactChannel === "telegram" && !tgOk) ||
-                      (s.contactChannel === "email" && !emailOk) ||
-                      (s.contactChannel === "both" && !tgOk && !emailOk);
+                      (s.contactChannel === 'telegram' && !tgOk) ||
+                      (s.contactChannel === 'email' && !emailOk) ||
+                      (s.contactChannel === 'both' && !tgOk && !emailOk);
                     return (
                       <button
                         key={s.id}
                         type="button"
                         onClick={() => toggle(s.id)}
                         className={cn(
-                          "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
-                          on ? "bg-primary/5" : "hover:bg-muted/40",
+                          'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
+                          on ? 'bg-primary/5' : 'hover:bg-muted/40',
                         )}
                       >
                         <span
                           className={cn(
-                            "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                            'w-4 h-4 rounded border flex items-center justify-center shrink-0',
                             on
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : "border-border",
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'border-border',
                           )}
                         >
                           {on && <Check size={11} />}
@@ -1081,35 +1094,41 @@ export default function NewRateRequestPage() {
                           <span className="text-xs text-muted-foreground">
                             {CONTACT_CHANNEL_LABELS[s.contactChannel]}
                             {s.telegramUsername &&
-                              ` · @${s.telegramUsername.replace("@", "")}`}
+                              ` · @${s.telegramUsername.replace('@', '')}`}
                             {s.email && ` · ${s.email}`}
                           </span>
                           {/* Надёжность и история — чтобы звать не только «по направлению». */}
-                          {s.scorecard && (s.scorecard.reliability != null || s.scorecard.invites > 0) && (
-                            <span className="text-[11px] text-muted-foreground block truncate">
-                              {s.scorecard.reliability != null
-                                ? `надёжность ${s.scorecard.reliability}`
-                                : "не проверен"}
-                              {s.scorecard.wins > 0 && ` · перевозок ${s.scorecard.wins}`}
-                              {s.scorecard.breaks > 0 && (
-                                <span className="text-red-600"> · срывов {s.scorecard.breaks}</span>
-                              )}
-                              {s.scorecard.avgResponseMin != null &&
-                                ` · отвечает ~${
-                                  s.scorecard.avgResponseMin < 60
-                                    ? `${s.scorecard.avgResponseMin} мин`
-                                    : `${Math.round(s.scorecard.avgResponseMin / 60)} ч`
-                                }`}
-                            </span>
-                          )}
+                          {s.scorecard &&
+                            (s.scorecard.reliability != null ||
+                              s.scorecard.invites > 0) && (
+                              <span className="text-[11px] text-muted-foreground block truncate">
+                                {s.scorecard.reliability != null
+                                  ? `надёжность ${s.scorecard.reliability}`
+                                  : 'не проверен'}
+                                {s.scorecard.wins > 0 &&
+                                  ` · перевозок ${s.scorecard.wins}`}
+                                {s.scorecard.breaks > 0 && (
+                                  <span className="text-red-600">
+                                    {' '}
+                                    · срывов {s.scorecard.breaks}
+                                  </span>
+                                )}
+                                {s.scorecard.avgResponseMin != null &&
+                                  ` · отвечает ~${
+                                    s.scorecard.avgResponseMin < 60
+                                      ? `${s.scorecard.avgResponseMin} мин`
+                                      : `${Math.round(s.scorecard.avgResponseMin / 60)} ч`
+                                  }`}
+                              </span>
+                            )}
                         </span>
                         {/* Почему подрядчик подобран (или почему нет) */}
-                        {matchType === "full" && (
+                        {matchType === 'full' && (
                           <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
                             по направлению
                           </span>
                         )}
-                        {matchType === "none" && (
+                        {matchType === 'none' && (
                           <span
                             className="shrink-0 text-[10px] text-muted-foreground"
                             title={reasons[0]}
@@ -1152,7 +1171,7 @@ export default function NewRateRequestPage() {
             <span className="text-xs text-muted-foreground">
               {selected.size > 0
                 ? `Выбрано подрядчиков: ${selected.size}. Отправка — на следующем экране.`
-                : "Можно создать и без подрядчиков — добавите позже."}
+                : 'Можно создать и без подрядчиков — добавите позже.'}
             </span>
           </div>
         </>
@@ -1171,7 +1190,9 @@ export default function NewRateRequestPage() {
           >
             <div className="flex items-center justify-between p-4 border-b">
               <div>
-                <h2 className="font-semibold text-sm">Сделки на этапе «Расчет ставки»</h2>
+                <h2 className="font-semibold text-sm">
+                  Сделки на этапе «Расчет ставки»
+                </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Из воронки вашего офиса
                 </p>
@@ -1201,11 +1222,14 @@ export default function NewRateRequestPage() {
 
             <div className="overflow-y-auto flex-1">
               {dealsError && (
-                <div className="p-4 text-sm text-red-700 bg-red-50">{dealsError}</div>
+                <div className="p-4 text-sm text-red-700 bg-red-50">
+                  {dealsError}
+                </div>
               )}
               {deals == null && !dealsError && (
                 <div className="py-10 text-center text-sm text-muted-foreground">
-                  <Loader2 className="animate-spin mx-auto mb-2" size={18} /> Загрузка сделок…
+                  <Loader2 className="animate-spin mx-auto mb-2" size={18} />{' '}
+                  Загрузка сделок…
                 </div>
               )}
               {deals != null && visibleDeals.length === 0 && !dealsError && (
@@ -1220,13 +1244,18 @@ export default function NewRateRequestPage() {
                   onClick={() => applyDeal(d.id)}
                   disabled={prefilling != null}
                   className={cn(
-                    "w-full text-left px-4 py-2.5 border-b last:border-b-0 hover:bg-muted/40 disabled:opacity-50 transition-colors",
+                    'w-full text-left px-4 py-2.5 border-b last:border-b-0 hover:bg-muted/40 disabled:opacity-50 transition-colors',
                     // Граница между «своими» и остальными — чтобы было видно, где чужие.
-                    i > 0 && visibleDeals[i - 1].mine && !d.mine && "border-t-2",
+                    i > 0 &&
+                      visibleDeals[i - 1].mine &&
+                      !d.mine &&
+                      'border-t-2',
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{d.title}</span>
+                    <span className="text-sm font-medium truncate">
+                      {d.title}
+                    </span>
                     {d.mine && (
                       <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/10 text-primary">
                         моя
@@ -1239,7 +1268,7 @@ export default function NewRateRequestPage() {
                   <div className="text-xs text-muted-foreground mt-0.5">
                     #{d.id}
                     {(d.origin || d.destination) &&
-                      ` · ${d.origin ?? "?"} → ${d.destination ?? "?"}`}
+                      ` · ${d.origin ?? '?'} → ${d.destination ?? '?'}`}
                   </div>
                 </button>
               ))}

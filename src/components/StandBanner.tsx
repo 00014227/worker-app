@@ -1,10 +1,10 @@
-import { AlertTriangle } from "lucide-react";
-import { APP_ENV, IS_PROD_BUILD, buildLabel } from "../lib/env";
+import { AlertTriangle } from 'lucide-react';
+import { APP_ENV, IS_PROD_BUILD, buildLabel } from '../lib/env';
 
 const ENV_LABEL: Record<string, string> = {
-  staging: "СТЕНД",
-  preview: "PR-ПРЕВЬЮ",
-  development: "ЛОКАЛЬНО",
+  staging: 'СТЕНД',
+  preview: 'PR-ПРЕВЬЮ',
+  development: 'ЛОКАЛЬНО',
 };
 
 export function StandBanner() {

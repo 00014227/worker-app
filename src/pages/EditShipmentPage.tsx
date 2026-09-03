@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Save, RefreshCw } from 'lucide-react';
 import { workerApi, OrderRow } from '../lib/api';
-import ShipmentForm, { ShipmentFormData, emptyForm } from '../components/ShipmentForm';
+import ShipmentForm, {
+  ShipmentFormData,
+  emptyForm,
+} from '../components/ShipmentForm';
 import { cn } from '@/lib/utils';
 
 function fromOrder(o: OrderRow): ShipmentFormData {
@@ -45,33 +48,45 @@ export default function EditShipmentPage() {
 
   useEffect(() => {
     if (!id) return;
-    workerApi.orders.get(id)
-      .then(o => { setForm(fromOrder(o)); setOrderNumber(o.number); })
-      .catch(e => setError((e as Error).message))
+    workerApi.orders
+      .get(id)
+      .then((o) => {
+        setForm(fromOrder(o));
+        setOrderNumber(o.number);
+      })
+      .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
   }, [id]);
 
   const isMulti = form.transportationType === 'Мультимодальная';
-  const canSave = !!form.transportationType && (
-    isMulti
-      ? form.legs.length > 0 && form.legs.every(l => l.departure && l.destination)
-      : !!form.departure && !!form.destination
-  );
+  const canSave =
+    !!form.transportationType &&
+    (isMulti
+      ? form.legs.length > 0 &&
+        form.legs.every((l) => l.departure && l.destination)
+      : !!form.departure && !!form.destination);
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
-      <RefreshCw size={16} className="animate-spin mr-2" /> Загрузка...
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
+        <RefreshCw size={16} className="animate-spin mr-2" /> Загрузка...
+      </div>
+    );
 
-  if (error) return (
-    <div className="space-y-4">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ChevronLeft size={16} /> Назад
-      </button>
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-    </div>
-  );
+  if (error)
+    return (
+      <div className="space-y-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronLeft size={16} /> Назад
+        </button>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      </div>
+    );
 
   if (saved) {
     return (
@@ -84,10 +99,16 @@ export default function EditShipmentPage() {
           Подключение к API будет добавлено в следующем обновлении.
         </p>
         <div className="flex gap-3 justify-center">
-          <button onClick={() => navigate(`/shipments/${id}`)} className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+          <button
+            onClick={() => navigate(`/shipments/${id}`)}
+            className="px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+          >
             К перевозке
           </button>
-          <button onClick={() => navigate('/shipments')} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+          <button
+            onClick={() => navigate('/shipments')}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
             К списку
           </button>
         </div>
@@ -98,17 +119,25 @@ export default function EditShipmentPage() {
   return (
     <div className="max-w-4xl mx-auto pb-12">
       <div className="mb-6">
-        <button onClick={() => navigate(`/shipments/${id}`)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-3 transition-colors">
+        <button
+          onClick={() => navigate(`/shipments/${id}`)}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-3 transition-colors"
+        >
           <ChevronLeft size={15} /> {orderNumber}
         </button>
         <h1 className="text-xl font-bold">Редактировать перевозку</h1>
-        <p className="text-xs text-muted-foreground mt-0.5 font-mono">{orderNumber}</p>
+        <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+          {orderNumber}
+        </p>
       </div>
 
       <ShipmentForm form={form} onChange={setForm} />
 
       <div className="flex items-center justify-between mt-6 pt-4 border-t">
-        <button onClick={() => navigate(`/shipments/${id}`)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+        <button
+          onClick={() => navigate(`/shipments/${id}`)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors"
+        >
           <ChevronLeft size={14} /> Отмена
         </button>
         <button
@@ -116,7 +145,9 @@ export default function EditShipmentPage() {
           disabled={!canSave}
           className={cn(
             'flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-medium transition-colors',
-            canSave ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-muted text-muted-foreground cursor-not-allowed',
+            canSave
+              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'bg-muted text-muted-foreground cursor-not-allowed',
           )}
         >
           <Save size={14} /> Сохранить изменения

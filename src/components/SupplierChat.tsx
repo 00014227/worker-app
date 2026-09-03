@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Send, Mail, X, Loader2, AlertTriangle, Paperclip } from "lucide-react";
-import { tenderApi, notificationApi, ConversationMessage } from "@/lib/api";
-import { subscribeToChat } from "@/lib/socket";
-import MessageMedia from "./MessageMedia";
-import { cn } from "@/lib/utils";
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Send, Mail, X, Loader2, AlertTriangle, Paperclip } from 'lucide-react';
+import { tenderApi, notificationApi, ConversationMessage } from '@/lib/api';
+import { subscribeToChat } from '@/lib/socket';
+import MessageMedia from './MessageMedia';
+import { cn } from '@/lib/utils';
 
 /**
  * Переписка логиста с подрядчиком: что написала система, что ответил подрядчик
@@ -28,7 +28,7 @@ export default function SupplierChat({
 }) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [text, setText] = useState("");
+  const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   /** Выбранный файл — уходит вместе с текстом как подписью. */
   const [file, setFile] = useState<File | null>(null);
@@ -88,7 +88,7 @@ export default function SupplierChat({
 
   // Лента растёт снизу — держим взгляд на последнем сообщении.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
+    bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
   const send = async () => {
@@ -100,10 +100,19 @@ export default function SupplierChat({
       // Файл уходит одним сообщением с подписью — два отдельных сообщения
       // и выглядят хуже, и тратят вдвое больше квоты аккаунта.
       const res = file
-        ? await tenderApi.tenders.sendSupplierFile(tenderId, supplier.id, file, body)
-        : await tenderApi.tenders.sendSupplierMessage(tenderId, supplier.id, body);
+        ? await tenderApi.tenders.sendSupplierFile(
+            tenderId,
+            supplier.id,
+            file,
+            body,
+          )
+        : await tenderApi.tenders.sendSupplierMessage(
+            tenderId,
+            supplier.id,
+            body,
+          );
       setMessages(res.messages);
-      setText("");
+      setText('');
       setFile(null);
     } catch (e) {
       setError((e as Error).message);
@@ -113,11 +122,14 @@ export default function SupplierChat({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex justify-end" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      onClick={onClose}
+    >
       <div
         className={cn(
-          "w-full max-w-md h-full bg-background shadow-xl flex flex-col relative",
-          dragOver && "ring-2 ring-primary ring-inset",
+          'w-full max-w-md h-full bg-background shadow-xl flex flex-col relative',
+          dragOver && 'ring-2 ring-primary ring-inset',
         )}
         onClick={(e) => e.stopPropagation()}
         // Перетаскивание в окно чата: логист приходит из Проводника и из почты,
@@ -128,7 +140,8 @@ export default function SupplierChat({
         }}
         onDragLeave={(e) => {
           // Уход на дочерний элемент — не выход из окна.
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
+          if (!e.currentTarget.contains(e.relatedTarget as Node))
+            setDragOver(false);
         }}
         onDrop={(e) => {
           e.preventDefault();
@@ -139,7 +152,9 @@ export default function SupplierChat({
       >
         {dragOver && (
           <div className="absolute inset-0 z-10 bg-primary/5 flex items-center justify-center pointer-events-none">
-            <span className="text-sm font-medium text-primary">Отпустите файл</span>
+            <span className="text-sm font-medium text-primary">
+              Отпустите файл
+            </span>
           </div>
         )}
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
@@ -147,42 +162,57 @@ export default function SupplierChat({
             <h2 className="font-semibold text-sm truncate">{supplier.name}</h2>
             <p className="text-xs text-muted-foreground">Переписка</p>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <X size={18} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
           {loading ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Загрузка…</p>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Загрузка…
+            </p>
           ) : messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Сообщений нет</p>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Сообщений нет
+            </p>
           ) : (
             messages.map((m) => (
               <div
                 key={m.id}
                 className={cn(
-                  "rounded-lg px-3 py-2 text-sm max-w-[85%]",
-                  m.direction === "outgoing" ? "bg-primary/10 ml-auto" : "bg-muted",
+                  'rounded-lg px-3 py-2 text-sm max-w-[85%]',
+                  m.direction === 'outgoing'
+                    ? 'bg-primary/10 ml-auto'
+                    : 'bg-muted',
                 )}
               >
                 <div className="flex items-center gap-1.5 mb-1">
-                  {m.channel === "email" ? (
+                  {m.channel === 'email' ? (
                     <Mail size={11} className="text-muted-foreground" />
                   ) : (
                     <Send size={11} className="text-muted-foreground" />
                   )}
                   {m.subject && (
-                    <span className="text-[10px] text-muted-foreground truncate">{m.subject}</span>
+                    <span className="text-[10px] text-muted-foreground truncate">
+                      {m.subject}
+                    </span>
                   )}
                 </div>
                 {m.text && (
-                  <div className="whitespace-pre-wrap break-words">{m.text}</div>
+                  <div className="whitespace-pre-wrap break-words">
+                    {m.text}
+                  </div>
                 )}
                 <MessageMedia message={m} />
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  {new Date(m.createdAt).toLocaleString("ru-RU")}
-                  {m.status === "error" && <span className="text-red-500 ml-1">· не доставлено</span>}
+                  {new Date(m.createdAt).toLocaleString('ru-RU')}
+                  {m.status === 'error' && (
+                    <span className="text-red-500 ml-1">· не доставлено</span>
+                  )}
                 </div>
               </div>
             ))
@@ -221,7 +251,7 @@ export default function SupplierChat({
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) setFile(f);
-                e.target.value = "";
+                e.target.value = '';
               }}
             />
             <button
@@ -238,7 +268,7 @@ export default function SupplierChat({
               // Enter отправляет, Shift+Enter — перенос строки: так работает
               // любой мессенджер, и логист не будет об этом задумываться.
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   void send();
                 }
@@ -252,7 +282,11 @@ export default function SupplierChat({
               disabled={(!text.trim() && !file) || sending}
               className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors flex items-center gap-1.5"
             >
-              {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              {sending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Send size={14} />
+              )}
             </button>
           </div>
         </div>

@@ -6,7 +6,17 @@ import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import { RefreshCw, AlertCircle, ArrowRight, MapPin, Truck, Plane, Train, Layers, Package } from 'lucide-react';
+import {
+  RefreshCw,
+  AlertCircle,
+  ArrowRight,
+  MapPin,
+  Truck,
+  Plane,
+  Train,
+  Layers,
+  Package,
+} from 'lucide-react';
 import { workerApi, MapOrderRow } from '../lib/api';
 import { cn } from '@/lib/utils';
 
@@ -18,11 +28,34 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-const TYPE_CONFIG: Record<string, { bg: string; border: string; Icon: React.FC<{ size: number; color: string }> }> = {
-  'Авто':            { bg: '#fff7ed', border: '#ea580c', Icon: (p) => <Truck size={p.size} color={p.color} /> },
-  'Авиа':            { bg: '#f0f9ff', border: '#0284c7', Icon: (p) => <Plane size={p.size} color={p.color} /> },
-  'Железнодорожная': { bg: '#faf5ff', border: '#7c3aed', Icon: (p) => <Train size={p.size} color={p.color} /> },
-  'Мультимодальная': { bg: '#f0fdfa', border: '#0d9488', Icon: (p) => <Layers size={p.size} color={p.color} /> },
+const TYPE_CONFIG: Record<
+  string,
+  {
+    bg: string;
+    border: string;
+    Icon: React.FC<{ size: number; color: string }>;
+  }
+> = {
+  Авто: {
+    bg: '#fff7ed',
+    border: '#ea580c',
+    Icon: (p) => <Truck size={p.size} color={p.color} />,
+  },
+  Авиа: {
+    bg: '#f0f9ff',
+    border: '#0284c7',
+    Icon: (p) => <Plane size={p.size} color={p.color} />,
+  },
+  Железнодорожная: {
+    bg: '#faf5ff',
+    border: '#7c3aed',
+    Icon: (p) => <Train size={p.size} color={p.color} />,
+  },
+  Мультимодальная: {
+    bg: '#f0fdfa',
+    border: '#0d9488',
+    Icon: (p) => <Layers size={p.size} color={p.color} />,
+  },
 };
 
 function statusRing(status: string | null): string {
@@ -34,7 +67,10 @@ function statusRing(status: string | null): string {
   return '#3b82f6';
 }
 
-function buildDivIcon(transportationType: string | null, status: string | null) {
+function buildDivIcon(
+  transportationType: string | null,
+  status: string | null,
+) {
   const cfg = transportationType ? TYPE_CONFIG[transportationType] : null;
   const ring = statusRing(status);
 
@@ -93,7 +129,9 @@ export default function MapPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const mapped = orders.filter((o) => o.lat !== null && o.lng !== null);
   const unmapped = orders.filter((o) => o.lat === null || o.lng === null);
@@ -117,7 +155,9 @@ export default function MapPage() {
           <div>
             <p className="text-sm font-semibold">Карта перевозок</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {loading ? 'Загрузка...' : `${mapped.length} на карте · ${unmapped.length} без координат`}
+              {loading
+                ? 'Загрузка...'
+                : `${mapped.length} на карте · ${unmapped.length} без координат`}
             </p>
           </div>
           <button
@@ -155,11 +195,16 @@ export default function MapPage() {
             >
               <div className="flex items-center gap-1.5">
                 {(() => {
-                  const cfg = o.transportationType ? TYPE_CONFIG[o.transportationType] : null;
+                  const cfg = o.transportationType
+                    ? TYPE_CONFIG[o.transportationType]
+                    : null;
                   return cfg ? (
                     <div
                       className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
-                      style={{ background: cfg.bg, border: `1.5px solid ${statusRing(o.status)}` }}
+                      style={{
+                        background: cfg.bg,
+                        border: `1.5px solid ${statusRing(o.status)}`,
+                      }}
                     >
                       <cfg.Icon size={10} color={cfg.border} />
                     </div>
@@ -172,7 +217,9 @@ export default function MapPage() {
                     </div>
                   );
                 })()}
-                <span className="font-mono text-xs font-semibold">{o.number}</span>
+                <span className="font-mono text-xs font-semibold">
+                  {o.number}
+                </span>
                 {o.status && (
                   <span className="ml-auto text-[10px] text-muted-foreground truncate max-w-[90px]">
                     {o.status}
@@ -180,13 +227,19 @@ export default function MapPage() {
                 )}
               </div>
               {o.payer && (
-                <p className="text-xs text-muted-foreground mt-0.5 truncate pl-4">{o.payer.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate pl-4">
+                  {o.payer.name}
+                </p>
               )}
               {(o.departure || o.destination) && (
                 <div className="flex items-center gap-1 mt-0.5 pl-4 text-[10px] text-muted-foreground">
-                  <span className="truncate max-w-[70px]">{o.departure ?? '—'}</span>
+                  <span className="truncate max-w-[70px]">
+                    {o.departure ?? '—'}
+                  </span>
                   <ArrowRight size={8} className="flex-shrink-0" />
-                  <span className="truncate max-w-[70px]">{o.destination ?? '—'}</span>
+                  <span className="truncate max-w-[70px]">
+                    {o.destination ?? '—'}
+                  </span>
                 </div>
               )}
               {o.currentLocation && (
@@ -210,16 +263,24 @@ export default function MapPage() {
                 >
                   <div className="flex items-center gap-1.5">
                     {(() => {
-                      const cfg = o.transportationType ? TYPE_CONFIG[o.transportationType] : null;
+                      const cfg = o.transportationType
+                        ? TYPE_CONFIG[o.transportationType]
+                        : null;
                       return cfg ? (
                         <div
                           className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
-                          style={{ background: cfg.bg, border: `1.5px solid ${cfg.border}` }}
+                          style={{
+                            background: cfg.bg,
+                            border: `1.5px solid ${cfg.border}`,
+                          }}
                         >
                           <cfg.Icon size={10} color={cfg.border} />
                         </div>
                       ) : (
-                        <AlertCircle size={10} className="text-amber-500 flex-shrink-0" />
+                        <AlertCircle
+                          size={10}
+                          className="text-amber-500 flex-shrink-0"
+                        />
                       );
                     })()}
                     <span className="font-mono text-xs">{o.number}</span>
@@ -271,9 +332,13 @@ export default function MapPage() {
                       <span>{o.destination ?? '—'}</span>
                     </div>
                   )}
-                  {o.payer && <p className="text-muted-foreground">{o.payer.name}</p>}
+                  {o.payer && (
+                    <p className="text-muted-foreground">{o.payer.name}</p>
+                  )}
                   {o.currentLocation && (
-                    <p className="mt-1 italic text-muted-foreground">{o.currentLocation}</p>
+                    <p className="mt-1 italic text-muted-foreground">
+                      {o.currentLocation}
+                    </p>
                   )}
                   <button
                     onClick={() => navigate(`/shipments/${o.id}`)}

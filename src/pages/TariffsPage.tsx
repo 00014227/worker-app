@@ -1,6 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Upload, RefreshCw, Truck, Train, Ship, Plane, Layers } from 'lucide-react';
+import {
+  Search,
+  Upload,
+  RefreshCw,
+  Truck,
+  Train,
+  Ship,
+  Plane,
+  Layers,
+} from 'lucide-react';
 import { listTariffs, type Tariff } from '../lib/api';
 
 const TRANSPORT_ICONS: Record<string, React.ReactNode> = {
@@ -19,7 +28,11 @@ const TRANSPORT_LABELS: Record<string, string> = {
   multimodal: 'Мульти',
 };
 
-function formatRate(label: string, value: string | null, currency: string): string | null {
+function formatRate(
+  label: string,
+  value: string | null,
+  currency: string,
+): string | null {
   if (!value || Number(value) === 0) return null;
   return `${label}: ${Number(value).toFixed(2)} ${currency}`;
 }
@@ -36,29 +49,34 @@ export default function TariffsPage() {
   const [destination, setDestination] = useState('');
   const [transportType, setTransportType] = useState('');
 
-  const load = useCallback(async (pg = page) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await listTariffs({
-        departure: departure || undefined,
-        destination: destination || undefined,
-        transportType: transportType || undefined,
-        page: pg,
-        limit: 50,
-      });
-      setTariffs(res.items);
-      setTotal(res.total);
-      setPages(res.pages);
-      setPage(pg);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [departure, destination, transportType, page]);
+  const load = useCallback(
+    async (pg = page) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await listTariffs({
+          departure: departure || undefined,
+          destination: destination || undefined,
+          transportType: transportType || undefined,
+          page: pg,
+          limit: 50,
+        });
+        setTariffs(res.items);
+        setTotal(res.total);
+        setPages(res.pages);
+        setPage(pg);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [departure, destination, transportType, page],
+  );
 
-  useEffect(() => { load(1); }, [departure, destination, transportType]);
+  useEffect(() => {
+    load(1);
+  }, [departure, destination, transportType]);
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -111,14 +129,18 @@ export default function TariffsPage() {
         >
           <option value="">Все типы</option>
           {Object.entries(TRANSPORT_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
+            <option key={k} value={k}>
+              {v}
+            </option>
           ))}
         </select>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
       )}
 
       {/* Table */}
@@ -137,12 +159,22 @@ export default function TariffsPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">Загрузка...</td>
+                <td
+                  colSpan={6}
+                  className="px-4 py-8 text-center text-slate-400"
+                >
+                  Загрузка...
+                </td>
               </tr>
             )}
             {!loading && tariffs.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">Тарифы не найдены</td>
+                <td
+                  colSpan={6}
+                  className="px-4 py-8 text-center text-slate-400"
+                >
+                  Тарифы не найдены
+                </td>
               </tr>
             )}
             {tariffs.map((t) => {
@@ -152,16 +184,25 @@ export default function TariffsPage() {
                 formatRate('/конт', t.ratePerContainer, t.currency),
               ].filter(Boolean);
               return (
-                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                  <td className="px-4 py-3 font-medium text-slate-900">{t.departure.name}</td>
-                  <td className="px-4 py-3 text-slate-700">{t.destination.name}</td>
+                <tr
+                  key={t.id}
+                  className="border-b border-slate-50 hover:bg-slate-50/50"
+                >
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    {t.departure.name}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {t.destination.name}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="flex items-center gap-1.5 text-slate-600">
                       {TRANSPORT_ICONS[t.transportType]}
                       {TRANSPORT_LABELS[t.transportType] ?? t.transportType}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{rates.join(' · ') || '—'}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {rates.join(' · ') || '—'}
+                  </td>
                   <td className="px-4 py-3 text-xs text-slate-500">
                     {t.validFrom.slice(0, 10)} — {t.validUntil.slice(0, 10)}
                   </td>
@@ -193,7 +234,9 @@ export default function TariffsPage() {
           >
             ←
           </button>
-          <span className="text-sm text-slate-600">{page} / {pages}</span>
+          <span className="text-sm text-slate-600">
+            {page} / {pages}
+          </span>
           <button
             onClick={() => load(page + 1)}
             disabled={page >= pages}
