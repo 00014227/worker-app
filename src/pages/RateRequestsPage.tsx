@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MapPin, Calendar, CheckCircle2, Clock, RefreshCw, FileText } from 'lucide-react';
+import { Plus, MapPin, Calendar, CalendarPlus, CheckCircle2, Clock, RefreshCw, FileText } from 'lucide-react';
 import { tenderApi, TenderListRow, TenderStatus, TENDER_MODE_LABELS } from '../lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -96,10 +96,25 @@ export default function RateRequestsPage() {
                       )}
                     </div>
                     <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1">
+                        {/* Момент создания — timestamptz, показываем в рабочем часовом
+                            поясе. Время важно не меньше даты: от него считается,
+                            сколько у подрядчиков осталось до дедлайна. */}
+                        <CalendarPlus size={11} /> создан{' '}
+                        {new Date(r.createdAt).toLocaleString('ru-RU', {
+                          timeZone: 'Asia/Tashkent',
+                          day: '2-digit',
+                          month: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
                       {r.loadingDate && (
                         <span className="flex items-center gap-1">
-                          {/* Дата погрузки — @db.Date (UTC-полночь): без timeZone съезжает на день назад */}
-                          <Calendar size={11} /> {new Date(r.loadingDate).toLocaleDateString('ru-RU', { timeZone: 'UTC' })}
+                          {/* Дата погрузки — @db.Date (UTC-полночь): без timeZone съезжает на день назад.
+                              Подписываем обе даты: рядом без подписей они путаются. */}
+                          <Calendar size={11} /> погрузка{' '}
+                          {new Date(r.loadingDate).toLocaleDateString('ru-RU', { timeZone: 'UTC' })}
                         </span>
                       )}
                       {r.weightKg && <span>{Number(r.weightKg).toLocaleString('ru-RU')} кг</span>}

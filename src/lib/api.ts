@@ -697,6 +697,10 @@ export interface EmployeeAdminRow {
   /** Доступ к проверке контрагентов. */
   isLawyer: boolean;
   bitrix24Id: number | null;
+  /** Личный вебхук внесён — сделки уходят от имени сотрудника. */
+  bitrixWebhookConnected: boolean;
+  /** Замаскированный вид: сам ключ наружу не отдаётся. */
+  bitrixWebhookMasked: string | null;
   /** Слать ли ежедневный Excel по активным перевозкам этого сотрудника. */
   reportsEnabled: boolean;
 }
@@ -848,6 +852,27 @@ export interface ConversationMessage {
   subject: string | null;
   status: string | null;
   createdAt: string;
+  /** voice | photo | document — пусто у обычного текстового сообщения. */
+  mediaKind: "voice" | "photo" | "document" | null;
+  mediaName: string | null;
+  mediaSize: number | null;
+  /** Длительность голосового в секундах — видна до нажатия «слушать». */
+  mediaDuration: number | null;
+  /** Файл удалён по сроку хранения: сообщение осталось, вложения уже нет. */
+  mediaPurged: boolean;
+}
+
+/**
+ * Вложение переписки. Грузим запросом с токеном и отдаём `blob:`-ссылку:
+ * `<img src>` и `<audio src>` заголовок с авторизацией слать не умеют, а
+ * открывать фото грузов и накладные наружу без проверки прав нельзя.
+ */
+export async function fetchMediaUrl(messageId: string): Promise<string> {
+  const res = await fetch(`/api/worker/tenders/media/${messageId}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Вложение недоступно");
+  return URL.createObjectURL(await res.blob());
 }
 
 export interface TelegramAccountRow {
@@ -882,6 +907,8 @@ export const employeeApi = {
       isAdmin?: boolean;
       isLawyer?: boolean;
       bitrix24Id?: number;
+      /** Ссылка целиком; пустая строка снимает её. */
+      bitrixWebhookUrl?: string;
     },
   ): Promise<EmployeeAdminRow> {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}/credentials`, {
@@ -906,6 +933,8 @@ export const employeeApi = {
       isAdmin?: boolean;
       isLawyer?: boolean;
       bitrix24Id?: number;
+      /** Ссылка целиком; пустая строка снимает её. */
+      bitrixWebhookUrl?: string;
       departmentId?: string;
       reportsEnabled?: boolean;
     },
@@ -936,6 +965,13 @@ export interface NotificationFeed {
 }
 
 /** Колокольчик логиста. Получатель везде берётся из токена. */
+/** От чьего имени уйдёт сделка: личный вебхук сотрудника или общий аккаунт. */
+export const aiDealApi = {
+  author(): Promise<{ personal: boolean }> {
+    return req<{ personal: boolean }>("/ai-deal/author");
+  },
+};
+
 export const notificationApi = {
   feed(): Promise<NotificationFeed> {
     return req<NotificationFeed>('/worker/notifications');
@@ -1264,6 +1300,29 @@ export const tenderApi = {
       return req<ConversationMessage[]>(
         `/worker/tenders/${tenderId}/suppliers/${supplierId}/messages`,
       );
+    },
+    /** Логист отправляет подрядчику файл или фото; подпись необязательна. */
+    async sendSupplierFile(
+      tenderId: string,
+      supplierId: string,
+      file: File,
+      caption?: string,
+    ): Promise<{ ok: boolean; messages: ConversationMessage[] }> {
+      const form = new FormData();
+      form.append("file", file);
+      if (caption?.trim()) form.append("caption", caption.trim());
+      const res = await fetch(
+        `/api/worker/tenders/${tenderId}/suppliers/${supplierId}/file`,
+        { method: "POST", headers: authHeaders(), body: form },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const raw = body?.message ?? body?.error;
+        throw new Error(
+          Array.isArray(raw) ? raw.join("; ") : typeof raw === "string" ? raw : "Не удалось отправить файл",
+        );
+      }
+      return res.json();
     },
     /** Логист пишет подрядчику вручную. Возвращает обновлённую переписку. */
     sendSupplierMessage(
