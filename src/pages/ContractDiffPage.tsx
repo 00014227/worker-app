@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
-  ChevronDown,
-  ChevronRight,
   Clock,
   FileDiff,
   Info,
@@ -23,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import UploadZone from '@/components/contract-diff/UploadZone';
 import ChangeCard from '@/components/contract-diff/ChangeCard';
-import ClauseText from '@/components/contract-diff/ClauseText';
+import DocumentView from '@/components/contract-diff/DocumentView';
 import { KIND, RISK, riskOrder } from '@/components/contract-diff/diff-meta';
 
 /** Шаги разбора. Договор сверяется до минуты — без них экран выглядит зависшим. */
@@ -43,7 +41,10 @@ export default function ContractDiffPage() {
   const [riskFilter, setRiskFilter] = useState<DiffRisk | 'all'>('all');
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [showSame, setShowSame] = useState(false);
+  /** Как читать результат: договор целиком или одни правки. */
+  const [view, setView] = useState<'document' | 'changes'>('document');
+  /** Какие правки раскрыты в теле документа. */
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
 
   const rowsRef = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -117,6 +118,9 @@ export default function ContractDiffPage() {
 
   const goTo = useCallback((id: string) => {
     setActiveId(id);
+    // Переход из списка сразу раскрывает разбор: иначе логист попадает на
+    // подсвеченный пункт и вынужден делать второй клик, чтобы понять, что не так.
+    setOpenIds((prev) => new Set(prev).add(id));
     rowsRef.current[id]?.scrollIntoView({
       block: 'center',
       behavior: 'smooth',
@@ -397,30 +401,68 @@ export default function ContractDiffPage() {
               </div>
             </div>
 
-            {/* ── Правки подробно ── */}
+            {/* ── Документ целиком, правки подсвечены по месту ── */}
             <div className="space-y-3">
-              {items.map((it) => (
-                <div
-                  key={it.id}
-                  ref={(el) => {
-                    rowsRef.current[it.id] = el;
-                  }}
-                  className={cn(
-                    'rounded-lg transition-shadow',
-                    activeId === it.id && 'ring-2 ring-primary/30',
-                  )}
-                >
-                  <ChangeCard item={it} />
+              <div className="flex items-center gap-2 print:hidden">
+                <div className="inline-flex rounded-lg border overflow-hidden text-xs">
+                  {(
+                    [
+                      ['document', 'Документ'],
+                      ['changes', 'Только правки'],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button
+                      key={v}
+                      onClick={() => setView(v)}
+                      className={cn(
+                        'px-3 py-1.5 transition-colors',
+                        view === v
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted/50',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
-              ))}
+                <span className="text-[11px] text-muted-foreground">
+                  {view === 'document'
+                    ? 'договор целиком, правка раскрывается по клику'
+                    : 'только изменённые пункты, подряд'}
+                </span>
+              </div>
 
-              {/* Совпавшие пункты свёрнуты: на договоре в 80 пунктов показывать
-                  всё подряд значит утопить те шесть, ради которых открыли экран. */}
-              <SameClauses
-                report={report}
-                open={showSame}
-                onToggle={() => setShowSame((v) => !v)}
-              />
+              {view === 'document' ? (
+                <DocumentView
+                  report={report}
+                  activeId={activeId}
+                  openIds={openIds}
+                  onToggle={(id) =>
+                    setOpenIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  rowsRef={rowsRef}
+                />
+              ) : (
+                items.map((it) => (
+                  <div
+                    key={it.id}
+                    ref={(el) => {
+                      rowsRef.current[it.id] = el;
+                    }}
+                    className={cn(
+                      'rounded-lg transition-shadow',
+                      activeId === it.id && 'ring-2 ring-primary/30',
+                    )}
+                  >
+                    <ChangeCard item={it} />
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </>
@@ -459,47 +501,5 @@ export default function ContractDiffPage() {
   );
 }
 
-/** Пункты без изменений — свёрнуты, но доступны: иногда нужно свериться с целым. */
-function SameClauses({
-  report,
-  open,
-  onToggle,
-}: {
-  report: ContractDiff;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const same = report.clauses.filter((c) => c.kind === 'same');
-  if (same.length === 0) return null;
-
-  return (
-    <div className="rounded-lg border print:hidden">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
-      >
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        {same.length} пунктов без изменений
-      </button>
-      {open && (
-        <div className="border-t divide-y max-h-[50vh] overflow-y-auto">
-          {same.map((c, i) => (
-            <div key={i} className="px-4 py-2 text-xs">
-              <span className="font-medium mr-1.5">
-                п. {c.rightNumber ?? c.leftNumber ?? '—'}
-              </span>
-              <ClauseText
-                parts={null}
-                text={c.after ?? c.before}
-                side="right"
-              />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Пустой экспорт-заглушка для правок без оценки — используется в карточке. */
+/** Тип правки нужен карточке и виду документа — переэкспортируем из одного места. */
 export type { DiffItem };
