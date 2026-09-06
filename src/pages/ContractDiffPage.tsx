@@ -24,15 +24,11 @@ import ChangeCard from '@/components/contract-diff/ChangeCard';
 import DocumentView from '@/components/contract-diff/DocumentView';
 import { KIND, RISK, riskOrder } from '@/components/contract-diff/diff-meta';
 
-/** Шаги разбора. Договор сверяется до минуты — без них экран выглядит зависшим. */
-const STEPS = ['Читаем файлы', 'Сверяем пункты', 'Оцениваем правки'];
-
 export default function ContractDiffPage() {
   const [mode, setMode] = useState<DiffMode>('ours');
   const [left, setLeft] = useState<File | null>(null);
   const [right, setRight] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ContractDiff | null>(null);
   const [history, setHistory] = useState<ContractDiffRow[]>([]);
@@ -67,11 +63,8 @@ export default function ContractDiffPage() {
     if (!left || !right || busy) return;
     setBusy(true);
     setError(null);
-    setStep(0);
     // Шаги двигаем по времени: сервер отдаёт результат целиком, а показать ход
     // работы всё равно нужно — иначе минута ожидания читается как зависание.
-    const t1 = setTimeout(() => setStep(1), 1200);
-    const t2 = setTimeout(() => setStep(2), 4000);
     try {
       const res = await contractDiffApi.compare(left, right, mode);
       setReport(res);
@@ -80,8 +73,6 @@ export default function ContractDiffPage() {
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      clearTimeout(t1);
-      clearTimeout(t2);
       setBusy(false);
     }
   };
@@ -262,19 +253,14 @@ export default function ContractDiffPage() {
             Сверить
           </button>
           {busy && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {STEPS.map((s, i) => (
-                <span
-                  key={s}
-                  className={cn(i === step && 'text-foreground font-medium')}
-                >
-                  {i < step ? '✓ ' : ''}
-                  {s}
-                  {i < STEPS.length - 1 && (
-                    <span className="mx-1.5 opacity-40">→</span>
-                  )}
-                </span>
-              ))}
+            <div className="text-xs text-muted-foreground">
+              {report?.stage === 'ocr' && report.progressTotal
+                ? `Распознаём страницы: ${report.progressDone ?? 0} из ${report.progressTotal}`
+                : report?.stage === 'aligning'
+                  ? 'Сверяем пункты…'
+                  : report?.stage === 'interpreting' && report.progressTotal
+                    ? `Оцениваем правки: ${report.progressDone ?? 0} из ${report.progressTotal}`
+                    : 'Читаем файлы…'}
             </div>
           )}
         </div>
@@ -288,6 +274,27 @@ export default function ContractDiffPage() {
 
       {report && (
         <>
+          {/* Распознанный текст — не оригинал: часть мелких расхождений будет
+              шумом распознавания, и юрист должен читать их с этой поправкой. */}
+          {(report.leftOcr || report.rightOcr) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex items-start gap-2">
+              <TriangleAlert size={13} className="mt-0.5 shrink-0" />
+              <span>
+                Текст{' '}
+                {report.leftOcr && report.rightOcr
+                  ? 'обоих документов получен'
+                  : `документа «${report.leftOcr ? report.leftName : report.rightName}» получен`}{' '}
+                распознаванием со страниц — в файле не было пригодного
+                текстового слоя.{' '}
+                <b>
+                  Мелкие расхождения могут быть ошибками распознавания, а не
+                  правками контрагента.
+                </b>{' '}
+                Спорные места сверяйте с оригиналом; docx даёт точную сверку.
+              </span>
+            </div>
+          )}
+
           {/* ── Сводка ── */}
           <div className="rounded-xl border px-5 py-3 flex items-center gap-5 flex-wrap">
             <div>

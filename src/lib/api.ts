@@ -1047,6 +1047,16 @@ export interface DiffClause {
 
 export interface ContractDiff {
   id: string;
+  /** processing — разбор идёт в фоне; done — готово; failed — смотри error. */
+  status: 'processing' | 'done' | 'failed';
+  /** Что делается сейчас: reading | ocr | aligning | interpreting. */
+  stage: string | null;
+  progressDone: number | null;
+  progressTotal: number | null;
+  error: string | null;
+  /** Текст получен распознаванием: мелкие расхождения могут быть его ошибками. */
+  leftOcr: boolean;
+  rightOcr: boolean;
   leftName: string;
   rightName: string;
   mode: DiffMode;
