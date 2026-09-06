@@ -26,6 +26,9 @@ import SideBySideView from '@/components/contract-diff/SideBySideView';
 import OriginalViewer from '@/components/contract-diff/OriginalViewer';
 import { KIND, RISK, riskOrder } from '@/components/contract-diff/diff-meta';
 
+/** Пауза между опросами. Реже — счётчик страниц дёргается, чаще — лишние запросы. */
+const POLL_MS = 2000;
+
 export default function ContractDiffPage() {
   const [mode, setMode] = useState<DiffMode>('ours');
   const [left, setLeft] = useState<File | null>(null);
@@ -51,6 +54,8 @@ export default function ContractDiffPage() {
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
 
   const rowsRef = useRef<Record<string, HTMLDivElement | null>>({});
+  /** Какую сверку ждём сейчас: ответы прежней не должны затирать новую. */
+  const pollFor = useRef<string | null>(null);
 
   const loadHistory = useCallback(() => {
     contractDiffApi
@@ -67,16 +72,41 @@ export default function ContractDiffPage() {
     loadHistory();
   }, [loadHistory]);
 
+  /**
+   * Ждём готовности сверки, опрашивая сервер.
+   *
+   * Сервер отвечает на загрузку сразу — заготовкой со `status: 'processing'` и
+   * пустыми списками, — потому что распознавание десятка страниц не укладывается
+   * в 26 секунд, на которых прокси рвёт запрос. Без опроса юрист видит именно
+   * эту пустую заготовку и решает, что сверка ничего не нашла.
+   */
+  const awaitReady = useCallback(async (id: string) => {
+    for (;;) {
+      const res = await contractDiffApi.byId(id);
+      // Показываем каждый ответ: по нему рисуется ход работы (стадия и счётчик
+      // страниц), иначе минута ожидания читается как зависание.
+      if (pollFor.current !== id) return null;
+      setReport(res);
+      if (res.status === 'failed') {
+        throw new Error(res.error || 'Сверка не удалась');
+      }
+      if (res.status !== 'processing') return res;
+      await new Promise((r) => setTimeout(r, POLL_MS));
+    }
+  }, []);
+
   const run = async () => {
     if (!left || !right || busy) return;
     setBusy(true);
     setError(null);
-    // Шаги двигаем по времени: сервер отдаёт результат целиком, а показать ход
-    // работы всё равно нужно — иначе минута ожидания читается как зависание.
+    setReport(null);
     try {
-      const res = await contractDiffApi.compare(left, right, mode);
-      setReport(res);
-      setActiveId(res.items[0]?.id ?? null);
+      const started = await contractDiffApi.compare(left, right, mode);
+      pollFor.current = started.id;
+      setReport(started);
+      const res =
+        started.status === 'processing' ? await awaitReady(started.id) : started;
+      if (res) setActiveId(res.items[0]?.id ?? null);
       loadHistory();
     } catch (e) {
       setError((e as Error).message);
@@ -88,10 +118,13 @@ export default function ContractDiffPage() {
   const open = async (id: string) => {
     setBusy(true);
     setError(null);
+    pollFor.current = id;
     try {
-      const res = await contractDiffApi.byId(id);
-      setReport(res);
-      setActiveId(res.items[0]?.id ?? null);
+      const first = await contractDiffApi.byId(id);
+      setReport(first);
+      // Из истории можно открыть и ещё не досчитанную сверку — дожидаемся её так же.
+      const res = first.status === 'processing' ? await awaitReady(id) : first;
+      if (res) setActiveId(res.items[0]?.id ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
