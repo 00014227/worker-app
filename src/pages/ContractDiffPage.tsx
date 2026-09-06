@@ -24,6 +24,7 @@ import ChangeCard from '@/components/contract-diff/ChangeCard';
 import DocumentView from '@/components/contract-diff/DocumentView';
 import SideBySideView from '@/components/contract-diff/SideBySideView';
 import OriginalViewer from '@/components/contract-diff/OriginalViewer';
+import ComparisonProgress from '@/components/contract-diff/ComparisonProgress';
 import { KIND, RISK, riskOrder } from '@/components/contract-diff/diff-meta';
 
 /** Пауза между опросами. Реже — счётчик страниц дёргается, чаще — лишние запросы. */
@@ -132,6 +133,13 @@ export default function ContractDiffPage() {
     }
   };
 
+  /**
+   * Сверка ещё считается. Отчёт в этот момент существует, но пуст: сервер
+   * отвечает заготовкой сразу. Показать её как результат — значит сказать
+   * юристу «различий нет», когда система их ещё не искала.
+   */
+  const pending = report?.status === 'processing';
+
   /** Правки: сначала опасные, дальше по документу. */
   const items = useMemo(() => {
     if (!report) return [];
@@ -178,6 +186,15 @@ export default function ContractDiffPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [report, items, activeId, goTo]);
 
+  // Пока в списке есть недосчитанная сверка, обновляем его сами: юрист мог
+  // обновить страницу посреди распознавания, и строка иначе навсегда замрёт
+  // на «считается».
+  useEffect(() => {
+    if (!history.some((h) => h.status === 'processing')) return;
+    const timer = setInterval(loadHistory, POLL_MS * 2);
+    return () => clearInterval(timer);
+  }, [history, loadHistory]);
+
   const swap = () => {
     setLeft(right);
     setRight(left);
@@ -199,7 +216,7 @@ export default function ContractDiffPage() {
             Что изменилось между двумя версиями и чем это грозит
           </p>
         </div>
-        {report && (
+        {report && !pending && (
           <button
             onClick={() => window.print()}
             className="print:hidden text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-3 py-1.5 rounded-lg border"
@@ -293,15 +310,9 @@ export default function ContractDiffPage() {
             )}
             Сверить
           </button>
-          {busy && (
-            <div className="text-xs text-muted-foreground">
-              {report?.stage === 'ocr' && report.progressTotal
-                ? `Распознаём страницы: ${report.progressDone ?? 0} из ${report.progressTotal}`
-                : report?.stage === 'aligning'
-                  ? 'Сверяем пункты…'
-                  : report?.stage === 'interpreting' && report.progressTotal
-                    ? `Оцениваем правки: ${report.progressDone ?? 0} из ${report.progressTotal}`
-                    : 'Читаем файлы…'}
+          {busy && !report && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Loader2 size={12} className="animate-spin" /> Загружаем файлы…
             </div>
           )}
         </div>
@@ -313,7 +324,9 @@ export default function ContractDiffPage() {
         </div>
       )}
 
-      {report && (
+      {report && pending && <ComparisonProgress report={report} />}
+
+      {report && !pending && (
         <>
           {/* Распознанный текст — не оригинал: часть мелких расхождений будет
               шумом распознавания, и юрист должен читать их с этой поправкой. */}
@@ -569,14 +582,26 @@ export default function ContractDiffPage() {
               <div className="text-xs font-medium truncate">
                 {h.leftName} → {h.rightName}
               </div>
-              <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+              <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
                 <Clock size={10} />
                 {new Date(h.createdAt).toLocaleString('ru-RU')}
-                <span>· правок {h.changeCount}</span>
-                {h.highRiskCount > 0 && (
-                  <span className="text-red-600">
-                    · рискованных {h.highRiskCount}
+                {/* «Правок 0» у недосчитанной сверки читается как «различий нет»,
+                    поэтому у незавершённых показываем состояние, а не итог. */}
+                {h.status === 'processing' ? (
+                  <span className="text-primary flex items-center gap-1">
+                    · <Loader2 size={9} className="animate-spin" /> считается
                   </span>
+                ) : h.status === 'failed' ? (
+                  <span className="text-red-600">· не удалась</span>
+                ) : (
+                  <>
+                    <span>· правок {h.changeCount}</span>
+                    {h.highRiskCount > 0 && (
+                      <span className="text-red-600">
+                        · рискованных {h.highRiskCount}
+                      </span>
+                    )}
+                  </>
                 )}
                 {h.employee && <span>· {h.employee.name}</span>}
               </div>

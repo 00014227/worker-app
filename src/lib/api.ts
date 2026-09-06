@@ -1080,6 +1080,8 @@ export interface ContractDiffRow {
   changeCount: number;
   highRiskCount: number;
   createdAt: string;
+  status: 'processing' | 'done' | 'failed';
+  error: string | null;
   employee: { name: string } | null;
 }
 
