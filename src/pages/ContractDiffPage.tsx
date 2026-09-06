@@ -22,6 +22,8 @@ import { cn } from '@/lib/utils';
 import UploadZone from '@/components/contract-diff/UploadZone';
 import ChangeCard from '@/components/contract-diff/ChangeCard';
 import DocumentView from '@/components/contract-diff/DocumentView';
+import SideBySideView from '@/components/contract-diff/SideBySideView';
+import OriginalViewer from '@/components/contract-diff/OriginalViewer';
 import { KIND, RISK, riskOrder } from '@/components/contract-diff/diff-meta';
 
 export default function ContractDiffPage() {
@@ -38,7 +40,13 @@ export default function ContractDiffPage() {
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
   /** Как читать результат: договор целиком или одни правки. */
-  const [view, setView] = useState<'document' | 'changes'>('document');
+  const [view, setView] = useState<'side' | 'document' | 'changes'>('side');
+  /** Открытый подлинник: какая сторона и на какой странице. */
+  const [original, setOriginal] = useState<{
+    side: 'left' | 'right';
+    page: number | null;
+    text: string | null;
+  } | null>(null);
   /** Какие правки раскрыты в теле документа. */
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
 
@@ -414,7 +422,8 @@ export default function ContractDiffPage() {
                 <div className="inline-flex rounded-lg border overflow-hidden text-xs">
                   {(
                     [
-                      ['document', 'Документ'],
+                      ['side', 'Два документа'],
+                      ['document', 'Одним текстом'],
                       ['changes', 'Только правки'],
                     ] as const
                   ).map(([v, label]) => (
@@ -433,13 +442,38 @@ export default function ContractDiffPage() {
                   ))}
                 </div>
                 <span className="text-[11px] text-muted-foreground">
-                  {view === 'document'
-                    ? 'договор целиком, правка раскрывается по клику'
-                    : 'только изменённые пункты, подряд'}
+                  {view === 'side'
+                    ? 'две версии рядом, пункт напротив пункта'
+                    : view === 'document'
+                      ? 'договор целиком, правка раскрывается по клику'
+                      : 'только изменённые пункты, подряд'}
                 </span>
               </div>
 
-              {view === 'document' ? (
+              {view === 'side' ? (
+                <SideBySideView
+                  report={report}
+                  activeId={activeId}
+                  openIds={openIds}
+                  onlyChanges={false}
+                  onToggle={(id) =>
+                    setOpenIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  onOriginal={(side, page) =>
+                    setOriginal({
+                      side,
+                      page,
+                      text: null,
+                    })
+                  }
+                  rowsRef={rowsRef}
+                />
+              ) : view === 'document' ? (
                 <DocumentView
                   report={report}
                   activeId={activeId}
@@ -473,6 +507,19 @@ export default function ContractDiffPage() {
             </div>
           </div>
         </>
+      )}
+
+      {original && report && (
+        <OriginalViewer
+          comparisonId={report.id}
+          side={original.side}
+          page={original.page}
+          fileName={
+            original.side === 'left' ? report.leftName : report.rightName
+          }
+          clauseText={original.text}
+          onClose={() => setOriginal(null)}
+        />
       )}
 
       {!report && history.length > 0 && (
