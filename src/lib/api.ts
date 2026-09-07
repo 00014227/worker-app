@@ -1,4 +1,4 @@
-import { authHeaders } from './auth';
+import { authHeaders, clearAuth } from './auth';
 
 const BASE = '/api';
 
@@ -13,6 +13,10 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      clearAuth();
+      window.location.href = '/login';
+    }
     // NestJS отдаёт message массивом при ошибках валидации DTO и объектом в
     // отдельных случаях — без нормализации в UI прилетало «[object Object]».
     const raw = body?.message ?? body?.error;
