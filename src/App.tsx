@@ -1,24 +1,29 @@
+import { lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
-import ContractorsPage from './pages/ContractorsPage';
-import RateRequestsPage from './pages/RateRequestsPage';
-import NewRateRequestPage from './pages/NewRateRequestPage';
-import RateRequestDetailPage from './pages/RateRequestDetailPage';
-import TelegramAccountsPage from './pages/TelegramAccountsPage';
-import CustomersPage from './pages/CustomersPage';
 import DashboardPage from './pages/DashboardPage';
-import ShipmentsPage from './pages/ShipmentsPage';
-import NewShipmentPage from './pages/NewShipmentPage';
-import ShipmentDetailPage from './pages/ShipmentDetailPage';
-import EditShipmentPage from './pages/EditShipmentPage';
-import AiDealPage from './pages/AiDealPage';
-import MapPage from './pages/MapPage';
-import TariffSourcesPage from './pages/TariffSourcesPage';
-import EmployeesPage from './pages/EmployeesPage';
-import CounterpartyCheckPage from './pages/CounterpartyCheckPage';
-import ContractDiffPage from './pages/ContractDiffPage';
+const ShipmentsPage = lazy(() => import('./pages/ShipmentsPage'));
+const NewShipmentPage = lazy(() => import('./pages/NewShipmentPage'));
+const ShipmentDetailPage = lazy(() => import('./pages/ShipmentDetailPage'));
+const EditShipmentPage = lazy(() => import('./pages/EditShipmentPage'));
+const RateRequestsPage = lazy(() => import('./pages/RateRequestsPage'));
+const NewRateRequestPage = lazy(() => import('./pages/NewRateRequestPage'));
+const ContractorsPage = lazy(() => import('./pages/ContractorsPage'));
+const CustomersPage = lazy(() => import('./pages/CustomersPage'));
+const TelegramAccountsPage = lazy(() => import('./pages/TelegramAccountsPage'));
+const RateRequestDetailPage = lazy(
+  () => import('./pages/RateRequestDetailPage'),
+);
+const MapPage = lazy(() => import('./pages/MapPage'));
+const AiDealPage = lazy(() => import('./pages/AiDealPage'));
+const TariffSourcesPage = lazy(() => import('./pages/TariffSourcesPage'));
+const EmployeesPage = lazy(() => import('./pages/EmployeesPage'));
+const CounterpartyCheckPage = lazy(
+  () => import('./pages/CounterpartyCheckPage'),
+);
+const ContractDiffPage = lazy(() => import('./pages/ContractDiffPage'));
 
 export default function App() {
   return (
