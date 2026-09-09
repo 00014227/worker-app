@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   FileText,
   Users,
@@ -15,12 +15,15 @@ import {
   UserCog,
   Scale,
   FileDiff,
+  Loader2,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 import { closeSocket } from '../lib/socket';
 import NotificationBell from './NotificationBell';
 import { Logo } from './Logo';
 import { StandBanner } from './StandBanner';
+import ErrorBoundary from './ErrorBoundary';
+import { Suspense } from 'react';
 
 const nav = [
   { to: '/dashboard', label: 'Дашборд', icon: LayoutDashboard },
@@ -46,6 +49,7 @@ const lawyerNav = [
 
 export default function Layout() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const user = getUser();
 
   const handleLogout = () => {
@@ -132,7 +136,22 @@ export default function Layout() {
             <NotificationBell />
           </header>
           <main className="flex-1 overflow-y-auto p-6">
-            <Outlet />
+            <ErrorBoundary key={pathname}>
+              <Suspense
+                fallback={
+                  <div
+                    role="status"
+                    aria-label="Загрузка"
+                    className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
+                  >
+                    <Loader2 size={32} className="animate-spin" />
+                    Загрузка…
+                  </div>
+                }
+              >
+                <Outlet />
+              </Suspense>
+            </ErrorBoundary>
           </main>
         </div>
       </div>
