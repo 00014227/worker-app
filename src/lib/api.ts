@@ -1044,6 +1044,9 @@ export interface DiffClause {
   kind: DiffKind;
   leftNumber: string | null;
   rightNumber: string | null;
+  /** Страница подлинника — по ней открывается кнопка «оригинал». */
+  leftPage: number | null;
+  rightPage: number | null;
   before: string | null;
   after: string | null;
   parts: WordPart[] | null;
@@ -1051,6 +1054,16 @@ export interface DiffClause {
 
 export interface ContractDiff {
   id: string;
+  /** processing — разбор идёт в фоне; done — готово; failed — смотри error. */
+  status: 'processing' | 'done' | 'failed';
+  /** Что делается сейчас: reading | ocr | aligning | interpreting. */
+  stage: string | null;
+  progressDone: number | null;
+  progressTotal: number | null;
+  error: string | null;
+  /** Текст получен распознаванием: мелкие расхождения могут быть его ошибками. */
+  leftOcr: boolean;
+  rightOcr: boolean;
   leftName: string;
   rightName: string;
   mode: DiffMode;
@@ -1071,6 +1084,8 @@ export interface ContractDiffRow {
   changeCount: number;
   highRiskCount: number;
   createdAt: string;
+  status: 'processing' | 'done' | 'failed';
+  error: string | null;
   employee: { name: string } | null;
 }
 
@@ -1083,6 +1098,21 @@ export const contractDiffApi = {
   },
   byId(id: string): Promise<ContractDiff> {
     return req<ContractDiff>(`/worker/contract-diff/${id}`);
+  },
+  /**
+   * Исходный файл сверки. Грузим запросом с токеном и отдаём blob-ссылку:
+   * встроенный просмотр PDF не умеет слать заголовок с авторизацией, а
+   * подписанные договоры открывать наружу нельзя.
+   */
+  async originalUrl(id: string, side: 'left' | 'right'): Promise<string> {
+    const res = await fetch(
+      `/api/worker/contract-diff/${id}/original/${side}`,
+      {
+        headers: authHeaders(),
+      },
+    );
+    if (!res.ok) throw new Error('Исходный файл недоступен');
+    return URL.createObjectURL(await res.blob());
   },
   /** Два файла одним запросом: порядок задаёт, с чьей стороны будет оценка. */
   async compare(

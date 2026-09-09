@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
-  ChevronDown,
-  ChevronRight,
   Clock,
   FileDiff,
   Info,
@@ -23,18 +21,20 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import UploadZone from '@/components/contract-diff/UploadZone';
 import ChangeCard from '@/components/contract-diff/ChangeCard';
-import ClauseText from '@/components/contract-diff/ClauseText';
+import DocumentView from '@/components/contract-diff/DocumentView';
+import SideBySideView from '@/components/contract-diff/SideBySideView';
+import OriginalViewer from '@/components/contract-diff/OriginalViewer';
+import ComparisonProgress from '@/components/contract-diff/ComparisonProgress';
 import { KIND, RISK, riskOrder } from '@/components/contract-diff/diff-meta';
 
-/** Шаги разбора. Договор сверяется до минуты — без них экран выглядит зависшим. */
-const STEPS = ['Читаем файлы', 'Сверяем пункты', 'Оцениваем правки'];
+/** Пауза между опросами. Реже — счётчик страниц дёргается, чаще — лишние запросы. */
+const POLL_MS = 2000;
 
 export default function ContractDiffPage() {
   const [mode, setMode] = useState<DiffMode>('ours');
   const [left, setLeft] = useState<File | null>(null);
   const [right, setRight] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ContractDiff | null>(null);
   const [history, setHistory] = useState<ContractDiffRow[]>([]);
@@ -43,9 +43,20 @@ export default function ContractDiffPage() {
   const [riskFilter, setRiskFilter] = useState<DiffRisk | 'all'>('all');
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [showSame, setShowSame] = useState(false);
+  /** Как читать результат: договор целиком или одни правки. */
+  const [view, setView] = useState<'side' | 'document' | 'changes'>('side');
+  /** Открытый подлинник: какая сторона и на какой странице. */
+  const [original, setOriginal] = useState<{
+    side: 'left' | 'right';
+    page: number | null;
+    text: string | null;
+  } | null>(null);
+  /** Какие правки раскрыты в теле документа. */
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
 
   const rowsRef = useRef<Record<string, HTMLDivElement | null>>({});
+  /** Какую сверку ждём сейчас: ответы прежней не должны затирать новую. */
+  const pollFor = useRef<string | null>(null);
 
   const loadHistory = useCallback(() => {
     contractDiffApi
@@ -62,25 +73,45 @@ export default function ContractDiffPage() {
     loadHistory();
   }, [loadHistory]);
 
+  /**
+   * Ждём готовности сверки, опрашивая сервер.
+   *
+   * Сервер отвечает на загрузку сразу — заготовкой со `status: 'processing'` и
+   * пустыми списками, — потому что распознавание десятка страниц не укладывается
+   * в 26 секунд, на которых прокси рвёт запрос. Без опроса юрист видит именно
+   * эту пустую заготовку и решает, что сверка ничего не нашла.
+   */
+  const awaitReady = useCallback(async (id: string) => {
+    for (;;) {
+      const res = await contractDiffApi.byId(id);
+      // Показываем каждый ответ: по нему рисуется ход работы (стадия и счётчик
+      // страниц), иначе минута ожидания читается как зависание.
+      if (pollFor.current !== id) return null;
+      setReport(res);
+      if (res.status === 'failed') {
+        throw new Error(res.error || 'Сверка не удалась');
+      }
+      if (res.status !== 'processing') return res;
+      await new Promise((r) => setTimeout(r, POLL_MS));
+    }
+  }, []);
+
   const run = async () => {
     if (!left || !right || busy) return;
     setBusy(true);
     setError(null);
-    setStep(0);
-    // Шаги двигаем по времени: сервер отдаёт результат целиком, а показать ход
-    // работы всё равно нужно — иначе минута ожидания читается как зависание.
-    const t1 = setTimeout(() => setStep(1), 1200);
-    const t2 = setTimeout(() => setStep(2), 4000);
+    setReport(null);
     try {
-      const res = await contractDiffApi.compare(left, right, mode);
-      setReport(res);
-      setActiveId(res.items[0]?.id ?? null);
+      const started = await contractDiffApi.compare(left, right, mode);
+      pollFor.current = started.id;
+      setReport(started);
+      const res =
+        started.status === 'processing' ? await awaitReady(started.id) : started;
+      if (res) setActiveId(res.items[0]?.id ?? null);
       loadHistory();
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      clearTimeout(t1);
-      clearTimeout(t2);
       setBusy(false);
     }
   };
@@ -88,16 +119,26 @@ export default function ContractDiffPage() {
   const open = async (id: string) => {
     setBusy(true);
     setError(null);
+    pollFor.current = id;
     try {
-      const res = await contractDiffApi.byId(id);
-      setReport(res);
-      setActiveId(res.items[0]?.id ?? null);
+      const first = await contractDiffApi.byId(id);
+      setReport(first);
+      // Из истории можно открыть и ещё не досчитанную сверку — дожидаемся её так же.
+      const res = first.status === 'processing' ? await awaitReady(id) : first;
+      if (res) setActiveId(res.items[0]?.id ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   };
+
+  /**
+   * Сверка ещё считается. Отчёт в этот момент существует, но пуст: сервер
+   * отвечает заготовкой сразу. Показать её как результат — значит сказать
+   * юристу «различий нет», когда система их ещё не искала.
+   */
+  const pending = report?.status === 'processing';
 
   /** Правки: сначала опасные, дальше по документу. */
   const items = useMemo(() => {
@@ -117,6 +158,9 @@ export default function ContractDiffPage() {
 
   const goTo = useCallback((id: string) => {
     setActiveId(id);
+    // Переход из списка сразу раскрывает разбор: иначе логист попадает на
+    // подсвеченный пункт и вынужден делать второй клик, чтобы понять, что не так.
+    setOpenIds((prev) => new Set(prev).add(id));
     rowsRef.current[id]?.scrollIntoView({
       block: 'center',
       behavior: 'smooth',
@@ -142,6 +186,15 @@ export default function ContractDiffPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [report, items, activeId, goTo]);
 
+  // Пока в списке есть недосчитанная сверка, обновляем его сами: юрист мог
+  // обновить страницу посреди распознавания, и строка иначе навсегда замрёт
+  // на «считается».
+  useEffect(() => {
+    if (!history.some((h) => h.status === 'processing')) return;
+    const timer = setInterval(loadHistory, POLL_MS * 2);
+    return () => clearInterval(timer);
+  }, [history, loadHistory]);
+
   const swap = () => {
     setLeft(right);
     setRight(left);
@@ -163,7 +216,7 @@ export default function ContractDiffPage() {
             Что изменилось между двумя версиями и чем это грозит
           </p>
         </div>
-        {report && (
+        {report && !pending && (
           <button
             onClick={() => window.print()}
             className="print:hidden text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-3 py-1.5 rounded-lg border"
@@ -257,20 +310,9 @@ export default function ContractDiffPage() {
             )}
             Сверить
           </button>
-          {busy && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {STEPS.map((s, i) => (
-                <span
-                  key={s}
-                  className={cn(i === step && 'text-foreground font-medium')}
-                >
-                  {i < step ? '✓ ' : ''}
-                  {s}
-                  {i < STEPS.length - 1 && (
-                    <span className="mx-1.5 opacity-40">→</span>
-                  )}
-                </span>
-              ))}
+          {busy && !report && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Loader2 size={12} className="animate-spin" /> Загружаем файлы…
             </div>
           )}
         </div>
@@ -282,8 +324,31 @@ export default function ContractDiffPage() {
         </div>
       )}
 
-      {report && (
+      {report && pending && <ComparisonProgress report={report} />}
+
+      {report && !pending && (
         <>
+          {/* Распознанный текст — не оригинал: часть мелких расхождений будет
+              шумом распознавания, и юрист должен читать их с этой поправкой. */}
+          {(report.leftOcr || report.rightOcr) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex items-start gap-2">
+              <TriangleAlert size={13} className="mt-0.5 shrink-0" />
+              <span>
+                Текст{' '}
+                {report.leftOcr && report.rightOcr
+                  ? 'обоих документов получен'
+                  : `документа «${report.leftOcr ? report.leftName : report.rightName}» получен`}{' '}
+                распознаванием со страниц — в файле не было пригодного
+                текстового слоя.{' '}
+                <b>
+                  Мелкие расхождения могут быть ошибками распознавания, а не
+                  правками контрагента.
+                </b>{' '}
+                Спорные места сверяйте с оригиналом; docx даёт точную сверку.
+              </span>
+            </div>
+          )}
+
           {/* ── Сводка ── */}
           <div className="rounded-xl border px-5 py-3 flex items-center gap-5 flex-wrap">
             <div>
@@ -397,33 +462,110 @@ export default function ContractDiffPage() {
               </div>
             </div>
 
-            {/* ── Правки подробно ── */}
+            {/* ── Документ целиком, правки подсвечены по месту ── */}
             <div className="space-y-3">
-              {items.map((it) => (
-                <div
-                  key={it.id}
-                  ref={(el) => {
-                    rowsRef.current[it.id] = el;
-                  }}
-                  className={cn(
-                    'rounded-lg transition-shadow',
-                    activeId === it.id && 'ring-2 ring-primary/30',
-                  )}
-                >
-                  <ChangeCard item={it} />
+              <div className="flex items-center gap-2 print:hidden">
+                <div className="inline-flex rounded-lg border overflow-hidden text-xs">
+                  {(
+                    [
+                      ['side', 'Два документа'],
+                      ['document', 'Одним текстом'],
+                      ['changes', 'Только правки'],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button
+                      key={v}
+                      onClick={() => setView(v)}
+                      className={cn(
+                        'px-3 py-1.5 transition-colors',
+                        view === v
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted/50',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
-              ))}
+                <span className="text-[11px] text-muted-foreground">
+                  {view === 'side'
+                    ? 'две версии рядом, пункт напротив пункта'
+                    : view === 'document'
+                      ? 'договор целиком, правка раскрывается по клику'
+                      : 'только изменённые пункты, подряд'}
+                </span>
+              </div>
 
-              {/* Совпавшие пункты свёрнуты: на договоре в 80 пунктов показывать
-                  всё подряд значит утопить те шесть, ради которых открыли экран. */}
-              <SameClauses
-                report={report}
-                open={showSame}
-                onToggle={() => setShowSame((v) => !v)}
-              />
+              {view === 'side' ? (
+                <SideBySideView
+                  report={report}
+                  activeId={activeId}
+                  openIds={openIds}
+                  onlyChanges={false}
+                  onToggle={(id) =>
+                    setOpenIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  onOriginal={(side, page) =>
+                    setOriginal({
+                      side,
+                      page,
+                      text: null,
+                    })
+                  }
+                  rowsRef={rowsRef}
+                />
+              ) : view === 'document' ? (
+                <DocumentView
+                  report={report}
+                  activeId={activeId}
+                  openIds={openIds}
+                  onToggle={(id) =>
+                    setOpenIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  rowsRef={rowsRef}
+                />
+              ) : (
+                items.map((it) => (
+                  <div
+                    key={it.id}
+                    ref={(el) => {
+                      rowsRef.current[it.id] = el;
+                    }}
+                    className={cn(
+                      'rounded-lg transition-shadow',
+                      activeId === it.id && 'ring-2 ring-primary/30',
+                    )}
+                  >
+                    <ChangeCard item={it} />
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </>
+      )}
+
+      {original && report && (
+        <OriginalViewer
+          comparisonId={report.id}
+          side={original.side}
+          page={original.page}
+          fileName={
+            original.side === 'left' ? report.leftName : report.rightName
+          }
+          clauseText={original.text}
+          onClose={() => setOriginal(null)}
+        />
       )}
 
       {!report && history.length > 0 && (
@@ -440,14 +582,26 @@ export default function ContractDiffPage() {
               <div className="text-xs font-medium truncate">
                 {h.leftName} → {h.rightName}
               </div>
-              <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+              <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
                 <Clock size={10} />
                 {new Date(h.createdAt).toLocaleString('ru-RU')}
-                <span>· правок {h.changeCount}</span>
-                {h.highRiskCount > 0 && (
-                  <span className="text-red-600">
-                    · рискованных {h.highRiskCount}
+                {/* «Правок 0» у недосчитанной сверки читается как «различий нет»,
+                    поэтому у незавершённых показываем состояние, а не итог. */}
+                {h.status === 'processing' ? (
+                  <span className="text-primary flex items-center gap-1">
+                    · <Loader2 size={9} className="animate-spin" /> считается
                   </span>
+                ) : h.status === 'failed' ? (
+                  <span className="text-red-600">· не удалась</span>
+                ) : (
+                  <>
+                    <span>· правок {h.changeCount}</span>
+                    {h.highRiskCount > 0 && (
+                      <span className="text-red-600">
+                        · рискованных {h.highRiskCount}
+                      </span>
+                    )}
+                  </>
                 )}
                 {h.employee && <span>· {h.employee.name}</span>}
               </div>
@@ -459,47 +613,5 @@ export default function ContractDiffPage() {
   );
 }
 
-/** Пункты без изменений — свёрнуты, но доступны: иногда нужно свериться с целым. */
-function SameClauses({
-  report,
-  open,
-  onToggle,
-}: {
-  report: ContractDiff;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const same = report.clauses.filter((c) => c.kind === 'same');
-  if (same.length === 0) return null;
-
-  return (
-    <div className="rounded-lg border print:hidden">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
-      >
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        {same.length} пунктов без изменений
-      </button>
-      {open && (
-        <div className="border-t divide-y max-h-[50vh] overflow-y-auto">
-          {same.map((c, i) => (
-            <div key={i} className="px-4 py-2 text-xs">
-              <span className="font-medium mr-1.5">
-                п. {c.rightNumber ?? c.leftNumber ?? '—'}
-              </span>
-              <ClauseText
-                parts={null}
-                text={c.after ?? c.before}
-                side="right"
-              />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Пустой экспорт-заглушка для правок без оценки — используется в карточке. */
+/** Тип правки нужен карточке и виду документа — переэкспортируем из одного места. */
 export type { DiffItem };
