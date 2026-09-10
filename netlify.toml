@@ -28,3 +28,14 @@
 
 [context.deploy-preview]
   command = "VITE_APP_ENV=preview VITE_GIT_BRANCH=$BRANCH VITE_GIT_SHA=$COMMIT_REF npm run build"
+
+# Имена файлов в /assets/ содержат отпечаток содержимого, поэтому под одним
+# именем содержимое не меняется никогда — такие файлы можно кэшировать навсегда.
+# По умолчанию Netlify отдаёт им max-age=0, must-revalidate, и браузер
+# переспрашивает про каждый файл при каждом открытии приложения.
+# index.html здесь трогать нельзя: именно он содержит ссылки на файлы с
+# отпечатками, и только его свежесть даёт человеку узнать про новый деплой.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    cache-control = "public, max-age=31536000, immutable"
