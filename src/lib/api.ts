@@ -481,6 +481,13 @@ export interface SupplierRow {
   lastReplyAt: string | null;
   /** Рейтинг надёжности; null у новых подрядчиков без истории. */
   scorecard: SupplierScorecard | null;
+  /**
+   * Типы кузова в парке подрядчика: тент, box, ISO, Мега, REF. Необязательное
+   * намеренно: пока в прод не уехал бэкенд с этим полем, ответ приходит без
+   * него — читать только как `vehicleTypes ?? []`, иначе `.map` уронит страницу.
+   * Пусто = не задано; фильтр по кузову таких подрядчиков не скрывает.
+   */
+  vehicleTypes?: string[];
 }
 
 /** Итог поиска подрядчиков в Telegram по телефонам. */
@@ -524,6 +531,7 @@ export interface CreateSupplierInput {
   preferredLanguage?: ContactLanguage;
   directions?: string[];
   transportModes?: string[];
+  vehicleTypes?: string[];
   telegramUsername?: string;
   telegramUserId?: string;
   country?: string;
@@ -1229,6 +1237,7 @@ export const tenderApi = {
         phone?: string;
         directions?: string[];
         transportModes?: string[];
+        vehicleTypes?: string[];
         /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
         force?: boolean;
       },

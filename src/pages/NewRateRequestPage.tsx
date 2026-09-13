@@ -118,6 +118,8 @@ export default function NewRateRequestPage() {
   const [touched, setTouched] = useState(false);
   /** Шаг 1 — параметры запроса, шаг 2 — подбор подрядчиков. */
   const [step, setStep] = useState<'form' | 'suppliers'>('form');
+  /** Скрывать подрядчиков, у которых нужного кузова заведомо нет. */
+  const [onlyMatchingVehicle, setOnlyMatchingVehicle] = useState(true);
   /** Рыночный ориентир по маршруту — грузится при переходе на шаг подбора. */
   const [benchmark, setBenchmark] = useState<RouteBenchmark | null>(null);
   /** Модалка выбора сделки Битрикса и её содержимое. */
@@ -227,13 +229,24 @@ export default function NewRateRequestPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return matched;
-    return matched.filter(
-      (m) =>
-        m.supplier.name.toLowerCase().includes(q) ||
-        (m.supplier.telegramUsername ?? '').toLowerCase().includes(q),
-    );
-  }, [matched, search]);
+    const vehicle = onlyMatchingVehicle ? form.vehicleType : '';
+    return matched.filter((m) => {
+      if (
+        q &&
+        !m.supplier.name.toLowerCase().includes(q) &&
+        !(m.supplier.telegramUsername ?? '').toLowerCase().includes(q)
+      ) {
+        return false;
+      }
+      // Пустой список кузовов НЕ скрывает подрядчика: пока поле не проставлено
+      // (а сразу после его появления оно пусто у всех), фильтр иначе оставил бы
+      // логиста с пустым списком. Отсеиваем только тех, у кого парк задан и
+      // нужного кузова в нём нет.
+      const fleet = m.supplier.vehicleTypes ?? [];
+      if (vehicle && fleet.length > 0 && !fleet.includes(vehicle)) return false;
+      return true;
+    });
+  }, [matched, search, onlyMatchingVehicle, form.vehicleType]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -1040,17 +1053,32 @@ export default function NewRateRequestPage() {
                 </div>
               )}
 
-              <div className="relative w-full sm:w-64">
-                <Search
-                  size={13}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                />
-                <Input
-                  className="pl-8 h-8 text-sm"
-                  placeholder="Поиск…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative w-full sm:w-64">
+                  <Search
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    className="pl-8 h-8 text-sm"
+                    placeholder="Поиск…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                {/* Кузов берём из шага «Груз» — отдельно выбирать его не нужно.
+                    Если он не задан, фильтровать не по чему. */}
+                {form.vehicleType && (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="accent-primary"
+                      checked={onlyMatchingVehicle}
+                      onChange={(e) => setOnlyMatchingVehicle(e.target.checked)}
+                    />
+                    только с подходящим кузовом ({form.vehicleType})
+                  </label>
+                )}
               </div>
 
               <div className="max-h-64 overflow-y-auto rounded-lg border divide-y">
@@ -1121,6 +1149,13 @@ export default function NewRateRequestPage() {
                                   }`}
                               </span>
                             )}
+                          {/* Парк — чтобы было видно, почему подрядчик
+                              попал в список или выпал из него. */}
+                          {(s.vehicleTypes ?? []).length > 0 && (
+                            <span className="text-[11px] text-muted-foreground block truncate">
+                              {(s.vehicleTypes ?? []).join(' · ')}
+                            </span>
+                          )}
                         </span>
                         {/* Почему подрядчик подобран (или почему нет) */}
                         {matchType === 'full' && (
