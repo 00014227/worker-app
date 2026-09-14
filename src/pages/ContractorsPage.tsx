@@ -26,6 +26,8 @@ import {
   ContactLanguage,
   CONTACT_LANGUAGE_LABELS,
   DuplicateSupplierMatch,
+  VEHICLE_TYPES,
+  REF_VEHICLE_TYPE,
 } from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,6 +48,11 @@ const MODE_LABEL: Record<string, string> = Object.fromEntries(
   MODES.map((m) => [m.value, m.label]),
 );
 
+const VEHICLE_OPTIONS: { value: string; label: string }[] = [
+  ...VEHICLE_TYPES,
+  REF_VEHICLE_TYPE,
+].map((v) => ({ value: v, label: v }));
+
 /** «Россия, Казахстан» ⇄ ['Россия','Казахстан'] — ввод через запятую, как у ТНВЭД. */
 const parseList = (s: string) =>
   s
@@ -53,11 +60,12 @@ const parseList = (s: string) =>
     .map((v) => v.trim())
     .filter(Boolean);
 
-/** Переключатели видов транспорта — общие для формы создания и редактирования. */
-function ModePicker({
+function TogglePicker({
+  options,
   value,
   onChange,
 }: {
+  options: { value: string; label: string }[];
   value: string[];
   onChange: (v: string[]) => void;
 }) {
@@ -65,7 +73,7 @@ function ModePicker({
     onChange(value.includes(m) ? value.filter((v) => v !== m) : [...value, m]);
   return (
     <div className="flex gap-2 flex-wrap">
-      {MODES.map((m) => (
+      {options.map((m) => (
         <button
           key={m.value}
           type="button"
@@ -633,6 +641,8 @@ export default function ContractorsPage() {
                         : 'направления не заданы'}
                       {c.transportModes.length > 0 &&
                         ` · ${c.transportModes.map((m) => MODE_LABEL[m] ?? m).join('/')}`}
+                      {(c.vehicleTypes ?? []).length > 0 &&
+                        ` · ${(c.vehicleTypes ?? []).join('/')}`}
                     </span>
                   </div>
                   {c.telegramUsername && (
@@ -783,6 +793,7 @@ function CreateSupplierPanel({
   });
   const [directions, setDirections] = useState('');
   const [modes, setModes] = useState<string[]>([]);
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Похожие подрядчики, найденные сервером — ждут подтверждения логиста. */
@@ -805,6 +816,7 @@ function CreateSupplierPanel({
         preferredLanguage: form.preferredLanguage,
         directions: parseList(directions),
         transportModes: modes,
+        vehicleTypes,
         force,
       };
       (
@@ -900,7 +912,20 @@ function CreateSupplierPanel({
 
           <div className="space-y-1.5">
             <Label>Виды транспорта</Label>
-            <ModePicker value={modes} onChange={setModes} />
+            <TogglePicker options={MODES} value={modes} onChange={setModes} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Типы кузова</Label>
+            <TogglePicker
+              options={VEHICLE_OPTIONS}
+              value={vehicleTypes}
+              onChange={setVehicleTypes}
+            />
+            <p className="text-xs text-muted-foreground">
+              По ним запрос отбирает подрядчиков под нужный кузов. Пусто —
+              подрядчик остаётся в списке, просто не отфильтруется.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -1025,6 +1050,9 @@ function BindPanel({
     (supplier.directions ?? []).join(', '),
   );
   const [modes, setModes] = useState<string[]>(supplier.transportModes ?? []);
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>(
+    supplier.vehicleTypes ?? [],
+  );
   const [accountId, setAccountId] = useState(supplier.telegramAccountId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1063,6 +1091,7 @@ function BindPanel({
         preferredLanguage: language,
         directions: dirs,
         transportModes: modes,
+        vehicleTypes,
         telegramAccountId: accountId || undefined,
         force,
       });
@@ -1080,6 +1109,7 @@ function BindPanel({
         preferredLanguage: language,
         directions: dirs,
         transportModes: modes,
+        vehicleTypes,
         telegramAccountId: accountId || null,
       });
     } catch (e) {
@@ -1202,7 +1232,20 @@ function BindPanel({
 
           <div className="space-y-1.5">
             <Label>Виды транспорта</Label>
-            <ModePicker value={modes} onChange={setModes} />
+            <TogglePicker options={MODES} value={modes} onChange={setModes} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Типы кузова</Label>
+            <TogglePicker
+              options={VEHICLE_OPTIONS}
+              value={vehicleTypes}
+              onChange={setVehicleTypes}
+            />
+            <p className="text-xs text-muted-foreground">
+              По ним запрос отбирает подрядчиков под нужный кузов. Пусто —
+              подрядчик остаётся в списке, просто не отфильтруется.
+            </p>
           </div>
 
           <div className="space-y-1.5">
