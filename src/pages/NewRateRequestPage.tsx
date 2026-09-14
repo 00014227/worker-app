@@ -202,10 +202,17 @@ export default function NewRateRequestPage() {
           originCountry: form.originCountry,
           destinationCountry: form.destinationCountry,
           mode: form.mode,
+          vehicleType: form.vehicleType,
         },
         suppliers,
       ),
-    [suppliers, form.originCountry, form.destinationCountry, form.mode],
+    [
+      suppliers,
+      form.originCountry,
+      form.destinationCountry,
+      form.mode,
+      form.vehicleType,
+    ],
   );
 
   const fullMatchIds = useMemo(

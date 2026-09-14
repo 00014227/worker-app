@@ -3,10 +3,11 @@ import { SupplierRow, TenderMode, TENDER_MODE_LABELS } from './api';
 /**
  * Подбор подрядчиков под маршрут запроса.
  *
- * `full`    — подрядчик возит обе страны маршрута и подходит по виду транспорта;
- *             такие отмечаются автоматически.
+ * `full`    — подрядчик возит обе страны маршрута и подходит по виду перевозки
+ *             и по кузову; такие отмечаются автоматически.
  * `partial` — покрыта только одна из стран (или направления не заданы, но конфликта нет).
- * `none`    — подрядчик явно возит другое: направления/транспорт заданы и не подходят.
+ * `none`    — подрядчик явно возит другое: направления, вид перевозки или кузов
+ *             заданы и не подходят.
  *
  * Незаполненные данные никогда не дают `none` — иначе подрядчики, которым ещё не
  * проставили направления, молча выпали бы из подбора.
@@ -24,6 +25,8 @@ export interface MatchParams {
   originCountry?: string;
   destinationCountry?: string;
   mode?: TenderMode;
+  /** Кузов, выбранный в запросе: «тент 90м3», «REF 90 м3» и т.п. */
+  vehicleType?: string;
 }
 
 /** Порядок вывода: подходящие → нейтральные → заведомо неподходящие. */
@@ -107,7 +110,7 @@ export function matchSuppliers(
   params: MatchParams,
   suppliers: SupplierRow[],
 ): MatchedSupplier[] {
-  const { originCountry, destinationCountry, mode } = params;
+  const { originCountry, destinationCountry, mode, vehicleType } = params;
   const routeKnown = !!(originCountry?.trim() || destinationCountry?.trim());
 
   return (
@@ -136,6 +139,13 @@ export function matchSuppliers(
           !!mode && hasModes && !supplier.transportModes.includes(mode);
         const modeOk = !modeConflict;
 
+        // Парк подрядчика. Пустой список не считается конфликтом: поле новое, и
+        // пока его не проставили, подрядчики не должны выпадать из подбора.
+        const fleet = supplier.vehicleTypes ?? [];
+        const vehicleConflict =
+          !!vehicleType && fleet.length > 0 && !fleet.includes(vehicleType);
+        const vehicleOk = !vehicleConflict;
+
         if (exactRoute) {
           score += 60;
           reasons.push(`Возит ${originCountry} → ${destinationCountry}`);
@@ -151,6 +161,11 @@ export function matchSuppliers(
           reasons.push(TENDER_MODE_LABELS[mode]);
         }
 
+        if (vehicleType && fleet.length > 0 && !vehicleConflict) {
+          score += 20;
+          reasons.push(vehicleType);
+        }
+
         // Небольшой бонус за надёжность — при прочих равных выше тот, кто отвечает.
         if (supplier.responseRate != null)
           score += Math.round(supplier.responseRate / 10);
@@ -160,11 +175,15 @@ export function matchSuppliers(
           matchType = 'none';
           reasons.length = 0;
           reasons.push('Другой вид транспорта');
+        } else if (vehicleConflict) {
+          matchType = 'none';
+          reasons.length = 0;
+          reasons.push(`Нет кузова «${vehicleType}»`);
         } else if (routeKnown && hasDirections && !coversFrom && !coversTo) {
           matchType = 'none';
           reasons.length = 0;
           reasons.push('Не возит это направление');
-        } else if (exactRoute && modeOk) {
+        } else if (exactRoute && modeOk && vehicleOk) {
           matchType = 'full';
         } else if (coversFrom || coversTo) {
           matchType = 'partial';
