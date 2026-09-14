@@ -15,6 +15,7 @@ import {
   PhoneCall,
   AlertTriangle,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   tenderApi,
@@ -53,13 +54,6 @@ const VEHICLE_OPTIONS: { value: string; label: string }[] = [
   REF_VEHICLE_TYPE,
 ].map((v) => ({ value: v, label: v }));
 
-/** «Россия, Казахстан» ⇄ ['Россия','Казахстан'] — ввод через запятую, как у ТНВЭД. */
-const parseList = (s: string) =>
-  s
-    .split(',')
-    .map((v) => v.trim())
-    .filter(Boolean);
-
 function TogglePicker({
   options,
   value,
@@ -88,6 +82,150 @@ function TogglePicker({
           {m.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** «Китай - Узбекистан» → ['Китай', 'Узбекистан']; иначе null. */
+function splitRoute(raw: string): [string, string] | null {
+  const parts = raw
+    .split(/\s*[-–—]\s*/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return parts.length === 2 ? [parts[0], parts[1]] : null;
+}
+
+/**
+ * Направления подрядчика. Хранятся как строки «страна отправления - страна
+ * назначения» и читаются НАПРАВЛЕННО: «Китай - Узбекистан» не значит, что
+ * подрядчик едет обратно. Кто возит в обе стороны — получает две записи,
+ * для этого галочка «и обратно».
+ *
+ * В базе остались записи старого формата: одиночные страны из импорта, без
+ * указания пары. Направление из них не восстановить, поэтому они показываются
+ * как есть с пометкой — логист заменит их при первой правке карточки.
+ */
+function RouteEditor({
+  value,
+  onChange,
+  countries,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  countries: string[];
+}) {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [both, setBoth] = useState(false);
+
+  /**
+   * Приводим к написанию, которое уже встречается у других подрядчиков:
+   * «китай» → «Китай». Иначе в фильтре по направлениям одна и та же страна
+   * расползается на несколько пунктов — подбору всё равно, а логисту нет.
+   * Своё написание придумывать не пытаемся: «ОАЭ» с заглавной превратилось бы
+   * в «Оаэ».
+   */
+  const canonical = (name: string) =>
+    countries.find((c) => c.toLowerCase() === name.toLowerCase()) ?? name;
+
+  const add = () => {
+    const a = canonical(from.trim());
+    const b = canonical(to.trim());
+    if (!a || !b) return;
+    const next = [...value];
+    const push = (r: string) => {
+      if (!next.some((x) => x.toLowerCase() === r.toLowerCase())) next.push(r);
+    };
+    push(`${a} - ${b}`);
+    if (both) push(`${b} - ${a}`);
+    onChange(next);
+    setFrom('');
+    setTo('');
+    setBoth(false);
+  };
+
+  const listId = 'countries-datalist';
+
+  return (
+    <div className="space-y-2">
+      {value.length > 0 && (
+        <div className="rounded-md border border-border divide-y">
+          {value.map((raw) => {
+            const pair = splitRoute(raw);
+            return (
+              <div
+                key={raw}
+                className="flex items-center gap-2 px-2.5 py-1.5 text-sm"
+              >
+                {pair ? (
+                  <span className="flex-1 truncate">
+                    {pair[0]} <span className="text-muted-foreground">→</span>{' '}
+                    {pair[1]}
+                  </span>
+                ) : (
+                  <span className="flex-1 truncate text-amber-700">
+                    {raw}
+                    <span className="ml-1.5 text-[11px] text-muted-foreground">
+                      старый формат, направление неизвестно
+                    </span>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-label={`Удалить маршрут ${raw}`}
+                  onClick={() => onChange(value.filter((v) => v !== raw))}
+                  className="shrink-0 text-muted-foreground hover:text-red-600"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <datalist id={listId}>
+        {countries.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          className="h-8 w-36 text-sm"
+          list={listId}
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder="Откуда"
+        />
+        <span className="text-muted-foreground">→</span>
+        <Input
+          className="h-8 w-36 text-sm"
+          list={listId}
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder="Куда"
+        />
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="accent-primary"
+            checked={both}
+            onChange={(e) => setBoth(e.target.checked)}
+          />
+          и обратно
+        </label>
+        <button
+          type="button"
+          onClick={add}
+          disabled={!from.trim() || !to.trim()}
+          className="h-8 px-3 rounded-md border border-border text-sm hover:bg-muted disabled:opacity-40"
+        >
+          Добавить
+        </button>
+      </div>
     </div>
   );
 }
@@ -327,6 +465,27 @@ export default function ContractorsPage() {
   const allDirections = useMemo(() => {
     const set = new Set<string>();
     rows.forEach((c) => c.directions.forEach((d) => set.add(d)));
+    return [...set].sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [rows]);
+
+  /**
+   * Страны для подсказок в редакторе маршрутов. Справочника стран нет, поэтому
+   * собираем из уже введённого — так «Узбекистан» не превратится в «узбекистан»
+   * и «Узбекистaн» с латинской «a».
+   */
+  const allCountries = useMemo(() => {
+    const set = new Set<string>();
+    rows.forEach((c) =>
+      c.directions.forEach((d) => {
+        const pair = splitRoute(d);
+        if (pair) {
+          set.add(pair[0]);
+          set.add(pair[1]);
+        } else if (d.trim()) {
+          set.add(d.trim());
+        }
+      }),
+    );
     return [...set].sort((a, b) => a.localeCompare(b, 'ru'));
   }, [rows]);
 
@@ -744,6 +903,7 @@ export default function ContractorsPage() {
         <BindPanel
           supplier={selected}
           accounts={accounts}
+          countries={allCountries}
           onClose={() => setSelected(null)}
           onSaved={(updated) => {
             setRows((prev) =>
@@ -760,6 +920,7 @@ export default function ContractorsPage() {
 
       {creating && (
         <CreateSupplierPanel
+          countries={allCountries}
           onClose={() => setCreating(false)}
           onCreated={(row) => {
             setRows((prev) => [row, ...prev]);
@@ -780,9 +941,11 @@ export default function ContractorsPage() {
 }
 
 function CreateSupplierPanel({
+  countries,
   onClose,
   onCreated,
 }: {
+  countries: string[];
   onClose: () => void;
   onCreated: (s: SupplierRow) => void;
 }) {
@@ -791,7 +954,7 @@ function CreateSupplierPanel({
     contactChannel: 'telegram',
     preferredLanguage: 'RU',
   });
-  const [directions, setDirections] = useState('');
+  const [directions, setDirections] = useState<string[]>([]);
   const [modes, setModes] = useState<string[]>([]);
   const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -814,7 +977,7 @@ function CreateSupplierPanel({
         name: form.name.trim(),
         contactChannel: form.contactChannel,
         preferredLanguage: form.preferredLanguage,
-        directions: parseList(directions),
+        directions,
         transportModes: modes,
         vehicleTypes,
         force,
@@ -898,15 +1061,16 @@ function CreateSupplierPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Направления (страны)</Label>
-            <Input
+            <Label>Маршруты</Label>
+            <RouteEditor
               value={directions}
-              onChange={(e) => setDirections(e.target.value)}
-              placeholder="Россия, Казахстан, Узбекистан"
+              onChange={setDirections}
+              countries={countries}
             />
             <p className="text-xs text-muted-foreground">
-              Через запятую. По ним запрос будет автоматически подбирать
-              подрядчиков под маршрут.
+              Страна отправления → страна назначения. По ним запрос подбирает
+              подрядчиков. Направление учитывается: если возит и обратно —
+              отметьте «и обратно».
             </p>
           </div>
 
@@ -1027,12 +1191,14 @@ function CreateSupplierPanel({
 function BindPanel({
   supplier,
   accounts,
+  countries,
   onClose,
   onSaved,
   onDeleted,
 }: {
   supplier: SupplierRow;
   accounts: TelegramAccountRow[];
+  countries: string[];
   onClose: () => void;
   onSaved: (s: Partial<SupplierRow> & { id: string }) => void;
   onDeleted: (id: string) => void;
@@ -1046,8 +1212,8 @@ function BindPanel({
   const [language, setLanguage] = useState<ContactLanguage>(
     supplier.preferredLanguage ?? 'RU',
   );
-  const [directions, setDirections] = useState(
-    (supplier.directions ?? []).join(', '),
+  const [directions, setDirections] = useState<string[]>(
+    supplier.directions ?? [],
   );
   const [modes, setModes] = useState<string[]>(supplier.transportModes ?? []);
   const [vehicleTypes, setVehicleTypes] = useState<string[]>(
@@ -1082,7 +1248,7 @@ function BindPanel({
     setSaving(true);
     setError(null);
     try {
-      const dirs = parseList(directions);
+      const dirs = directions;
       const res = await tenderApi.suppliers.update(supplier.id, {
         telegramUsername: username.trim() || undefined,
         email: email.trim() || undefined,
@@ -1219,14 +1385,15 @@ function BindPanel({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Направления (страны)</Label>
-            <Input
+            <Label>Маршруты</Label>
+            <RouteEditor
               value={directions}
-              onChange={(e) => setDirections(e.target.value)}
-              placeholder="Россия, Казахстан, Узбекистан"
+              onChange={setDirections}
+              countries={countries}
             />
             <p className="text-xs text-muted-foreground">
-              Через запятую — для автоподбора под маршрут запроса.
+              Страна отправления → страна назначения. Направление учитывается:
+              если возит и обратно — отметьте «и обратно».
             </p>
           </div>
 

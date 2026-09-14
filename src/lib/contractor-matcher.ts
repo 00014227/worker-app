@@ -3,10 +3,11 @@ import { SupplierRow, TenderMode, TENDER_MODE_LABELS } from './api';
 /**
  * Подбор подрядчиков под маршрут запроса.
  *
- * `full`    — подрядчик возит обе страны маршрута и подходит по виду транспорта;
- *             такие отмечаются автоматически.
+ * `full`    — подрядчик возит обе страны маршрута и подходит по виду перевозки
+ *             и по кузову; такие отмечаются автоматически.
  * `partial` — покрыта только одна из стран (или направления не заданы, но конфликта нет).
- * `none`    — подрядчик явно возит другое: направления/транспорт заданы и не подходят.
+ * `none`    — подрядчик явно возит другое: направления, вид перевозки или кузов
+ *             заданы и не подходят.
  *
  * Незаполненные данные никогда не дают `none` — иначе подрядчики, которым ещё не
  * проставили направления, молча выпали бы из подбора.
@@ -24,6 +25,8 @@ export interface MatchParams {
   originCountry?: string;
   destinationCountry?: string;
   mode?: TenderMode;
+  /** Кузов, выбранный в запросе: «тент 90м3», «REF 90 м3» и т.п. */
+  vehicleType?: string;
 }
 
 /** Порядок вывода: подходящие → нейтральные → заведомо неподходящие. */
@@ -49,7 +52,7 @@ function covers(directions: string[], country?: string): boolean {
 }
 
 /**
- * У подрядчика есть запись именно про ЭТУ пару стран (в любом порядке).
+ * У подрядчика есть запись именно про ЭТОТ маршрут.
  *
  * В данных сосуществуют два формата `directions`: пары «Страна A - Страна B»
  * (пришли из бэкапа старой платформы, сохранены дословно по требованию
@@ -58,7 +61,11 @@ function covers(directions: string[], country?: string): boolean {
  * интерфейс (см. поле в ContractorsPage.tsx с подсказкой «Россия, Казахстан,
  * Узбекистан»). Форматы разбираются по-разному:
  *
- *  - Пара «A - B» — это ОДИН явно названный маршрут, сравниваем буквально.
+ *  - Пара «A - B» — это ОДИН явно названный маршрут, причём НАПРАВЛЕННЫЙ:
+ *    «Китай - Узбекистан» значит «возит из Китая в Узбекистан», но не обратно.
+ *    Кто работает в обе стороны, записывает две пары. Сравниваем строго по
+ *    порядку: иначе на запрос «Узбекистан → Китай» подбирался бы подрядчик,
+ *    который ездит только встречным рейсом.
  *  - Плоский список — просто набор стран, с которыми работает подрядчик, без
  *    указания, какие из них сочетаются в один рейс. Совпадение по каждой
  *    стране независимо (как было раньше) на списке из 3+ стран — чистое
@@ -68,6 +75,9 @@ function covers(directions: string[], country?: string): boolean {
  *    этих стран у них нигде вместе не значилась.
  *    Исключение — когда в плоском списке РОВНО две страны: тогда других
  *    комбинаций просто не существует, и это те самые origin/destination.
+ *    Порядок здесь не проверяется намеренно: перечисление через запятую
+ *    направления не несёт вообще, и трактовать его как «туда» было бы
+ *    выдумкой.
  */
 function hasExactRoute(
   directions: string[],
@@ -85,12 +95,8 @@ function hasExactRoute(
       .filter(Boolean);
     if (parts.length === 2) {
       const [a, b] = parts;
-      if (
-        (sideMatches(a, o) && sideMatches(b, d)) ||
-        (sideMatches(a, d) && sideMatches(b, o))
-      ) {
-        return true;
-      }
+      // Строго по порядку: «A - B» — это A → B и только он.
+      if (sideMatches(a, o) && sideMatches(b, d)) return true;
     } else {
       flatTokens.push(norm(raw));
     }
@@ -107,7 +113,7 @@ export function matchSuppliers(
   params: MatchParams,
   suppliers: SupplierRow[],
 ): MatchedSupplier[] {
-  const { originCountry, destinationCountry, mode } = params;
+  const { originCountry, destinationCountry, mode, vehicleType } = params;
   const routeKnown = !!(originCountry?.trim() || destinationCountry?.trim());
 
   return (
@@ -136,6 +142,13 @@ export function matchSuppliers(
           !!mode && hasModes && !supplier.transportModes.includes(mode);
         const modeOk = !modeConflict;
 
+        // Парк подрядчика. Пустой список не считается конфликтом: поле новое, и
+        // пока его не проставили, подрядчики не должны выпадать из подбора.
+        const fleet = supplier.vehicleTypes ?? [];
+        const vehicleConflict =
+          !!vehicleType && fleet.length > 0 && !fleet.includes(vehicleType);
+        const vehicleOk = !vehicleConflict;
+
         if (exactRoute) {
           score += 60;
           reasons.push(`Возит ${originCountry} → ${destinationCountry}`);
@@ -151,6 +164,11 @@ export function matchSuppliers(
           reasons.push(TENDER_MODE_LABELS[mode]);
         }
 
+        if (vehicleType && fleet.length > 0 && !vehicleConflict) {
+          score += 20;
+          reasons.push(vehicleType);
+        }
+
         // Небольшой бонус за надёжность — при прочих равных выше тот, кто отвечает.
         if (supplier.responseRate != null)
           score += Math.round(supplier.responseRate / 10);
@@ -160,11 +178,15 @@ export function matchSuppliers(
           matchType = 'none';
           reasons.length = 0;
           reasons.push('Другой вид транспорта');
+        } else if (vehicleConflict) {
+          matchType = 'none';
+          reasons.length = 0;
+          reasons.push(`Нет кузова «${vehicleType}»`);
         } else if (routeKnown && hasDirections && !coversFrom && !coversTo) {
           matchType = 'none';
           reasons.length = 0;
           reasons.push('Не возит это направление');
-        } else if (exactRoute && modeOk) {
+        } else if (exactRoute && modeOk && vehicleOk) {
           matchType = 'full';
         } else if (coversFrom || coversTo) {
           matchType = 'partial';
