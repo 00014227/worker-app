@@ -1177,6 +1177,9 @@ export interface CounterpartyCheck {
   riskLevel: RiskLevel | null;
   model: string | null;
   createdAt: string;
+  /** processing — поиск ещё идёт; отчёт и источники появятся по готовности. */
+  status: 'processing' | 'done' | 'failed';
+  error: string | null;
   /** Отчёт отдан из сохранённых, без нового платного поиска. */
   fromCache?: boolean;
 }
@@ -1186,6 +1189,8 @@ export interface CheckHistoryRow {
   rawQuery: string;
   riskLevel: RiskLevel | null;
   createdAt: string;
+  status: 'processing' | 'done' | 'failed';
+  error: string | null;
   employee: { name: string } | null;
 }
 
