@@ -19,7 +19,13 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
     }
     // NestJS отдаёт message массивом при ошибках валидации DTO и объектом в
     // отдельных случаях — без нормализации в UI прилетало «[object Object]».
-    const raw = body?.message ?? body?.error;
+    // Глобальный фильтр бэкенда кладёт ответ исключения целиком в message:
+    // { message: { message: 'текст', error, statusCode } } — достаём текст оттуда.
+    const outer = body?.message ?? body?.error;
+    const raw =
+      outer && typeof outer === 'object' && !Array.isArray(outer)
+        ? outer.message
+        : outer;
     const message = Array.isArray(raw)
       ? raw.join('; ')
       : typeof raw === 'string'
@@ -1209,6 +1215,171 @@ export const legalCheckApi = {
     return req<CounterpartyCheck>('/worker/legal-check', {
       method: 'POST',
       body: JSON.stringify({ query, force }),
+    });
+  },
+};
+
+// ── Дебиторка ────────────────────────────────────────────────────────────────
+
+/** dry-run — только журнал; test — письма на тестовый ящик; live — клиентам. */
+export type DebtMailMode = 'dry-run' | 'test' | 'live';
+
+export type DebtLetterStatus =
+  | 'dry_run'
+  | 'pending_approval'
+  | 'queued'
+  | 'sending'
+  | 'sent'
+  | 'error'
+  | 'cancelled';
+
+/** Сумма в одной валюте. Сумы и доллары не складываются — показываем рядом. */
+export interface MoneyByCurrency {
+  currency: string;
+  /** Строкой: деньги из базы приходят точными, без float. */
+  amount: string;
+}
+
+export interface DebtorRow {
+  customerId: string;
+  name: string;
+  inn: string | null;
+  email: string | null;
+  /** По самому старому неоплаченному документу; null — просроченных нет. */
+  daysOverdue: number | null;
+  stage: { stage: number; title: string } | null;
+  debt: MoneyByCurrency[];
+  overdue: MoneyByCurrency[];
+  lastLetter: {
+    stage: number;
+    status: DebtLetterStatus;
+    createdAt: string;
+  } | null;
+  pendingClaimId: string | null;
+  /** Действующая отсрочка: до этой даты включительно писем нет. */
+  deferral: { until: string; reason: DebtDeferralReason } | null;
+  /** Какое письмо уйдёт следующим и не раньше какой даты (YYYY-MM-DD). */
+  nextLetter: { stage: number; title: string; date: string } | null;
+}
+
+/** Почему отложили письма. */
+export type DebtDeferralReason = 'payment_order' | 'schedule' | 'other';
+
+export const DEFERRAL_REASON_LABELS: Record<DebtDeferralReason, string> = {
+  payment_order: 'Прислал платёжку',
+  schedule: 'Согласован график',
+  other: 'Другое',
+};
+
+export interface DebtorDeferral {
+  id: string;
+  /** YYYY-MM-DD, включительно. */
+  until: string;
+  reason: DebtDeferralReason;
+  comment: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  active: boolean;
+}
+
+export interface DebtorDocument {
+  id: string;
+  docNumber: string;
+  contractNumber: string | null;
+  /** YYYY-MM-DD */
+  docDate: string;
+  dueDate: string;
+  amount: string;
+  paid: string;
+  balance: string;
+  currency: string;
+  daysOverdue: number;
+}
+
+export interface DebtorLetter {
+  id: string;
+  stage: number;
+  mode: DebtMailMode;
+  status: DebtLetterStatus;
+  daysOverdue: number;
+  toAddr: string;
+  ccAddr: string | null;
+  subject: string;
+  html: string;
+  createdAt: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  sentAt: string | null;
+  error: string | null;
+  caseClosed: boolean;
+}
+
+export interface DebtStage {
+  stage: number;
+  /** С какого дня просрочки положен этап. */
+  day: number;
+  title: string;
+  /** Претензия: уходит только после «Утвердить». */
+  requiresApproval: boolean;
+}
+
+export interface DunningRunResult {
+  mode: DebtMailMode;
+  created: number;
+  skippedNoEmail: number;
+  /** Пропущено из-за отсрочки. */
+  deferred: number;
+  closed: number;
+  /** Отправлено / не ушло (в режиме проверки всегда 0). */
+  sent: number;
+  failed: number;
+}
+
+/**
+ * Дебиторка: смотреть и ставить отсрочку — всем; прогонять и утверждать —
+ * юристам и админам.
+ */
+export const receivablesApi = {
+  list(): Promise<{
+    mode: DebtMailMode;
+    /** Куда уходят письма в тестовом режиме. */
+    testRecipient: string;
+    stages: DebtStage[];
+    rows: DebtorRow[];
+  }> {
+    return req('/worker/receivables');
+  },
+  details(customerId: string): Promise<{
+    documents: DebtorDocument[];
+    letters: DebtorLetter[];
+    deferrals: DebtorDeferral[];
+  }> {
+    return req(`/worker/receivables/${customerId}`);
+  },
+  defer(
+    customerId: string,
+    input: { until: string; reason: DebtDeferralReason; comment?: string },
+  ): Promise<{ id: string }> {
+    return req(`/worker/receivables/${customerId}/deferrals`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  cancelDeferral(id: string): Promise<{ id: string }> {
+    return req(`/worker/receivables/deferrals/${id}/cancel`, {
+      method: 'POST',
+    });
+  },
+  run(): Promise<DunningRunResult> {
+    return req('/worker/receivables/run', { method: 'POST' });
+  },
+  approve(
+    notificationId: string,
+  ): Promise<{ id: string; status: DebtLetterStatus }> {
+    return req(`/worker/receivables/notifications/${notificationId}/approve`, {
+      method: 'POST',
     });
   },
 };

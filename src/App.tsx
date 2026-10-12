@@ -24,6 +24,7 @@ const CounterpartyCheckPage = lazy(
   () => import('./pages/CounterpartyCheckPage'),
 );
 const ContractDiffPage = lazy(() => import('./pages/ContractDiffPage'));
+const ReceivablesPage = lazy(() => import('./pages/ReceivablesPage'));
 
 export default function App() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
           />
           <Route path="/contractors" element={<ContractorsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/receivables" element={<ReceivablesPage />} />
           <Route path="/telegram-accounts" element={<TelegramAccountsPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/ai-deal" element={<AiDealPage />} />
