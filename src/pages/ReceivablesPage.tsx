@@ -144,6 +144,7 @@ export default function ReceivablesPage() {
   const [data, setData] = useState<{
     mode: DebtMailMode;
     testRecipient: string;
+    lettersReady: boolean;
     stages: DebtStage[];
     rows: DebtorRow[];
   } | null>(null);
@@ -318,6 +319,15 @@ export default function ReceivablesPage() {
               )
               .join(' · ')}
           </div>
+        </div>
+      )}
+
+      {data && !data.lettersReady && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+          <span className="font-semibold">Бланк писем — черновик:</span>{' '}
+          реквизиты компании ещё не заполнены. Клиентам (боевой режим) письма не
+          уйдут, пока бухгалтерия не пришлёт бланк; тестовые и режим проверки
+          работают.
         </div>
       )}
 
@@ -535,6 +545,19 @@ export default function ReceivablesPage() {
   );
 }
 
+/** Почему клиенту ещё не писали и когда напишем — вместо пустого «писем нет». */
+function noLettersReason(row: DebtorRow): string {
+  if (!row.email) return 'Писем не было: в карточке клиента нет email.';
+  if (row.deferral)
+    return `Писем пока не было — действует отсрочка до ${fmtDate(row.deferral.until)}.`;
+  if (!row.nextLetter) return 'Писем этому клиенту ещё не было.';
+  const when =
+    row.nextLetter.date === todayYmd()
+      ? 'при ближайшем прогоне (по будням в 10:00)'
+      : `с ${fmtDate(row.nextLetter.date)}`;
+  return `Писем этому клиенту ещё не было. Первое — «${row.nextLetter.title}», ${when}.`;
+}
+
 function DebtorPanel({
   row,
   mode,
@@ -711,10 +734,10 @@ function DebtorPanel({
             </section>
 
             <section className="space-y-2">
-              <div className="text-xs text-muted-foreground">ПИСЬМА</div>
+              <div className="text-xs text-muted-foreground">ИСТОРИЯ ПИСЕМ</div>
               {details.letters.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Писем ещё не было.
+                  {noLettersReason(row)}
                 </p>
               )}
               {details.letters.map((l) => (

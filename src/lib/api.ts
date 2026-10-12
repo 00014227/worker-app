@@ -1346,6 +1346,8 @@ export const receivablesApi = {
     mode: DebtMailMode;
     /** Куда уходят письма в тестовом режиме. */
     testRecipient: string;
+    /** Реквизиты компании в бланке заполнены; нет — клиентам письма не уходят. */
+    lettersReady: boolean;
     stages: DebtStage[];
     rows: DebtorRow[];
   }> {
