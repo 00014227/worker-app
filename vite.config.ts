@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
@@ -13,7 +13,7 @@ const VENDOR = [
   '/lucide-react/',
 ];
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   resolve: {
     alias: {
@@ -40,10 +40,14 @@ export default defineConfig({
     port: 3001,
     proxy: {
       '/api': {
-        target: 'https://165-245-217-29.nip.io',
+        // Локальный бэкенд — API_PROXY_TARGET=http://localhost:3000 в .env.local.
+        // Без префикса VITE_: адрес нужен только dev-серверу, в сборку не попадает.
+        target:
+          loadEnv(mode, process.cwd(), '').API_PROXY_TARGET ||
+          'https://165-245-217-29.nip.io',
         changeOrigin: true,
         secure: false,
       },
     },
   },
-});
+}));

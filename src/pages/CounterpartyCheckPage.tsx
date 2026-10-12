@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Scale,
   Search,
@@ -61,6 +61,9 @@ function withCitations(check: CounterpartyCheck) {
   return parts;
 }
 
+/** Пауза между опросами готовности. */
+const POLL_MS = 2500;
+
 export default function CounterpartyCheckPage() {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
@@ -68,6 +71,11 @@ export default function CounterpartyCheckPage() {
   const [check, setCheck] = useState<CounterpartyCheck | null>(null);
   const [history, setHistory] = useState<CheckHistoryRow[]>([]);
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  /** Какую проверку ждём: ответы прежней не должны затирать новую. */
+  const pollFor = useRef<string | null>(null);
+  /** Проверка ещё идёт — отчёта нет, показывать его пустым нельзя. */
+  const pending = check?.status === 'processing';
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   const loadHistory = () => {
     legalCheckApi
@@ -84,15 +92,36 @@ export default function CounterpartyCheckPage() {
     loadHistory();
   }, []);
 
+  /**
+   * Ждём готовности проверки, опрашивая сервер.
+   *
+   * Поиск по источникам занимает около минуты, а прокси рвёт запрос на 26-й
+   * секунде. Поэтому сервер отвечает сразу заготовкой со `status: 'processing'`,
+   * и без опроса юрист видел бы пустой отчёт вместо идущей работы.
+   */
+  const awaitReady = useCallback(async (id: string) => {
+    for (;;) {
+      const res = await legalCheckApi.byId(id);
+      if (pollFor.current !== id) return null;
+      setCheck(res);
+      if (res.status === 'failed') throw new Error(res.error || 'Проверка не удалась');
+      if (res.status !== 'processing') return res;
+      await new Promise((r) => setTimeout(r, POLL_MS));
+    }
+  }, []);
+
   const run = async (force = false) => {
     const q = force ? (check?.rawQuery ?? query) : query;
     if (!q.trim() || busy) return;
     setBusy(true);
     setError(null);
+    setCheck(null);
     try {
-      const res = await legalCheckApi.check(q.trim(), force);
-      setCheck(res);
-      setQuery(res.rawQuery);
+      const started = await legalCheckApi.check(q.trim(), force);
+      pollFor.current = started.id;
+      setCheck(started);
+      setQuery(started.rawQuery);
+      if (started.status === 'processing') await awaitReady(started.id);
       loadHistory();
     } catch (e) {
       setError((e as Error).message);
@@ -104,10 +133,13 @@ export default function CounterpartyCheckPage() {
   const open = async (id: string) => {
     setBusy(true);
     setError(null);
+    pollFor.current = id;
     try {
-      const res = await legalCheckApi.byId(id);
-      setCheck(res);
-      setQuery(res.rawQuery);
+      const first = await legalCheckApi.byId(id);
+      setCheck(first);
+      setQuery(first.rawQuery);
+      // Из списка можно открыть и ещё не досчитанную проверку — ждём так же.
+      if (first.status === 'processing') await awaitReady(id);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -115,7 +147,21 @@ export default function CounterpartyCheckPage() {
     }
   };
 
+  // Пока в списке есть идущая проверка, обновляем его сами: юрист мог обновить
+  // вкладку посреди поиска, и строка иначе навсегда замрёт на «идёт».
+  useEffect(() => {
+    if (!history.some((h) => h.status === 'processing')) return;
+    const timer = setInterval(loadHistory, POLL_MS * 2);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history]);
+
   const parts = useMemo(() => (check ? withCitations(check) : []), [check]);
+  /** Источник по его номеру — сноскам нужен адрес, а не только цифра. */
+  const byIndex = useMemo(
+    () => new Map((check?.sources ?? []).map((s) => [s.index, s])),
+    [check],
+  );
   const risk = check?.riskLevel ? RISK[check.riskLevel] : null;
 
   return (
@@ -186,13 +232,11 @@ export default function CounterpartyCheckPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
         <div className="space-y-3">
-          {busy && !check && (
-            <div className="rounded-lg border py-10 text-center text-sm text-muted-foreground">
-              Ищем в открытых источниках — это занимает до минуты…
-            </div>
+          {(pending || (busy && !check)) && (
+            <CheckProgress query={check?.rawQuery ?? query} />
           )}
 
-          {check && (
+          {check && !pending && (
             <div className="rounded-xl border">
               <div className="flex items-start justify-between gap-3 px-5 py-3 border-b">
                 <div className="min-w-0">
@@ -230,6 +274,9 @@ export default function CounterpartyCheckPage() {
                 </div>
               </div>
 
+              {/* Сноски ведут прямо на источник. Раньше рядом с текстом стояли
+                  голые номера, и чтобы понять, откуда взято утверждение, юрист
+                  отматывал к списку внизу и искал строку по номеру. */}
               <div className="px-5 py-4 text-sm whitespace-pre-wrap leading-relaxed">
                 {parts.map((p, i) =>
                   p.sources.length > 0 ? (
@@ -238,9 +285,29 @@ export default function CounterpartyCheckPage() {
                       className="border-b border-dotted border-primary/50"
                     >
                       {p.text}
-                      <sup className="text-primary font-medium ml-0.5">
-                        {p.sources.join(',')}
-                      </sup>
+                      <span className="whitespace-nowrap">
+                        {p.sources.map((n) => {
+                          const src = byIndex.get(n);
+                          if (!src) return null;
+                          return (
+                            <a
+                              key={n}
+                              href={src.url}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              title={`${src.title}\n${hostOf(src.url)}`}
+                              className="ml-0.5 align-super text-[10px] font-medium text-primary hover:underline"
+                            >
+                              [{n}]
+                            </a>
+                          );
+                        })}
+                        {/* Домен первого источника — чтобы «откуда это» читалось
+                            без наведения: суду ссылаются на реестр, а не на форум. */}
+                        <span className="ml-1 text-[10px] text-muted-foreground">
+                          {hostOf(byIndex.get(p.sources[0])?.url ?? '')}
+                        </span>
+                      </span>
                     </span>
                   ) : (
                     <span key={i}>{p.text}</span>
@@ -249,9 +316,13 @@ export default function CounterpartyCheckPage() {
               </div>
 
               <div className="px-5 py-3 border-t">
-                <div className="text-xs font-medium mb-1.5">
-                  Источники ({check.sources.length})
-                </div>
+                <button
+                  onClick={() => setSourcesOpen((v) => !v)}
+                  className="text-xs font-medium mb-1.5 hover:underline"
+                >
+                  {sourcesOpen ? 'Скрыть' : 'Показать'} полный список источников
+                  ({check.sources.length})
+                </button>
                 {check.sources.length === 0 ? (
                   // Отчёт без ссылок проверить нельзя — говорим прямо.
                   <p className="text-xs text-amber-700 flex items-start gap-1">
@@ -259,7 +330,7 @@ export default function CounterpartyCheckPage() {
                     Модель не привела ни одного источника. Такому отчёту
                     доверять нельзя — проверьте контрагента вручную.
                   </p>
-                ) : (
+                ) : sourcesOpen ? (
                   <ol className="space-y-1">
                     {check.sources.map((s) => (
                       <li key={s.index} className="text-xs flex gap-1.5">
@@ -278,7 +349,7 @@ export default function CounterpartyCheckPage() {
                       </li>
                     ))}
                   </ol>
-                )}
+                ) : null}
               </div>
 
               {/* Показ подсказок поиска требуют условия использования Google. */}
@@ -309,16 +380,26 @@ export default function CounterpartyCheckPage() {
                 )}
               >
                 <div className="text-xs font-medium truncate">{h.rawQuery}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                  {h.riskLevel && (
-                    <span
-                      className={cn(
-                        'px-1 rounded border',
-                        RISK[h.riskLevel].cls,
-                      )}
-                    >
-                      {h.riskLevel}
+                <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
+                  {/* Идущая проверка без отметки выглядит как пустая: ни риска,
+                      ни отчёта — будто ничего не нашли. */}
+                  {h.status === 'processing' ? (
+                    <span className="text-primary flex items-center gap-1">
+                      <Loader2 size={9} className="animate-spin" /> идёт
                     </span>
+                  ) : h.status === 'failed' ? (
+                    <span className="text-red-600">не удалась</span>
+                  ) : (
+                    h.riskLevel && (
+                      <span
+                        className={cn(
+                          'px-1 rounded border',
+                          RISK[h.riskLevel].cls,
+                        )}
+                      >
+                        {h.riskLevel}
+                      </span>
+                    )
                   )}
                   {new Date(h.createdAt).toLocaleDateString('ru-RU')}
                   {h.employee && ` · ${h.employee.name}`}
@@ -330,4 +411,74 @@ export default function CounterpartyCheckPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * Экран ожидания проверки.
+ *
+ * Проверка идёт в фоне около минуты: модель ищет, открывает найденные страницы
+ * и сводит их в отчёт. Без явного «работаем» юрист видит пустоту и решает, что
+ * ничего не нашлось, — ровно так это и выглядело, когда прокси рвал запрос.
+ */
+function CheckProgress({ query }: { query: string }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(
+      () => setElapsed(Math.round((Date.now() - started) / 1000)),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="rounded-xl border p-5 space-y-3">
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <Loader2 size={16} className="animate-spin text-primary shrink-0" />
+        <span className="text-sm font-semibold">Ищем в открытых источниках</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {elapsed < 60
+            ? `${elapsed} с`
+            : `${Math.floor(elapsed / 60)} мин ${String(elapsed % 60).padStart(2, '0')} с`}
+        </span>
+        {query && (
+          <span className="text-xs text-muted-foreground truncate min-w-0">
+            · {query}
+          </span>
+        )}
+      </div>
+
+      {/* Полосу процентов не рисуем: сколько источников модель откроет, заранее
+          неизвестно, и выдуманный процент хуже честного секундомера. */}
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className="h-full w-1/3 bg-primary/70 animate-pulse rounded-full" />
+      </div>
+
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        Модель ищет в интернете, открывает найденные страницы и сводит их в
+        отчёт со ссылками — обычно около минуты. Страницу можно закрыть:
+        проверка досчитается и появится в списке справа.
+      </p>
+
+      <div className="space-y-2 pt-1">
+        {[92, 78, 85, 60].map((w, i) => (
+          <div
+            key={i}
+            className="h-2 rounded bg-muted animate-pulse"
+            style={{ width: `${w}%`, animationDelay: `${i * 140}ms` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Домен источника: «egov.uz» вместо длинного адреса со всеми параметрами. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
 }
