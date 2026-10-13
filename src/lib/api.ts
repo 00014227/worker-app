@@ -1250,6 +1250,10 @@ export interface DebtorRow {
   stage: { stage: number; title: string } | null;
   debt: MoneyByCurrency[];
   overdue: MoneyByCurrency[];
+  /** Долг, под который в 1С не нашлось акта: срок неизвестен, письмом не отправляется. */
+  undated: MoneyByCurrency[];
+  /** Наши юрлица, которым должен клиент; письмо каждого — на его бланке. */
+  organizations: string[];
   lastLetter: {
     stage: number;
     status: DebtLetterStatus;
@@ -1288,14 +1292,19 @@ export interface DebtorDocument {
   id: string;
   docNumber: string;
   contractNumber: string | null;
-  /** YYYY-MM-DD */
-  docDate: string;
-  dueDate: string;
+  /** YYYY-MM-DD; null — долг из 1С без акта, срок неизвестен. */
+  docDate: string | null;
+  dueDate: string | null;
   amount: string;
   paid: string;
   balance: string;
   currency: string;
-  daysOverdue: number;
+  daysOverdue: number | null;
+  /** Организация-кредитор (из 1С). */
+  organizationName: string | null;
+  /** Дней на оплату после акта и откуда: contract — договор, payment_term — справочник. */
+  termDays: number | null;
+  dueDateSource: 'contract' | 'payment_term' | 'none' | null;
 }
 
 export interface DebtorLetter {
@@ -1349,6 +1358,8 @@ export const receivablesApi = {
     /** Реквизиты компании в бланке заполнены; нет — клиентам письма не уходят. */
     lettersReady: boolean;
     stages: DebtStage[];
+    /** Ближайший прогон рассылки по расписанию (ISO); null — расписание не запущено. */
+    nextRun: string | null;
     rows: DebtorRow[];
   }> {
     return req('/worker/receivables');
