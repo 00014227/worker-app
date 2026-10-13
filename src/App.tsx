@@ -25,6 +25,9 @@ const CounterpartyCheckPage = lazy(
 );
 const ContractDiffPage = lazy(() => import('./pages/ContractDiffPage'));
 const ReceivablesPage = lazy(() => import('./pages/ReceivablesPage'));
+const MemosPage = lazy(() => import('./pages/MemosPage'));
+const MemoCardPage = lazy(() => import('./pages/MemoCardPage'));
+const MemoSettingsPage = lazy(() => import('./pages/MemoSettingsPage'));
 
 export default function App() {
   return (
@@ -53,6 +56,9 @@ export default function App() {
           <Route path="/contractors" element={<ContractorsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/receivables" element={<ReceivablesPage />} />
+          <Route path="/memos" element={<MemosPage />} />
+          <Route path="/memos/settings" element={<MemoSettingsPage />} />
+          <Route path="/memos/:id" element={<MemoCardPage />} />
           <Route path="/telegram-accounts" element={<TelegramAccountsPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/ai-deal" element={<AiDealPage />} />

@@ -117,6 +117,17 @@ const fmtDateTime = (iso: string) =>
     minute: '2-digit',
   });
 
+/** Время прогона по Ташкенту: «вторник, 20 октября в 10:00». */
+const fmtRun = (iso: string) =>
+  new Date(iso).toLocaleString('ru-RU', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Tashkent',
+  });
+
 /** Итог по валютам для шапки: точность до копейки тут не нужна. */
 function sumMoney(items: MoneyByCurrency[]): MoneyByCurrency[] {
   const sums = new Map<string, number>();
@@ -146,6 +157,7 @@ export default function ReceivablesPage() {
     testRecipient: string;
     lettersReady: boolean;
     stages: DebtStage[];
+    nextRun: string | null;
     rows: DebtorRow[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -231,7 +243,7 @@ export default function ReceivablesPage() {
     if (!data) return;
     if (
       !window.confirm(
-        `Прогнать рассылку сейчас, не дожидаясь расписания?\n\nНовые письма ${WHERE_MANY[data.mode]}.`,
+        `Прогнать рассылку сейчас, не дожидаясь расписания?\n\nСначала подтянем свежие долги из 1С — это до минуты. Новые письма ${WHERE_MANY[data.mode]}.`,
       )
     )
       return;
@@ -306,8 +318,12 @@ export default function ReceivablesPage() {
             {data.mode === 'test' && data.testRecipient
               ? ` (${data.testRecipient})`
               : ''}
-            . Письма создаются и отправляются автоматически по будням в 10:00;
-            претензия уходит сразу после утверждения.
+            . Письма создаются и отправляются автоматически раз в неделю
+            {data.nextRun
+              ? ` (ближайший прогон — ${fmtRun(data.nextRun)})`
+              : ''}
+            , перед этим долги обновляются из 1С; претензия уходит сразу после
+            утверждения.
           </div>
           <div className="opacity-80">
             {data.stages
@@ -461,6 +477,11 @@ export default function ReceivablesPage() {
                           <MailX size={11} /> нет email — письма не уходят
                         </div>
                       )}
+                      {r.organizations.length > 0 && (
+                        <div className="text-[11px] text-muted-foreground">
+                          кредитор: {r.organizations.join(', ')}
+                        </div>
+                      )}
                       {r.deferral && (
                         <div className="text-xs text-blue-700 flex items-center gap-1">
                           <CalendarClock size={11} /> отсрочка до{' '}
@@ -479,6 +500,15 @@ export default function ReceivablesPage() {
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
+                      {r.undated.map((m) => (
+                        <div
+                          key={`u-${m.currency}`}
+                          className="text-muted-foreground"
+                          title="Долг есть в 1С, но акта под него нет: срок неизвестен, письмом не отправляется"
+                        >
+                          + без акта {fmtMoney(m)}
+                        </div>
+                      ))}
                     </td>
                     <td
                       className={cn(
@@ -497,9 +527,7 @@ export default function ReceivablesPage() {
                       {r.nextLetter && (
                         <div className="text-muted-foreground">
                           далее: этап {r.nextLetter.stage},{' '}
-                          {r.nextLetter.date === todayYmd()
-                            ? 'сегодня'
-                            : `с ${fmtShort(r.nextLetter.date)}`}
+                          {fmtShort(r.nextLetter.date)}
                         </div>
                       )}
                     </td>
@@ -545,16 +573,25 @@ export default function ReceivablesPage() {
   );
 }
 
+/** «30 дн. по договору» / «предоплата» — откуда взят срок оплаты акта. */
+function termLabel(d: DebtorDocument): string {
+  if (d.termDays === null) return '';
+  const days =
+    d.termDays === 0 ? 'в день акта' : `${d.termDays} дн. после акта`;
+  return d.dueDateSource === 'payment_term' ? `${days} (справочник)` : days;
+}
+
 /** Почему клиенту ещё не писали и когда напишем — вместо пустого «писем нет». */
 function noLettersReason(row: DebtorRow): string {
-  if (!row.email) return 'Писем не было: в карточке клиента нет email.';
+  if (!row.email)
+    return 'Писем не было: у клиента нет email — ни в карточке 1С, ни в «Клиенты».';
   if (row.deferral)
     return `Писем пока не было — действует отсрочка до ${fmtDate(row.deferral.until)}.`;
   if (!row.nextLetter) return 'Писем этому клиенту ещё не было.';
   const when =
     row.nextLetter.date === todayYmd()
-      ? 'при ближайшем прогоне (по будням в 10:00)'
-      : `с ${fmtDate(row.nextLetter.date)}`;
+      ? 'при ближайшем прогоне'
+      : `в прогон ${fmtDate(row.nextLetter.date)}`;
   return `Писем этому клиенту ещё не было. Первое — «${row.nextLetter.title}», ${when}.`;
 }
 
@@ -639,7 +676,8 @@ function DebtorPanel({
             <p className="text-xs text-muted-foreground mt-0.5">
               {row.email ?? (
                 <span className="text-red-600">
-                  нет email — добавьте в разделе{' '}
+                  нет email — укажите почту в карточке клиента в 1С (подтянется
+                  утром) или в разделе{' '}
                   <Link to="/customers" className="underline">
                     «Клиенты»
                   </Link>
@@ -697,7 +735,9 @@ function DebtorPanel({
                     <tr key={d.id}>
                       <td className="py-1.5">
                         <div>
-                          № {d.docNumber} от {fmtDate(d.docDate)}
+                          {d.docDate
+                            ? `№ ${d.docNumber} от ${fmtDate(d.docDate)}`
+                            : 'Долг без акта в 1С'}
                         </div>
                         {d.contractNumber && (
                           <div className="text-muted-foreground">
@@ -706,14 +746,28 @@ function DebtorPanel({
                         )}
                       </td>
                       <td className="py-1.5">
-                        <div>{fmtDate(d.dueDate)}</div>
-                        <div className={cn(daysClass(d.daysOverdue))}>
-                          {d.daysOverdue > 0
-                            ? `просрочка ${d.daysOverdue} дн.`
-                            : d.daysOverdue === 0
-                              ? 'срок сегодня'
-                              : `через ${-d.daysOverdue} дн.`}
-                        </div>
+                        {d.dueDate && d.daysOverdue !== null ? (
+                          <>
+                            <div>{fmtDate(d.dueDate)}</div>
+                            <div className={cn(daysClass(d.daysOverdue))}>
+                              {d.daysOverdue > 0
+                                ? `просрочка ${d.daysOverdue} дн.`
+                                : d.daysOverdue === 0
+                                  ? 'срок сегодня'
+                                  : `через ${-d.daysOverdue} дн.`}
+                            </div>
+                            <div className="text-muted-foreground">
+                              {termLabel(d)}
+                            </div>
+                          </>
+                        ) : (
+                          <div
+                            className="text-muted-foreground"
+                            title="Акта под этот долг в 1С нет — срок посчитать не из чего. Письмом не отправляется."
+                          >
+                            срок неизвестен
+                          </div>
+                        )}
                       </td>
                       <td className="py-1.5 text-right whitespace-nowrap">
                         {fmtMoney({ amount: d.balance, currency: d.currency })}

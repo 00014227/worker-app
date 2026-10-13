@@ -17,6 +17,7 @@ import {
   FileDiff,
   Loader2,
   HandCoins,
+  ClipboardList,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 import { closeSocket } from '../lib/socket';
@@ -34,6 +35,7 @@ const nav = [
   { to: '/contractors', label: 'Подрядчики', icon: Users },
   { to: '/customers', label: 'Клиенты', icon: Building2 },
   { to: '/receivables', label: 'Дебиторка', icon: HandCoins },
+  { to: '/memos', label: 'Служебные записки', icon: ClipboardList },
   { to: '/telegram-accounts', label: 'Telegram', icon: Send },
   { to: '/tariff-sources', label: 'Тарифы', icon: Database },
   { to: '/ai-deal', label: 'Сделка через ИИ', icon: Sparkles },
