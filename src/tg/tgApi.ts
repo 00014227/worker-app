@@ -33,12 +33,36 @@ export interface CreatedMemo {
 }
 
 export const tgApi = {
-  /** Обмен подписанных данных Telegram на токен. Токен сохраняем сразу. */
+  /**
+   * Обмен подписанных данных Telegram на токен.
+   *
+   * Запрос идёт в обход общего обработчика: его 401 означает «подпись не
+   * подошла», а не «сеанс истёк», и подменять настоящую причину нельзя —
+   * именно на этом я потерял время при первом запуске.
+   */
   async session(initData: string): Promise<TgSession> {
-    const session = await request<TgSession>('/memo-tg/session', {
+    const res = await fetch('/api/memo-tg/session', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ initData }),
     });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as {
+        message?: { message?: unknown } | unknown;
+      };
+      const outer = (body as { message?: unknown }).message;
+      const raw =
+        outer && typeof outer === 'object' && !Array.isArray(outer)
+          ? (outer as { message?: unknown }).message
+          : outer;
+      const text = Array.isArray(raw)
+        ? raw.join('; ')
+        : typeof raw === 'string'
+          ? raw
+          : `Ошибка ${res.status}`;
+      throw new Error(text);
+    }
+    const session = (await res.json()) as TgSession;
     saveMiniAppToken(session.token);
     return session;
   },
