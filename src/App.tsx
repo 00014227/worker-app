@@ -3,6 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
+// Mini App в Telegram. Импорт обычный, не lazy: единственный <Suspense>
+// живёт внутри Layout, а эта страница снаружи — ленивая упала бы без заглушки.
+import MiniAppPage from './tg/MiniAppPage';
 import DashboardPage from './pages/DashboardPage';
 const ShipmentsPage = lazy(() => import('./pages/ShipmentsPage'));
 const NewShipmentPage = lazy(() => import('./pages/NewShipmentPage'));
@@ -34,6 +37,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* Вне ProtectedRoute: человека опознаёт Telegram, логин в кабинете не нужен. */}
+        <Route path="/tg/memo" element={<MiniAppPage />} />
         <Route
           element={
             <ProtectedRoute>

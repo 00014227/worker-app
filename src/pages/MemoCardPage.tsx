@@ -28,6 +28,7 @@ import {
   fmtDateTime,
   fmtMoney,
   fmtSize,
+  optionLabel,
 } from '@/components/memos/memo-meta';
 
 export default function MemoCardPage() {
@@ -238,7 +239,9 @@ export default function MemoCardPage() {
               {fields.map((f) => {
                 const value = memo.payload[f.key];
                 if (value === undefined || value === '') return null;
-                return <Row key={f.key} label={f.label} value={String(value)} />;
+                // Для выбора показываем подпись: в базе лежит значение, и
+                // согласующий иначе читал бы «vacation» вместо «Отпуск».
+                return <Row key={f.key} label={f.label} value={optionLabel(f, value)} />;
               })}
               <div>
                 <div className="text-xs text-muted-foreground mb-1">Обоснование</div>

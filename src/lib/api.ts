@@ -1,6 +1,11 @@
-import { authHeaders, clearAuth } from './auth';
+import { authHeaders, handleUnauthorized } from './auth';
 
 const BASE = '/api';
+
+/** Тот же запрос, что и у кабинета. Открыт для Mini App, чтобы не плодить обёртки. */
+export async function request<T>(path: string, opts?: RequestInit): Promise<T> {
+  return req<T>(path, opts);
+}
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -14,8 +19,9 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     if (res.status === 401) {
-      clearAuth();
-      window.location.href = '/login';
+      // Что делать — решает auth.ts: в кабинете это переход на вход, в Mini App
+      // переход на страницу входа выглядел бы поломкой.
+      handleUnauthorized();
     }
     // NestJS отдаёт message массивом при ошибках валидации DTO и объектом в
     // отдельных случаях — без нормализации в UI прилетало «[object Object]».
@@ -1618,7 +1624,8 @@ export const tenderApi = {
 
 // ── Служебные записки ──────────────────────────────────────────────────────
 
-export type MemoType = 'payment' | 'purchase' | 'trip' | 'other';
+/** Все известные типы. Прежние остаются: их записки надо открывать. */
+export type MemoType = 'absence' | 'payment' | 'purchase' | 'trip' | 'other';
 export type MemoStatus =
   | 'draft'
   | 'pending_approval'
@@ -1639,14 +1646,21 @@ export type MemoTaskStatus =
 export interface MemoFieldDef {
   key: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'date';
+  type: 'text' | 'textarea' | 'number' | 'date' | 'select';
   required: boolean;
   hint?: string;
   maxLength?: number;
+  /** Закрытый список для 'select' — рисуется выпадающим списком. */
+  options?: { value: string; label: string }[];
+  /** Поле обязательно только при этих значениях другого поля. */
+  requiredWhen?: { key: string; equals: string[] };
 }
 
 export interface MemoMeta {
+  /** Все известные типы — по ним карточка находит описания полей. */
   types: { type: MemoType; fields: MemoFieldDef[]; amountRequired: boolean }[];
+  /** Что можно создать сейчас. Остальное — только читать. */
+  creatableTypes: MemoType[];
   statuses: MemoStatus[];
   currencies: string[];
   departments: { id: string; name: string }[];

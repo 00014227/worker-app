@@ -26,4 +26,24 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'warn',
     },
   },
+  {
+    // Внутри Mini App нельзя дёргать env: confirmOnStand() вызывает
+    // window.confirm, а в Telegram WebView это выглядит поломкой приложения.
+    // Сборка гоняет eslint, значит нарушение не доедет до production.
+    files: ['src/tg/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/lib/env',
+              message:
+                'confirmOnStand() вызывает window.confirm — в Telegram WebView это недопустимо.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

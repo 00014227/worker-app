@@ -1,5 +1,6 @@
 import type {
   MemoDecisionKind,
+  MemoFieldDef,
   MemoStatus,
   MemoTaskStatus,
   MemoType,
@@ -45,7 +46,12 @@ export const MEMO_STATUS: Record<MemoStatus, { label: string; chip: string; dot:
   },
 };
 
+/**
+ * Подписи типов. Прежние четыре обязаны остаться: их убрали из выбора, но
+ * записки открываются, и карточка ищет подпись здесь по типу из базы.
+ */
 export const MEMO_TYPE: Record<MemoType, { label: string; short: string }> = {
+  absence: { label: 'Отсутствие на рабочем месте', short: 'Отсутствие' },
   payment: { label: 'Оплата', short: 'Оплата' },
   purchase: { label: 'Закупка', short: 'Закупка' },
   trip: { label: 'Командировка', short: 'Команд.' },
@@ -136,4 +142,15 @@ export function dueLabel(dueAt: string | null): string {
   const left = Math.abs(hours);
   if (left > 48) return `осталось ${Math.floor(left / 24)} дн.`;
   return `осталось ${Math.max(1, Math.floor(left))} ч`;
+}
+
+/**
+ * Подпись выбранного варианта.
+ *
+ * Без неё карточка показывала бы `vacation` вместо «Отпуск»: в базе лежит
+ * значение, а человеку нужна подпись.
+ */
+export function optionLabel(field: MemoFieldDef, value: string | number): string {
+  const found = field.options?.find((o) => o.value === String(value));
+  return found ? found.label : String(value);
 }
