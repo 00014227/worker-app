@@ -604,11 +604,17 @@ export default function ReceivablesPage() {
   );
 }
 
-/** «30 дн. по договору» / «предоплата» — откуда взят срок оплаты акта. */
+/** «30 дн. после акта», «5 банк. дн. после акта», «в день акта» — откуда срок оплаты. */
 function termLabel(d: DebtorDocument): string {
   if (d.termDays === null) return '';
+  const unit =
+    d.termUnit === 'banking'
+      ? ' банк.'
+      : d.termUnit === 'working'
+        ? ' раб.'
+        : '';
   const days =
-    d.termDays === 0 ? 'в день акта' : `${d.termDays} дн. после акта`;
+    d.termDays === 0 ? 'в день акта' : `${d.termDays}${unit} дн. после акта`;
   return d.dueDateSource === 'payment_term' ? `${days} (справочник)` : days;
 }
 
