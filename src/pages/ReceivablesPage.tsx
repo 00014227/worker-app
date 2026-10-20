@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CalendarClock,
+  CalendarDays,
   HandCoins,
   Search,
   RefreshCw,
   Loader2,
   Play,
-  Gavel,
+  Ban,
   MailX,
-  ShieldCheck,
   Eye,
   EyeOff,
 } from 'lucide-react';
@@ -23,7 +23,12 @@ import {
   DebtStage,
   DebtDeferralReason,
   DebtorDeferral,
+  DebtorStop,
+  DebtHoliday,
+  DebtStopKind,
+  DebtStopReason,
   DEFERRAL_REASON_LABELS,
+  STOP_KIND_LABELS,
   MoneyByCurrency,
 } from '../lib/api';
 import { getUser } from '../lib/auth';
@@ -35,9 +40,10 @@ import { cn } from '@/lib/utils';
 
 const STATUS: Record<DebtLetterStatus, { label: string; className: string }> = {
   dry_run: { label: 'Только в журнале', className: 'text-muted-foreground' },
+  // Из старой схемы с претензией в системе; новые письма так не помечаются.
   pending_approval: {
-    label: 'Ждёт утверждения',
-    className: 'text-amber-600',
+    label: 'Ждал утверждения (старая схема)',
+    className: 'text-muted-foreground',
   },
   queued: { label: 'В очереди на отправку', className: 'text-blue-600' },
   sending: { label: 'Отправляется', className: 'text-blue-600' },
@@ -67,12 +73,15 @@ const MODE: Record<
   },
 };
 
-/** Куда уйдёт письмо после действия — для текста подтверждения. */
-const WHERE: Record<DebtMailMode, string> = {
-  'dry-run': 'останется только в журнале (режим проверки)',
-  'test': 'уйдёт на тестовый ящик',
-  'live': 'уйдёт клиенту',
+/** Почему письмо не ушло — для итога прогона. */
+const STOP_REASON_LABELS: Record<DebtStopReason, string> = {
+  no_email: 'нет email',
+  dispute: 'спор по сумме',
+  claim: 'претензия направлена',
+  no_term: 'в 1С нет срока или даты АВР',
 };
+
+/** Куда уйдут письма после прогона — для текста подтверждения. */
 const WHERE_MANY: Record<DebtMailMode, string> = {
   'dry-run': 'останутся только в журнале (режим проверки)',
   'test': 'уйдут на тестовый ящик',
@@ -140,10 +149,11 @@ function sumMoney(items: MoneyByCurrency[]): MoneyByCurrency[] {
   }));
 }
 
+/** Цвет дней просрочки: 30+ — письмо 5, 14+ — письмо 4. */
 function daysClass(days: number | null) {
   if (days === null) return 'text-muted-foreground';
-  if (days >= 45) return 'text-red-600 font-semibold';
-  if (days >= 30) return 'text-amber-600 font-medium';
+  if (days >= 30) return 'text-red-600 font-semibold';
+  if (days >= 14) return 'text-amber-600 font-medium';
   return '';
 }
 
@@ -163,12 +173,13 @@ export default function ReceivablesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [onlyClaims, setOnlyClaims] = useState(false);
+  const [onlyStops, setOnlyStops] = useState(false);
   const [onlyDeferred, setOnlyDeferred] = useState(false);
   /** Этап из сводки сверху; 0 — «ещё рано», null — все. */
   const [stageFilter, setStageFilter] = useState<number | null>(null);
   const [selected, setSelected] = useState<DebtorRow | null>(null);
   const [running, setRunning] = useState(false);
+  const [showHolidays, setShowHolidays] = useState(false);
   const [runResult, setRunResult] = useState<{
     ok: boolean;
     text: string;
@@ -200,28 +211,23 @@ export default function ReceivablesPage() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (data?.rows ?? []).filter((r) => {
-      if (onlyClaims && !r.pendingClaimId) return false;
+      if (onlyStops && r.stops.length === 0) return false;
       if (onlyDeferred && !r.deferral) return false;
       if (stageFilter !== null && (r.stage?.stage ?? 0) !== stageFilter)
         return false;
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || (r.inn ?? '').includes(q);
     });
-  }, [data, search, onlyClaims, onlyDeferred, stageFilter]);
+  }, [data, search, onlyStops, onlyDeferred, stageFilter]);
 
-  // Сводка по этапам: сколько клиентов и сколько денег на каждом. Клик — фильтр.
+  // Сводка по этапам: на каком письме клиент сейчас (самый поздний наступивший
+  // этап по его актам), сколько клиентов и денег. Клик — фильтр.
   const buckets = useMemo(() => {
     if (!data) return [];
-    const stages = [...data.stages].sort((a, b) => a.day - b.day);
+    const stages = [...data.stages].sort((a, b) => a.stage - b.stage);
     return [
-      { key: 0, label: 'Ещё рано', hint: `до ${stages[0]?.day ?? 0} дн.` },
-      ...stages.map((s, i) => ({
-        key: s.stage,
-        label: s.title,
-        hint: stages[i + 1]
-          ? `${s.day}–${stages[i + 1].day - 1} дн.`
-          : `${s.day}+ дн.`,
-      })),
+      { key: 0, label: 'Писем ещё не было', hint: 'до первого письма' },
+      ...stages.map((s) => ({ key: s.stage, label: s.title, hint: s.when })),
     ].map((b) => {
       const inBucket = data.rows.filter((r) => (r.stage?.stage ?? 0) === b.key);
       return {
@@ -237,7 +243,7 @@ export default function ReceivablesPage() {
     () => sumMoney((data?.rows ?? []).flatMap((r) => r.overdue)),
     [data],
   );
-  const claims = (data?.rows ?? []).filter((r) => r.pendingClaimId).length;
+  const stopped = (data?.rows ?? []).filter((r) => r.stops.length).length;
 
   const run = async () => {
     if (!data) return;
@@ -252,8 +258,15 @@ export default function ReceivablesPage() {
     try {
       const r = await receivablesApi.run();
       const parts = [`Создано писем: ${r.created}`];
-      if (r.skippedNoEmail) parts.push(`без email: ${r.skippedNoEmail}`);
-      if (r.deferred) parts.push(`отсрочка: ${r.deferred}`);
+      const reasons = new Map<DebtStopReason, number>();
+      for (const s of r.stopped)
+        reasons.set(s.reason, (reasons.get(s.reason) ?? 0) + 1);
+      if (reasons.size)
+        parts.push(
+          `не отправлено: ${[...reasons]
+            .map(([reason, n]) => `${STOP_REASON_LABELS[reason]} — ${n}`)
+            .join(', ')}`,
+        );
       if (r.closed) parts.push(`закрыто (долг погашен): ${r.closed}`);
       if (r.sent) parts.push(`отправлено: ${r.sent}`);
       if (r.failed)
@@ -277,10 +290,17 @@ export default function ReceivablesPage() {
               ? 'Загрузка…'
               : `${data?.rows.length ?? 0} должников · просрочено ${
                   totalOverdue.map(fmtMoney).join(' + ') || '0'
-                }${claims ? ` · претензий на утверждении: ${claims}` : ''}`}
+                }${stopped ? ` · со стопом: ${stopped}` : ''}`}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowHolidays(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted/50 transition-colors"
+          >
+            <CalendarDays size={13} />
+            Праздники
+          </button>
           {canAct && (
             <button
               onClick={run}
@@ -318,32 +338,28 @@ export default function ReceivablesPage() {
             {data.mode === 'test' && data.testRecipient
               ? ` (${data.testRecipient})`
               : ''}
-            . Письма создаются и отправляются автоматически раз в неделю
+            . Письма создаются и отправляются автоматически каждый рабочий день
+            в 10:00
             {data.nextRun
               ? ` (ближайший прогон — ${fmtRun(data.nextRun)})`
               : ''}
-            , перед этим долги обновляются из 1С; претензия уходит сразу после
-            утверждения.
+            , перед этим долги обновляются из 1С. Отсчёт — от даты каждого акта
+            и срока оплаты T по договору.
           </div>
           <div className="opacity-80">
             {data.stages
-              .map(
-                (s) =>
-                  `${s.day} дн. — ${s.title.toLowerCase()}${
-                    s.requiresApproval ? ' (после утверждения юристом)' : ''
-                  }`,
-              )
+              .map((s) => `${s.stage}. ${s.title} — ${s.when}`)
               .join(' · ')}
+            . После письма 5 — претензия вручную (юрист).
           </div>
         </div>
       )}
 
       {data && !data.lettersReady && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
-          <span className="font-semibold">Бланк писем — черновик:</span>{' '}
-          реквизиты компании ещё не заполнены. Клиентам (боевой режим) письма не
-          уйдут, пока бухгалтерия не пришлёт бланк; тестовые и режим проверки
-          работают.
+          <span className="font-semibold">Подпись писем не заполнена:</span> нет
+          контакта (DEBT_CONTACT_*) или организация не настроена. Клиентам
+          (боевой режим) письма не уйдут; тестовые и режим проверки работают.
         </div>
       )}
 
@@ -407,15 +423,15 @@ export default function ReceivablesPage() {
           />
         </div>
         <button
-          onClick={() => setOnlyClaims((v) => !v)}
+          onClick={() => setOnlyStops((v) => !v)}
           className={cn(
             'px-2.5 py-1 rounded-md text-xs font-medium border transition-all',
-            onlyClaims
+            onlyStops
               ? 'bg-primary text-primary-foreground border-primary'
               : 'border-border text-muted-foreground hover:bg-muted/50',
           )}
         >
-          Претензии на утверждении
+          Со стопом{stopped ? ` · ${stopped}` : ''}
         </button>
         <button
           onClick={() => setOnlyDeferred((v) => !v)}
@@ -484,13 +500,22 @@ export default function ReceivablesPage() {
                       )}
                       {r.deferral && (
                         <div className="text-xs text-blue-700 flex items-center gap-1">
-                          <CalendarClock size={11} /> отсрочка до{' '}
+                          <CalendarClock size={11} /> отсрочка: новый срок{' '}
                           {fmtShort(r.deferral.until)} ·{' '}
                           {DEFERRAL_REASON_LABELS[
                             r.deferral.reason
                           ].toLowerCase()}
                         </div>
                       )}
+                      {r.stops.map((kind) => (
+                        <div
+                          key={kind}
+                          className="text-xs text-red-700 flex items-center gap-1"
+                        >
+                          <Ban size={11} />{' '}
+                          {STOP_KIND_LABELS[kind].toLowerCase()} — писем нет
+                        </div>
+                      ))}
                     </td>
                     <td className="px-4 py-2.5 text-right text-xs whitespace-nowrap">
                       {r.overdue.length ? (
@@ -504,9 +529,9 @@ export default function ReceivablesPage() {
                         <div
                           key={`u-${m.currency}`}
                           className="text-muted-foreground"
-                          title="Долг есть в 1С, но акта под него нет: срок неизвестен, письмом не отправляется"
+                          title="В 1С нет акта или срока оплаты: срок не угадываем, письмом не отправляется"
                         >
-                          + без акта {fmtMoney(m)}
+                          + без срока {fmtMoney(m)}
                         </div>
                       ))}
                     </td>
@@ -522,26 +547,24 @@ export default function ReceivablesPage() {
                       {r.stage ? (
                         `${r.stage.stage}. ${r.stage.title}`
                       ) : (
-                        <span className="text-muted-foreground">ещё рано</span>
+                        <span className="text-muted-foreground">
+                          писем ещё не было
+                        </span>
                       )}
                       {r.nextLetter && (
                         <div className="text-muted-foreground">
-                          далее: этап {r.nextLetter.stage},{' '}
+                          далее: письмо {r.nextLetter.stage},{' '}
                           {fmtShort(r.nextLetter.date)}
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-xs">
-                      {r.pendingClaimId ? (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 text-amber-800 px-2 py-0.5 font-medium">
-                          <Gavel size={11} /> Претензия ждёт утверждения
-                        </span>
-                      ) : r.lastLetter ? (
+                      {r.lastLetter ? (
                         <div>
                           <span
                             className={STATUS[r.lastLetter.status].className}
                           >
-                            Этап {r.lastLetter.stage} ·{' '}
+                            Письмо {r.lastLetter.stage} ·{' '}
                             {STATUS[r.lastLetter.status].label}
                           </span>
                           <div className="text-muted-foreground">
@@ -560,10 +583,18 @@ export default function ReceivablesPage() {
         )}
       </Card>
 
+      {showHolidays && (
+        <HolidaysPanel
+          onClose={() => setShowHolidays(false)}
+          onChanged={load}
+        />
+      )}
+
       {selected && data && (
         <DebtorPanel
           row={selected}
           mode={data.mode}
+          stages={data.stages}
           canAct={canAct}
           onClose={() => setSelected(null)}
           onChanged={load}
@@ -585,25 +616,27 @@ function termLabel(d: DebtorDocument): string {
 function noLettersReason(row: DebtorRow): string {
   if (!row.email)
     return 'Писем не было: у клиента нет email — ни в карточке 1С, ни в «Клиенты».';
-  if (row.deferral)
-    return `Писем пока не было — действует отсрочка до ${fmtDate(row.deferral.until)}.`;
+  if (row.stops.length)
+    return `Писем нет: ${row.stops.map((k) => STOP_KIND_LABELS[k].toLowerCase()).join(', ')}.`;
   if (!row.nextLetter) return 'Писем этому клиенту ещё не было.';
   const when =
     row.nextLetter.date === todayYmd()
       ? 'при ближайшем прогоне'
-      : `в прогон ${fmtDate(row.nextLetter.date)}`;
+      : fmtDate(row.nextLetter.date);
   return `Писем этому клиенту ещё не было. Первое — «${row.nextLetter.title}», ${when}.`;
 }
 
 function DebtorPanel({
   row,
   mode,
+  stages,
   canAct,
   onClose,
   onChanged,
 }: {
   row: DebtorRow;
   mode: DebtMailMode;
+  stages: DebtStage[];
   canAct: boolean;
   onClose: () => void;
   onChanged: () => void;
@@ -612,52 +645,26 @@ function DebtorPanel({
     documents: DebtorDocument[];
     letters: DebtorLetter[];
     deferrals: DebtorDeferral[];
+    stops: DebtorStop[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [approving, setApproving] = useState(false);
   const [openLetter, setOpenLetter] = useState<string | null>(null);
-  const activeDeferral = details?.deferrals.find((d) => d.active) ?? null;
+  const stageTitle = (n: number) =>
+    stages.find((s) => s.stage === n)?.title ?? `Письмо ${n}`;
 
   const load = useCallback(
     () =>
       receivablesApi
         .details(row.customerId)
-        .then((d) => {
-          setDetails(d);
-          // Претензию юрист должен прочитать до утверждения — раскрываем сразу.
-          setOpenLetter(
-            (prev) =>
-              prev ??
-              d.letters.find((l) => l.status === 'pending_approval')?.id ??
-              null,
-          );
-        })
+        .then(setDetails)
         .catch((e: Error) => setError(e.message)),
     [row.customerId],
   );
   useEffect(() => {
     load();
   }, [load]);
-
-  const approve = async (letter: DebtorLetter) => {
-    if (
-      !window.confirm(
-        `Утвердить претензию для «${row.name}»?\n\nПосле утверждения письмо ${WHERE[letter.mode]}.`,
-      )
-    )
-      return;
-    setApproving(true);
-    setError(null);
-    try {
-      await receivablesApi.approve(letter.id);
-    } catch (e) {
-      // Чаще всего претензию уже утвердил другой юрист или клиент заплатил —
-      // показываем причину и обновляем данные, чтобы кнопка не висела зря.
-      setError((e as Error).message);
-    } finally {
-      setApproving(false);
-    }
-    await load();
+  const changed = () => {
+    load();
     onChanged();
   };
 
@@ -707,18 +714,22 @@ function DebtorPanel({
           )
         ) : (
           <>
+            <StopSection
+              customerId={row.customerId}
+              stops={details.stops}
+              canAct={canAct}
+              onChanged={changed}
+            />
+
             <DeferralSection
               customerId={row.customerId}
               deferrals={details.deferrals}
-              onChanged={() => {
-                load();
-                onChanged();
-              }}
+              onChanged={changed}
             />
 
             <section className="space-y-2">
               <div className="text-xs text-muted-foreground">
-                НЕОПЛАЧЕННЫЕ ДОКУМЕНТЫ
+                НЕОПЛАЧЕННЫЕ АКТЫ
               </div>
               <table className="w-full text-xs">
                 <thead>
@@ -744,11 +755,24 @@ function DebtorPanel({
                             договор {d.contractNumber}
                           </div>
                         )}
+                        {d.stagesDone.length > 0 && (
+                          <div className="text-muted-foreground">
+                            письма: {d.stagesDone.join(', ')}
+                          </div>
+                        )}
                       </td>
                       <td className="py-1.5">
-                        {d.dueDate && d.daysOverdue !== null ? (
+                        {d.dueDate && d.deadline && d.daysOverdue !== null ? (
                           <>
-                            <div>{fmtDate(d.dueDate)}</div>
+                            <div>
+                              {fmtDate(d.deadline)}
+                              {d.deadline !== d.dueDate && (
+                                <span className="text-blue-700">
+                                  {' '}
+                                  (отсрочка; по договору {fmtDate(d.dueDate)})
+                                </span>
+                              )}
+                            </div>
                             <div className={cn(daysClass(d.daysOverdue))}>
                               {d.daysOverdue > 0
                                 ? `просрочка ${d.daysOverdue} дн.`
@@ -763,7 +787,7 @@ function DebtorPanel({
                         ) : (
                           <div
                             className="text-muted-foreground"
-                            title="Акта под этот долг в 1С нет — срок посчитать не из чего. Письмом не отправляется."
+                            title="В 1С нет акта или срока оплаты — срок не угадываем. Письмом не отправляется, случай — в ежедневном отчёте."
                           >
                             срок неизвестен
                           </div>
@@ -803,7 +827,12 @@ function DebtorPanel({
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="font-medium">{l.subject}</div>
+                    <div>
+                      <div className="font-medium">
+                        Письмо {l.stage}. {stageTitle(l.stage)}
+                      </div>
+                      <div className="text-muted-foreground">{l.subject}</div>
+                    </div>
                     <span
                       className={cn(
                         'whitespace-nowrap',
@@ -817,18 +846,13 @@ function DebtorPanel({
                     {fmtDateTime(l.createdAt)} · просрочка {l.daysOverdue} дн. ·
                     кому {l.toAddr}
                     {l.ccAddr && `, копия ${l.ccAddr}`}
+                    {l.replyToAddr && `, ответ клиента — ${l.replyToAddr}`}
                     {l.mode !== mode &&
                       ` · ${MODE[l.mode].label.toLowerCase()}`}
                   </div>
                   {l.caseClosed && (
                     <div className="text-muted-foreground">
                       Прошлая просрочка — долг тогда был погашен.
-                    </div>
-                  )}
-                  {l.approvedBy && l.approvedAt && (
-                    <div className="flex items-center gap-1 text-green-700">
-                      <ShieldCheck size={12} /> Утвердил {l.approvedBy},{' '}
-                      {fmtDateTime(l.approvedAt)}
                     </div>
                   )}
                   {l.error && <div className="text-red-600">{l.error}</div>}
@@ -847,30 +871,6 @@ function DebtorPanel({
                       )}
                       {openLetter === l.id ? 'Скрыть текст' : 'Текст письма'}
                     </button>
-                    {l.status === 'pending_approval' &&
-                      (activeDeferral ? (
-                        <span className="text-blue-700">
-                          Отсрочка до {fmtDate(activeDeferral.until)} —
-                          утвердить можно после неё
-                        </span>
-                      ) : canAct ? (
-                        <button
-                          onClick={() => approve(l)}
-                          disabled={approving}
-                          className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
-                        >
-                          {approving ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <Gavel size={12} />
-                          )}
-                          Утвердить претензию
-                        </button>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          Утвердить может юрист
-                        </span>
-                      ))}
                   </div>
 
                   {openLetter === l.id && (
@@ -879,7 +879,7 @@ function DebtorPanel({
                       title={l.subject}
                       sandbox=""
                       srcDoc={l.html}
-                      className="w-full h-72 rounded border bg-white"
+                      className="w-full h-96 rounded border bg-white"
                     />
                   )}
                 </div>
@@ -893,9 +893,10 @@ function DebtorPanel({
 }
 
 /**
- * Отсрочка: клиент прислал платёжку или договорился о графике. До даты письма
- * не создаются и не отправляются, претензию утвердить нельзя. Ставить может любой
- * сотрудник — платёжки и звонки приходят в бухгалтерию; кто поставил, видно в истории.
+ * Отсрочка: клиент прислал платёжку или договорился о графике — новый крайний срок
+ * оплаты. Письма 2–5 считаются заново от него (письмо 2 — за 2 дня до срока),
+ * письмо 1 повторно не уходит. Ставить может любой сотрудник — платёжки и звонки
+ * приходят в бухгалтерию; кто поставил, видно в истории.
  */
 function DeferralSection({
   customerId,
@@ -939,7 +940,7 @@ function DeferralSection({
     if (!active) return;
     if (
       !window.confirm(
-        'Снять отсрочку? Письма возобновятся со следующего прогона.',
+        'Снять отсрочку? Срок снова будет по договору, письма продолжатся со следующего прогона.',
       )
     )
       return;
@@ -962,8 +963,8 @@ function DeferralSection({
       {active && !editing && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs space-y-1">
           <div className="font-medium text-blue-900 flex items-center gap-1">
-            <CalendarClock size={12} /> До {fmtDate(active.until)} включительно
-            · {DEFERRAL_REASON_LABELS[active.reason]}
+            <CalendarClock size={12} /> Новый срок оплаты —{' '}
+            {fmtDate(active.until)} · {DEFERRAL_REASON_LABELS[active.reason]}
           </div>
           {active.comment && (
             <div className="whitespace-pre-wrap">{active.comment}</div>
@@ -972,8 +973,8 @@ function DeferralSection({
             Поставил {active.createdBy ?? '—'}, {fmtDateTime(active.createdAt)}
           </div>
           <div className="text-muted-foreground">
-            Письма не создаются и не отправляются, претензию утвердить нельзя.
-            Если оплата дойдёт до 1С — кейс закроется сам.
+            Письма считаются от нового срока: письмо 2 — за 2 дня до него, 3–5 —
+            после. Если оплата дойдёт до 1С — кейс закроется сам.
           </div>
           <div className="flex gap-3 pt-1">
             <button
@@ -1002,8 +1003,8 @@ function DeferralSection({
             <CalendarClock size={13} /> Поставить отсрочку
           </button>
           <span className="text-xs text-muted-foreground">
-            Прислал платёжку или договорился о графике — письма не пойдут до
-            выбранной даты
+            Прислал платёжку или договорился о графике — новый срок оплаты,
+            письма считаются от него
           </span>
         </div>
       )}
@@ -1033,7 +1034,7 @@ function DeferralSection({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Не писать до (включительно)</Label>
+            <Label className="text-xs">Новый срок оплаты</Label>
             <div className="flex items-center gap-1.5 flex-wrap">
               <input
                 type="date"
@@ -1105,7 +1106,7 @@ function DeferralSection({
             <ul className="mt-1.5 space-y-1.5">
               {past.map((d) => (
                 <li key={d.id} className="text-muted-foreground">
-                  до {fmtDate(d.until)} · {DEFERRAL_REASON_LABELS[d.reason]}
+                  срок {fmtDate(d.until)} · {DEFERRAL_REASON_LABELS[d.reason]}
                   {d.comment && ` — ${d.comment}`}
                   <div className="text-[11px]">
                     поставил {d.createdBy ?? '—'} {fmtDateTime(d.createdAt)}
@@ -1119,5 +1120,378 @@ function DeferralSection({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Стоп для писем клиенту: спор по сумме или претензия уже направлена. Пока стоп
+ * стоит, автоматических писем нет, случай попадает в ежедневный отчёт. Ставят и
+ * снимают юристы и админы; история остаётся.
+ */
+function StopSection({
+  customerId,
+  stops,
+  canAct,
+  onChanged,
+}: {
+  customerId: string;
+  stops: DebtorStop[];
+  canAct: boolean;
+  onChanged: () => void;
+}) {
+  const active = stops.filter((s) => s.active);
+  const past = stops.filter((s) => !s.active);
+  const [kind, setKind] = useState<DebtStopKind | null>(null);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const free = (Object.keys(STOP_KIND_LABELS) as DebtStopKind[]).filter(
+    (k) => !active.some((s) => s.kind === k),
+  );
+
+  const save = async () => {
+    if (!kind) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await receivablesApi.stop(customerId, {
+        kind,
+        comment: comment.trim() || undefined,
+      });
+      setKind(null);
+      setComment('');
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancel = async (stop: DebtorStop) => {
+    if (
+      !window.confirm(
+        `Снять «${STOP_KIND_LABELS[stop.kind]}»? Письма 3–5 догонят при следующем прогоне.`,
+      )
+    )
+      return;
+    setError(null);
+    try {
+      await receivablesApi.cancelStop(stop.id);
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  if (!canAct && active.length === 0 && past.length === 0) return null;
+
+  return (
+    <section className="space-y-2">
+      <div className="text-xs text-muted-foreground">СТОП ДЛЯ ПИСЕМ</div>
+
+      {active.map((s) => (
+        <div
+          key={s.id}
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs space-y-1"
+        >
+          <div className="font-medium text-red-900 flex items-center gap-1">
+            <Ban size={12} /> {STOP_KIND_LABELS[s.kind]} — автоматических писем
+            нет
+          </div>
+          {s.comment && <div className="whitespace-pre-wrap">{s.comment}</div>}
+          <div className="text-muted-foreground">
+            Поставил {s.createdBy ?? '—'}, {fmtDateTime(s.createdAt)}
+          </div>
+          {canAct && (
+            <button
+              onClick={() => cancel(s)}
+              className="text-red-700 hover:underline"
+            >
+              Снять
+            </button>
+          )}
+        </div>
+      ))}
+
+      {canAct && !kind && free.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {free.map((k) => (
+            <button
+              key={k}
+              onClick={() => setKind(k)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium hover:bg-muted/50 transition-colors"
+            >
+              <Ban size={13} /> {STOP_KIND_LABELS[k]}
+            </button>
+          ))}
+          <span className="text-xs text-muted-foreground">
+            писем клиенту не будет, случай — в ежедневном отчёте
+          </span>
+        </div>
+      )}
+
+      {kind && (
+        <div className="rounded-lg border p-3 space-y-3 text-xs">
+          <div className="font-medium">{STOP_KIND_LABELS[kind]}</div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Комментарий</Label>
+            <Textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              maxLength={1000}
+              placeholder={
+                kind === 'dispute'
+                  ? 'Что оспаривает клиент: «не согласен с актом TL-00000440»'
+                  : 'Когда и кем направлена претензия'
+              }
+              className="text-xs md:text-xs"
+            />
+          </div>
+          {error && <div className="text-red-600">{error}</div>}
+          <div className="flex gap-2">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
+            >
+              {saving && <Loader2 size={12} className="animate-spin" />}
+              Поставить стоп
+            </button>
+            <button
+              onClick={() => {
+                setKind(null);
+                setError(null);
+              }}
+              className="px-3 py-1.5 rounded-md border hover:bg-muted/50"
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!kind && error && <div className="text-xs text-red-600">{error}</div>}
+
+      {past.length > 0 && (
+        <div className="text-xs">
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            {showHistory ? 'Скрыть' : 'Показать'} снятые стопы ({past.length})
+          </button>
+          {showHistory && (
+            <ul className="mt-1.5 space-y-1.5">
+              {past.map((s) => (
+                <li key={s.id} className="text-muted-foreground">
+                  {STOP_KIND_LABELS[s.kind]}
+                  {s.comment && ` — ${s.comment}`}
+                  <div className="text-[11px]">
+                    поставил {s.createdBy ?? '—'} {fmtDateTime(s.createdAt)}
+                    {s.cancelledAt &&
+                      ` · снял ${s.cancelledBy ?? '—'} ${fmtDateTime(s.cancelledAt)}`}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** «21.03.2026, сб» — дату праздника удобнее проверять с днём недели. */
+const fmtDay = (ymd: string) =>
+  `${fmtDate(ymd)}, ${new Date(`${ymd}T00:00:00Z`).toLocaleDateString('ru-RU', {
+    weekday: 'short',
+    timeZone: 'UTC',
+  })}`;
+
+const isWeekend = (ymd: string) => {
+  const day = new Date(`${ymd}T00:00:00Z`).getUTCDay();
+  return day === 0 || day === 6;
+};
+
+/**
+ * Праздники Узбекистана — нерабочие дни рассылки. Вносят сотрудники: дни Хайита
+ * и переносы выходных объявляют каждый год, в коде их нет.
+ */
+function HolidaysPanel({
+  onClose,
+  onChanged,
+}: {
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [items, setItems] = useState<DebtHoliday[] | null>(null);
+  const [date, setDate] = useState('');
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPast, setShowPast] = useState(false);
+
+  const load = useCallback(
+    () =>
+      receivablesApi
+        .holidays()
+        .then(setItems)
+        .catch((e: Error) => setError(e.message)),
+    [],
+  );
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const today = todayYmd();
+  const upcoming = (items ?? []).filter((h) => h.date >= today);
+  const past = (items ?? []).filter((h) => h.date < today).reverse();
+
+  const add = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await receivablesApi.addHoliday({ date, name: name.trim() || undefined });
+      setDate('');
+      setName('');
+      await load();
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (h: DebtHoliday) => {
+    if (!window.confirm(`Убрать праздник ${fmtDay(h.date)}?`)) return;
+    setError(null);
+    try {
+      await receivablesApi.removeHoliday(h.date);
+      await load();
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const row = (h: DebtHoliday) => (
+    <li
+      key={h.date}
+      className="flex items-start justify-between gap-3 py-2 text-xs"
+    >
+      <div>
+        <div className="font-medium">
+          {fmtDay(h.date)}
+          {h.name && ` — ${h.name}`}
+        </div>
+        <div className="text-muted-foreground">
+          внёс {h.createdBy ?? '—'}, {fmtDateTime(h.createdAt)}
+        </div>
+      </div>
+      <button
+        onClick={() => remove(h)}
+        title="Убрать"
+        className="text-muted-foreground hover:text-red-600"
+      >
+        ✕
+      </button>
+    </li>
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md h-full bg-background shadow-xl p-5 overflow-y-auto space-y-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-sm flex items-center gap-1.5">
+              <CalendarDays size={15} /> Праздники
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Нерабочие дни рассылки, кроме субботы и воскресенья. В такой день
+              писем нет: письма 1–2 уходят в предыдущий рабочий день (до срока),
+              3–5 — в следующий.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+
+        <section className="rounded-lg border p-3 space-y-3 text-xs">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Дата</Label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="h-8 rounded-md border bg-transparent px-2 text-sm"
+            />
+            {date && isWeekend(date) && (
+              <div className="text-amber-700">
+                Это суббота или воскресенье — в выходные писем и так нет.
+              </div>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Название</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={200}
+              placeholder="Навруз, Рамазан Хайит, перенос выходного…"
+              className="h-8 text-xs"
+            />
+          </div>
+          {error && <div className="text-red-600">{error}</div>}
+          <button
+            onClick={add}
+            disabled={saving || !date}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors"
+          >
+            {saving && <Loader2 size={12} className="animate-spin" />}
+            Добавить
+          </button>
+        </section>
+
+        <section className="space-y-1">
+          <div className="text-xs text-muted-foreground">ВПЕРЕДИ</div>
+          {!items ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 size={14} className="animate-spin" /> Загрузка…
+            </div>
+          ) : upcoming.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Праздников не внесено — рассылка идёт по будням.
+            </p>
+          ) : (
+            <ul className="divide-y">{upcoming.map(row)}</ul>
+          )}
+        </section>
+
+        {past.length > 0 && (
+          <section className="text-xs">
+            <button
+              onClick={() => setShowPast((v) => !v)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {showPast ? 'Скрыть' : 'Показать'} прошедшие ({past.length})
+            </button>
+            {showPast && <ul className="divide-y mt-1">{past.map(row)}</ul>}
+          </section>
+        )}
+      </div>
+    </div>
   );
 }
