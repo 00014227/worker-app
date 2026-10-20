@@ -1,0 +1,82 @@
+/**
+ * Вид Mini App.
+ *
+ * Цвета берутся из переменных, которые заполняет Telegram (см. applyTheme):
+ * иначе приложение выглядит чужим в тёмной теме. Значения после запятой —
+ * запас на случай, когда Telegram ничего не передал.
+ */
+
+.tg-page {
+  min-height: 100vh;
+  padding: 16px 16px 96px; /* снизу место под кнопку Telegram */
+  background: var(--tg-bg, #ffffff);
+  color: var(--tg-text, #111111);
+  font-size: 15px;
+}
+
+.tg-hint-text {
+  font-size: 13px;
+  color: var(--tg-hint, #8a8a8e);
+  line-height: 1.4;
+}
+
+.tg-card {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--tg-secondary-bg, #f4f4f5);
+}
+
+/* Поля ввода. 16px — не меньше: при меньшем размере iOS приближает страницу
+   при фокусе, и приложение «прыгает». */
+.tg-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 16px;
+  color: var(--tg-text, #111111);
+  background: var(--tg-bg, #ffffff);
+  border: 1px solid var(--tg-hint, #c7c7cc);
+  border-radius: 10px;
+  appearance: none;
+}
+
+.tg-input:focus {
+  outline: none;
+  border-color: var(--tg-button, #2481cc);
+}
+
+.tg-input:disabled {
+  opacity: 0.5;
+}
+
+.tg-button {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--tg-button-text, #ffffff);
+  background: var(--tg-button, #2481cc);
+  border: none;
+  border-radius: 10px;
+}
+
+.tg-button-secondary {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 16px;
+  font-size: 15px;
+  color: var(--tg-text, #111111);
+  background: transparent;
+  border: 1px solid var(--tg-hint, #c7c7cc);
+  border-radius: 10px;
+}
+
+.tg-error {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: 10px;
+}

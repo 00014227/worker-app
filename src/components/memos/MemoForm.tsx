@@ -49,7 +49,11 @@ export default function MemoForm({
   const [error, setError] = useState<string | null>(null);
 
   const spec = meta.types.find((t) => t.type === type);
-  const fields = spec?.fields ?? [];
+  // Поле с невыполненным условием не показываем: своя причина спрашивается
+  // только при «Иное».
+  const fields = (spec?.fields ?? []).filter(
+    (f) => !f.requiredWhen || f.requiredWhen.equals.includes(payload[f.requiredWhen.key] ?? ''),
+  );
   const setField = (key: string, value: string) =>
     setPayload((prev) => ({ ...prev, [key]: value }));
 
@@ -99,7 +103,9 @@ export default function MemoForm({
           <div className="space-y-1.5">
             <Label>Тип записки *</Label>
             <div className="grid grid-cols-2 gap-2">
-              {meta.types.map((t) => (
+              {meta.types
+                .filter((t) => meta.creatableTypes.includes(t.type))
+                .map((t) => (
                 <button
                   key={t.type}
                   onClick={() => setType(t.type)}
@@ -185,7 +191,20 @@ export default function MemoForm({
                 <Label>
                   {field.label} {field.required ? '*' : ''}
                 </Label>
-                {field.type === 'textarea' ? (
+                {field.type === 'select' ? (
+                  <select
+                    className={selectCls}
+                    value={payload[field.key] ?? ''}
+                    onChange={(e) => setField(field.key, e.target.value)}
+                  >
+                    <option value="">— выберите —</option>
+                    {(field.options ?? []).map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : field.type === 'textarea' ? (
                   <Textarea
                     value={payload[field.key] ?? ''}
                     onChange={(e) => setField(field.key, e.target.value)}

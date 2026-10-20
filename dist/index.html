@@ -5,9 +5,12 @@
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TransAsia Worker</title>
-    <script type="module" crossorigin src="/assets/index-CIeuiH5A.js"></script>
+      <!-- Mini App записок: нужен до монтирования React, чтобы ready() сработал
+         на первой отрисовке. Пакета в проекте нет — это официальный путь. -->
+    <script src="https://telegram.org/js/telegram-web-app.js?57"></script>
+    <script type="module" crossorigin src="/assets/index-wqgGWm7B.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-BbdFH7Bp.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-BNJesknl.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-CyACbalo.css">
   </head>
   <body>
     <div id="root"></div>
