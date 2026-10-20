@@ -1334,6 +1334,8 @@ export interface DebtorDocument {
   organizationName: string | null;
   /** Дней на оплату после акта и откуда: contract — договор, payment_term — справочник. */
   termDays: number | null;
+  /** В каких днях срок: банковские и рабочие считаются по рабочим дням. */
+  termUnit: 'calendar' | 'working' | 'banking' | null;
   dueDateSource: 'contract' | 'payment_term' | 'none' | null;
   /** Письма, уже ушедшие по этому акту (номера этапов). */
   stagesDone: number[];
