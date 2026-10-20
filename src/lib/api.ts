@@ -1251,25 +1251,46 @@ export interface DebtorRow {
   name: string;
   inn: string | null;
   email: string | null;
-  /** По самому старому неоплаченному документу; null — просроченных нет. */
+  /** По самому просроченному акту (с учётом отсрочки); null — просроченных нет. */
   daysOverdue: number | null;
+  /** Самый поздний этап, чей день уже наступил по какому-нибудь акту. */
   stage: { stage: number; title: string } | null;
   debt: MoneyByCurrency[];
   overdue: MoneyByCurrency[];
-  /** Долг, под который в 1С не нашлось акта: срок неизвестен, письмом не отправляется. */
+  /** Долг без срока: в 1С нет акта или срока оплаты — письмом не отправляется. */
   undated: MoneyByCurrency[];
-  /** Наши юрлица, которым должен клиент; письмо каждого — на его бланке. */
+  /** Наши юрлица, которым должен клиент; от каждого — своё письмо. */
   organizations: string[];
   lastLetter: {
     stage: number;
     status: DebtLetterStatus;
     createdAt: string;
   } | null;
-  pendingClaimId: string | null;
-  /** Действующая отсрочка: до этой даты включительно писем нет. */
+  /** Действующая отсрочка — новый крайний срок оплаты. */
   deferral: { until: string; reason: DebtDeferralReason } | null;
-  /** Какое письмо уйдёт следующим и не раньше какой даты (YYYY-MM-DD). */
+  /** Стопы: спор по сумме, претензия направлена — автоматических писем нет. */
+  stops: DebtStopKind[];
+  /** Какое письмо уйдёт следующим и когда (YYYY-MM-DD). */
   nextLetter: { stage: number; title: string; date: string } | null;
+}
+
+/** Стоп для писем клиенту. */
+export type DebtStopKind = 'dispute' | 'claim';
+
+export const STOP_KIND_LABELS: Record<DebtStopKind, string> = {
+  dispute: 'Спор по сумме',
+  claim: 'Претензия направлена',
+};
+
+export interface DebtorStop {
+  id: string;
+  kind: DebtStopKind;
+  comment: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  active: boolean;
 }
 
 /** Почему отложили письма. */
@@ -1298,9 +1319,12 @@ export interface DebtorDocument {
   id: string;
   docNumber: string;
   contractNumber: string | null;
-  /** YYYY-MM-DD; null — долг из 1С без акта, срок неизвестен. */
+  /** YYYY-MM-DD; null — в 1С нет акта или срока, письмом не отправляется. */
   docDate: string | null;
+  /** Срок по договору. */
   dueDate: string | null;
+  /** Действующий срок: после отсрочки — новый. */
+  deadline: string | null;
   amount: string;
   paid: string;
   balance: string;
@@ -1311,6 +1335,8 @@ export interface DebtorDocument {
   /** Дней на оплату после акта и откуда: contract — договор, payment_term — справочник. */
   termDays: number | null;
   dueDateSource: 'contract' | 'payment_term' | 'none' | null;
+  /** Письма, уже ушедшие по этому акту (номера этапов). */
+  stagesDone: number[];
 }
 
 export interface DebtorLetter {
@@ -1321,11 +1347,11 @@ export interface DebtorLetter {
   daysOverdue: number;
   toAddr: string;
   ccAddr: string | null;
+  /** Куда уйдёт ответ клиента — КАМ. */
+  replyToAddr: string | null;
   subject: string;
   html: string;
   createdAt: string;
-  approvedAt: string | null;
-  approvedBy: string | null;
   sentAt: string | null;
   error: string | null;
   caseClosed: boolean;
@@ -1333,27 +1359,42 @@ export interface DebtorLetter {
 
 export interface DebtStage {
   stage: number;
-  /** С какого дня просрочки положен этап. */
-  day: number;
   title: string;
-  /** Претензия: уходит только после «Утвердить». */
-  requiresApproval: boolean;
+  /** Когда уходит: «T÷2 дней от даты АВР», «просрочка 14 дней»… */
+  when: string;
 }
+
+/** Праздник — нерабочий день рассылки. */
+export interface DebtHoliday {
+  /** YYYY-MM-DD. */
+  date: string;
+  name: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+/** Почему письмо не ушло. */
+export type DebtStopReason = 'no_email' | 'dispute' | 'claim' | 'no_term';
 
 export interface DunningRunResult {
   mode: DebtMailMode;
   created: number;
-  skippedNoEmail: number;
-  /** Пропущено из-за отсрочки. */
-  deferred: number;
-  closed: number;
   /** Отправлено / не ушло (в режиме проверки всегда 0). */
   sent: number;
   failed: number;
+  cancelled: number;
+  closed: number;
+  letters: { customer: string; stage: number; acts: string[]; to: string }[];
+  stopped: {
+    customer: string;
+    reason: DebtStopReason;
+    stage?: number;
+    acts: string[];
+  }[];
 }
 
 /**
- * Дебиторка: смотреть и ставить отсрочку — всем; прогонять и утверждать —
+ * Дебиторка: смотреть и ставить отсрочку — всем; прогонять и ставить стопы —
  * юристам и админам.
  */
 export const receivablesApi = {
@@ -1361,7 +1402,7 @@ export const receivablesApi = {
     mode: DebtMailMode;
     /** Куда уходят письма в тестовом режиме. */
     testRecipient: string;
-    /** Реквизиты компании в бланке заполнены; нет — клиентам письма не уходят. */
+    /** Организация и контакт в подписи заполнены; нет — клиентам письма не уходят. */
     lettersReady: boolean;
     stages: DebtStage[];
     /** Ближайший прогон рассылки по расписанию (ISO); null — расписание не запущено. */
@@ -1374,6 +1415,7 @@ export const receivablesApi = {
     documents: DebtorDocument[];
     letters: DebtorLetter[];
     deferrals: DebtorDeferral[];
+    stops: DebtorStop[];
   }> {
     return req(`/worker/receivables/${customerId}`);
   },
@@ -1394,12 +1436,29 @@ export const receivablesApi = {
   run(): Promise<DunningRunResult> {
     return req('/worker/receivables/run', { method: 'POST' });
   },
-  approve(
-    notificationId: string,
-  ): Promise<{ id: string; status: DebtLetterStatus }> {
-    return req(`/worker/receivables/notifications/${notificationId}/approve`, {
+  stop(
+    customerId: string,
+    input: { kind: DebtStopKind; comment?: string },
+  ): Promise<{ id: string }> {
+    return req(`/worker/receivables/${customerId}/stops`, {
       method: 'POST',
+      body: JSON.stringify(input),
     });
+  },
+  cancelStop(id: string): Promise<{ id: string }> {
+    return req(`/worker/receivables/stops/${id}/cancel`, { method: 'POST' });
+  },
+  holidays(): Promise<DebtHoliday[]> {
+    return req('/worker/receivables/holidays');
+  },
+  addHoliday(input: { date: string; name?: string }): Promise<DebtHoliday> {
+    return req('/worker/receivables/holidays', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  removeHoliday(date: string): Promise<{ date: string }> {
+    return req(`/worker/receivables/holidays/${date}`, { method: 'DELETE' });
   },
 };
 
