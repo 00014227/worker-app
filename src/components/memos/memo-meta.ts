@@ -13,7 +13,10 @@ import type {
  * схемы. Русские подписи живут здесь, рядом с интерфейсом, а не в API: иначе
  * любое изменение формулировки требовало бы выкатки бэкенда.
  */
-export const MEMO_STATUS: Record<MemoStatus, { label: string; chip: string; dot: string }> = {
+export const MEMO_STATUS: Record<
+  MemoStatus,
+  { label: string; chip: string; dot: string }
+> = {
   draft: {
     label: 'Черновик',
     chip: 'bg-slate-100 text-slate-600 border-slate-200',
@@ -52,27 +55,68 @@ export const MEMO_STATUS: Record<MemoStatus, { label: string; chip: string; dot:
  */
 export const MEMO_TYPE: Record<MemoType, { label: string; short: string }> = {
   absence: { label: 'Отсутствие на рабочем месте', short: 'Отсутствие' },
+  extra_expenses: { label: 'Обоснование доп. расходов', short: 'Доп. расходы' },
   payment: { label: 'Оплата', short: 'Оплата' },
   purchase: { label: 'Закупка', short: 'Закупка' },
   trip: { label: 'Командировка', short: 'Команд.' },
   other: { label: 'Прочая записка', short: 'Прочее' },
 };
 
-/** Состояние этапа в маршруте. */
-export const TASK_STATUS: Record<MemoTaskStatus, { label: string; chip: string }> = {
-  waiting: { label: 'Ждёт очереди', chip: 'bg-slate-100 text-slate-500 border-slate-200' },
-  pending: { label: 'Ждёт решения', chip: 'bg-blue-50 text-blue-700 border-blue-200' },
-  approved: { label: 'Согласовано', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  rejected: { label: 'Отклонено', chip: 'bg-red-50 text-red-700 border-red-200' },
-  returned: { label: 'Возвращено', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
-  cancelled: { label: 'Снято', chip: 'bg-slate-100 text-slate-400 border-slate-200' },
-  skipped: { label: 'Пропущено', chip: 'bg-slate-100 text-slate-400 border-slate-200' },
+/** Перевыставлен ли расход клиенту — подписи для карточки. */
+export const REBILLED_LABEL: Record<string, string> = {
+  yes: 'Перевыставлен клиенту',
+  no: 'Не перевыставлен клиенту',
+  partial: 'Перевыставлен частично',
 };
 
-export const DECISION: Record<MemoDecisionKind, { label: string; chip: string }> = {
-  approve: { label: 'Согласовал', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+/** Состояние этапа в маршруте. */
+export const TASK_STATUS: Record<
+  MemoTaskStatus,
+  { label: string; chip: string }
+> = {
+  waiting: {
+    label: 'Ждёт очереди',
+    chip: 'bg-slate-100 text-slate-500 border-slate-200',
+  },
+  pending: {
+    label: 'Ждёт решения',
+    chip: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  approved: {
+    label: 'Согласовано',
+    chip: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
+  rejected: {
+    label: 'Отклонено',
+    chip: 'bg-red-50 text-red-700 border-red-200',
+  },
+  returned: {
+    label: 'Возвращено',
+    chip: 'bg-amber-50 text-amber-700 border-amber-200',
+  },
+  cancelled: {
+    label: 'Снято',
+    chip: 'bg-slate-100 text-slate-400 border-slate-200',
+  },
+  skipped: {
+    label: 'Пропущено',
+    chip: 'bg-slate-100 text-slate-400 border-slate-200',
+  },
+};
+
+export const DECISION: Record<
+  MemoDecisionKind,
+  { label: string; chip: string }
+> = {
+  approve: {
+    label: 'Согласовал',
+    chip: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
   reject: { label: 'Отклонил', chip: 'bg-red-50 text-red-700 border-red-200' },
-  return: { label: 'Вернул на доработку', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
+  return: {
+    label: 'Вернул на доработку',
+    chip: 'bg-amber-50 text-amber-700 border-amber-200',
+  },
 };
 
 /** Подписи событий журнала. */
@@ -89,11 +133,17 @@ export const EVENT_LABEL: Record<string, string> = {
 };
 
 /** Деньги: разделители разрядов и валюта рядом. Приходят строкой, без float. */
-export function fmtMoney(amount: string | null, currency: string | null): string {
+export function fmtMoney(
+  amount: string | null,
+  currency: string | null,
+): string {
   if (amount === null) return '—';
   const value = Number(amount);
   const text = Number.isFinite(value)
-    ? value.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+    ? value.toLocaleString('ru-RU', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      })
     : amount;
   return currency ? `${text} ${currency}` : text;
 }
@@ -150,7 +200,10 @@ export function dueLabel(dueAt: string | null): string {
  * Без неё карточка показывала бы `vacation` вместо «Отпуск»: в базе лежит
  * значение, а человеку нужна подпись.
  */
-export function optionLabel(field: MemoFieldDef, value: string | number): string {
+export function optionLabel(
+  field: MemoFieldDef,
+  value: string | number,
+): string {
   const found = field.options?.find((o) => o.value === String(value));
   return found ? found.label : String(value);
 }

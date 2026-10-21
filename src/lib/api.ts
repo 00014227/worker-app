@@ -1686,7 +1686,8 @@ export const tenderApi = {
 // ── Служебные записки ──────────────────────────────────────────────────────
 
 /** Все известные типы. Прежние остаются: их записки надо открывать. */
-export type MemoType = 'absence' | 'payment' | 'purchase' | 'trip' | 'other';
+export type MemoType =
+  'absence' | 'extra_expenses' | 'payment' | 'purchase' | 'trip' | 'other';
 export type MemoStatus =
   | 'draft'
   | 'pending_approval'
@@ -1719,9 +1720,21 @@ export interface MemoFieldDef {
 
 export interface MemoMeta {
   /** Все известные типы — по ним карточка находит описания полей. */
-  types: { type: MemoType; fields: MemoFieldDef[]; amountRequired: boolean }[];
+  types: {
+    type: MemoType;
+    fields: MemoFieldDef[];
+    amountRequired: boolean;
+    /** Где тип заполняется. `miniapp` кабинет предлагать не должен. */
+    createdIn: 'cabinet' | 'miniapp' | 'both';
+  }[];
   /** Что можно создать сейчас. Остальное — только читать. */
   creatableTypes: MemoType[];
+  /**
+   * Что может создать кабинет. Уже отфильтровано сервером по `createdIn`:
+   * обоснование доп. расходов заполняется только в Telegram, потому что
+   * кабинет не умеет рисовать таблицу расходов.
+   */
+  cabinetCreatableTypes: MemoType[];
   statuses: MemoStatus[];
   currencies: string[];
   departments: { id: string; name: string }[];
@@ -1789,6 +1802,33 @@ export interface MemoEventView {
   actorEmployeeId: string | null;
 }
 
+/** Строка таблицы расходов. Деньги строками — точность не теряется. */
+export interface MemoExpenseLineView {
+  expenseType: string;
+  planned: string;
+  actual: string;
+  /** Факт минус план. Положительное — перерасход. */
+  diff: string;
+}
+
+/** Табличная часть обоснования доп. расходов. */
+export interface MemoExtraExpenseView {
+  orderNumber: string;
+  /** Есть, только если по номеру нашлась ровно одна перевозка. */
+  orderId: string | null;
+  currency: string | null;
+  lines: MemoExpenseLineView[];
+  plannedTotal: string;
+  actualTotal: string;
+  /** Итог факта минус итог плана. Отрицательное — сэкономили. */
+  expenseOverrun: string;
+  incomePlanned: string;
+  incomeActual: string;
+  incomeDiff: string;
+  rebilled: string;
+  culprit: string | null;
+}
+
 export interface MemoCard {
   id: string;
   number: string | null;
@@ -1811,6 +1851,8 @@ export interface MemoCard {
   /** Задача, по которой этот человек может решать прямо сейчас. */
   myTaskId: string | null;
   events: MemoEventView[];
+  /** Таблица расходов. У остальных типов — null. */
+  extraExpense: MemoExtraExpenseView | null;
   canEdit: boolean;
   canCancel: boolean;
 }
@@ -1835,12 +1877,21 @@ export interface MemoAnalytics {
   byStatus: Partial<Record<MemoStatus, number>>;
   byType: Partial<Record<MemoType, number>>;
   /** Суммы раздельно по валютам: курсов в базе нет, единый итог был бы выдуман. */
-  approvedByCurrency: { currency: string | null; total: string; count: number }[];
+  approvedByCurrency: {
+    currency: string | null;
+    total: string;
+    count: number;
+  }[];
   avgHoursToDecision: number | null;
   decidedCount: number;
   overdueTasks: number;
   decisionsByRole: { roleId: string; count: number }[];
-  waitByRole: { roleId: string; roleName: string; avgHours: number; count: number }[];
+  waitByRole: {
+    roleId: string;
+    roleName: string;
+    avgHours: number;
+    count: number;
+  }[];
 }
 
 export interface MemoInput {
@@ -1931,7 +1982,9 @@ export const memoApi = {
     return req<MemoCard>(`/worker/memos/${id}`);
   },
   readiness(id: string): Promise<{ ready: boolean; problems: string[] }> {
-    return req<{ ready: boolean; problems: string[] }>(`/worker/memos/${id}/readiness`);
+    return req<{ ready: boolean; problems: string[] }>(
+      `/worker/memos/${id}/readiness`,
+    );
   },
   create(input: MemoInput): Promise<{ id: string; status: MemoStatus }> {
     return req<{ id: string; status: MemoStatus }>('/worker/memos', {
@@ -1939,13 +1992,18 @@ export const memoApi = {
       body: JSON.stringify(input),
     });
   },
-  update(id: string, input: Partial<MemoInput>): Promise<{ id: string; status: MemoStatus }> {
+  update(
+    id: string,
+    input: Partial<MemoInput>,
+  ): Promise<{ id: string; status: MemoStatus }> {
     return req<{ id: string; status: MemoStatus }>(`/worker/memos/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(input),
     });
   },
-  submit(id: string): Promise<{ number: string; stepNo: number; resubmitted: boolean }> {
+  submit(
+    id: string,
+  ): Promise<{ number: string; stepNo: number; resubmitted: boolean }> {
     return req<{ number: string; stepNo: number; resubmitted: boolean }>(
       `/worker/memos/${id}/submit`,
       { method: 'POST' },
@@ -1981,15 +2039,22 @@ export const memoApi = {
       const body = await res.json().catch(() => ({}));
       const raw = body?.message?.message ?? body?.message ?? body?.error;
       throw new Error(
-        Array.isArray(raw) ? raw.join('; ') : typeof raw === 'string' ? raw : 'Не удалось загрузить',
+        Array.isArray(raw)
+          ? raw.join('; ')
+          : typeof raw === 'string'
+            ? raw
+            : 'Не удалось загрузить',
       );
     }
     return res.json();
   },
   removeAttachment(id: string, attachmentId: string): Promise<{ ok: true }> {
-    return req<{ ok: true }>(`/worker/memos/${id}/attachments/${attachmentId}`, {
-      method: 'DELETE',
-    });
+    return req<{ ok: true }>(
+      `/worker/memos/${id}/attachments/${attachmentId}`,
+      {
+        method: 'DELETE',
+      },
+    );
   },
   /**
    * Вложение грузим запросом с токеном и отдаём blob-ссылку: просмотр файла
@@ -1997,9 +2062,12 @@ export const memoApi = {
    * не должны.
    */
   async attachmentUrl(id: string, attachmentId: string): Promise<string> {
-    const res = await fetch(`/api/worker/memos/${id}/attachments/${attachmentId}`, {
-      headers: authHeaders(),
-    });
+    const res = await fetch(
+      `/api/worker/memos/${id}/attachments/${attachmentId}`,
+      {
+        headers: authHeaders(),
+      },
+    );
     if (!res.ok) throw new Error('Вложение недоступно');
     return URL.createObjectURL(await res.blob());
   },
@@ -2039,22 +2107,32 @@ export const memoApi = {
         body: JSON.stringify({ code, name }),
       });
     },
-    updateRole(id: string, name: string, isActive?: boolean): Promise<{ id: string }> {
+    updateRole(
+      id: string,
+      name: string,
+      isActive?: boolean,
+    ): Promise<{ id: string }> {
       return req<{ id: string }>(`/worker/memos/admin/roles/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ name, isActive }),
       });
     },
     addMember(roleId: string, employeeId: string): Promise<{ id: string }> {
-      return req<{ id: string }>(`/worker/memos/admin/roles/${roleId}/members`, {
-        method: 'POST',
-        body: JSON.stringify({ employeeId }),
-      });
+      return req<{ id: string }>(
+        `/worker/memos/admin/roles/${roleId}/members`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ employeeId }),
+        },
+      );
     },
     removeMember(roleId: string, employeeId: string): Promise<{ ok: true }> {
-      return req<{ ok: true }>(`/worker/memos/admin/roles/${roleId}/members/${employeeId}`, {
-        method: 'DELETE',
-      });
+      return req<{ ok: true }>(
+        `/worker/memos/admin/roles/${roleId}/members/${employeeId}`,
+        {
+          method: 'DELETE',
+        },
+      );
     },
     candidates(): Promise<MemoCandidate[]> {
       return req<MemoCandidate[]>('/worker/memos/admin/candidates');
@@ -2076,33 +2154,53 @@ export const memoApi = {
       id: string,
       steps: { roleId: string; isMandatory?: boolean; slaHours?: number }[],
     ): Promise<{ id: string; versionNo: number }> {
-      return req<{ id: string; versionNo: number }>(`/worker/memos/admin/routes/${id}/steps`, {
-        method: 'POST',
-        body: JSON.stringify({ steps }),
-      });
+      return req<{ id: string; versionNo: number }>(
+        `/worker/memos/admin/routes/${id}/steps`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ steps }),
+        },
+      );
     },
-    setRouteActive(id: string, isActive: boolean): Promise<{ id: string; isActive: boolean }> {
-      return req<{ id: string; isActive: boolean }>(`/worker/memos/admin/routes/${id}/active`, {
-        method: 'POST',
-        body: JSON.stringify({ isActive }),
-      });
+    setRouteActive(
+      id: string,
+      isActive: boolean,
+    ): Promise<{ id: string; isActive: boolean }> {
+      return req<{ id: string; isActive: boolean }>(
+        `/worker/memos/admin/routes/${id}/active`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ isActive }),
+        },
+      );
     },
     links(): Promise<MemoLinkStatus[]> {
       return req<MemoLinkStatus[]>('/worker/memos/admin/telegram-links');
     },
     /** Код показывается ровно один раз — в этом ответе. */
-    issueCode(
-      employeeId: string,
-    ): Promise<{ employeeId: string; name: string; code: string; expiresAt: string }> {
-      return req<{ employeeId: string; name: string; code: string; expiresAt: string }>(
-        '/worker/memos/admin/telegram-code',
-        { method: 'POST', body: JSON.stringify({ employeeId }) },
-      );
+    issueCode(employeeId: string): Promise<{
+      employeeId: string;
+      name: string;
+      code: string;
+      expiresAt: string;
+    }> {
+      return req<{
+        employeeId: string;
+        name: string;
+        code: string;
+        expiresAt: string;
+      }>('/worker/memos/admin/telegram-code', {
+        method: 'POST',
+        body: JSON.stringify({ employeeId }),
+      });
     },
     unlink(employeeId: string): Promise<{ ok: true }> {
-      return req<{ ok: true }>(`/worker/memos/admin/telegram-links/${employeeId}`, {
-        method: 'DELETE',
-      });
+      return req<{ ok: true }>(
+        `/worker/memos/admin/telegram-links/${employeeId}`,
+        {
+          method: 'DELETE',
+        },
+      );
     },
   },
 };
