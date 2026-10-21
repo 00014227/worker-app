@@ -1806,9 +1806,9 @@ export interface MemoEventView {
 export interface MemoExpenseLineView {
   expenseType: string;
   /** Кому платим — как ввёл автор. */
-  supplierName: string | null;
-  /** Подрядчик из справочника, если имя выбрали из подсказки. */
-  supplierId: string | null;
+  counterpartyName: string | null;
+  /** Контрагент 1С, если имя выбрали из подсказки. */
+  counterpartyId: string | null;
   planned: string;
   actual: string;
   /** Факт минус план. Положительное — перерасход. */

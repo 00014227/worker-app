@@ -19,17 +19,24 @@ export type TgMemoType = 'absence' | 'extra_expenses';
 /** Строка расходов в черновике — строками, как её держат поля ввода. */
 export interface TgDraftLine {
   expenseType: string;
-  supplierName: string;
-  supplierId: string;
+  counterpartyName: string;
+  counterpartyId: string;
   planned: string;
   actual: string;
 }
 
-/** Подрядчик в подсказке. Ничего, кроме названия и ИНН, сервер не отдаёт. */
-export interface TgSupplier {
+/**
+ * Контрагент в подсказке. Кроме названия и ИНН сервер ничего не отдаёт.
+ *
+ * `source` говорит, откуда имя: `onec` — справочник 1С, `own` — наш список
+ * подрядчиков. Ссылку на строку расхода кладём только у первых: записи из
+ * нашего справочника в 1С нет, и связывать не с чем.
+ */
+export interface TgCounterparty {
   id: string;
   name: string;
   inn: string | null;
+  source: 'onec' | 'own';
 }
 
 /**
@@ -114,9 +121,9 @@ export const tgApi = {
   },
 
   /** Подсказки «кому платим». Меньше двух букв сервер не ищет. */
-  suppliers(q: string): Promise<TgSupplier[]> {
-    return request<TgSupplier[]>(
-      `/memo-tg/suppliers?q=${encodeURIComponent(q)}`,
+  counterparties(q: string): Promise<TgCounterparty[]> {
+    return request<TgCounterparty[]>(
+      `/memo-tg/counterparties?q=${encodeURIComponent(q)}`,
     );
   },
 
@@ -149,8 +156,8 @@ export const tgApi = {
     currency: string;
     lines: {
       expenseType: string;
-      supplierName: string;
-      supplierId?: string;
+      counterpartyName: string;
+      counterpartyId?: string;
       planned: number;
       actual: number;
     }[];
