@@ -47,6 +47,9 @@ export default function MemoExtraExpenseBlock({
             <thead>
               <tr className="text-xs text-muted-foreground">
                 <th className="text-left font-normal pb-1.5">Вид расхода</th>
+                <th className="text-left font-normal pb-1.5 pl-3">
+                  Кому платим
+                </th>
                 <th className="text-right font-normal pb-1.5 pl-3">План</th>
                 <th className="text-right font-normal pb-1.5 pl-3">Факт</th>
                 <th className="text-right font-normal pb-1.5 pl-3">Разница</th>
@@ -72,7 +75,9 @@ export default function MemoExtraExpenseBlock({
                 </tr>
               ))}
               <tr className="border-t font-medium">
-                <td className="py-1.5 pr-2">Итого</td>
+                <td className="py-1.5 pr-2" colSpan={2}>
+                  Итого
+                </td>
                 <td className="py-1.5 pl-3 text-right tabular-nums whitespace-nowrap">
                   {fmtMoney(extra.plannedTotal, null)}
                 </td>

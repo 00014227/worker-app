@@ -1805,6 +1805,10 @@ export interface MemoEventView {
 /** Строка таблицы расходов. Деньги строками — точность не теряется. */
 export interface MemoExpenseLineView {
   expenseType: string;
+  /** Кому платим — как ввёл автор. */
+  supplierName: string | null;
+  /** Подрядчик из справочника, если имя выбрали из подсказки. */
+  supplierId: string | null;
   planned: string;
   actual: string;
   /** Факт минус план. Положительное — перерасход. */
