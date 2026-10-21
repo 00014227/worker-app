@@ -13,11 +13,36 @@ export interface TgFieldDef {
   requiredWhen?: { key: string; equals: string[] };
 }
 
+/** Какие формы умеет приложение. Больше одной — с тех пор как типов два. */
+export type TgMemoType = 'absence' | 'extra_expenses';
+
+/** Строка расходов в черновике — строками, как её держат поля ввода. */
+export interface TgDraftLine {
+  expenseType: string;
+  planned: string;
+  actual: string;
+}
+
+/**
+ * Черновик. Строки расходов — не строка, а массив, поэтому значение шире, чем
+ * `string`: именно на этом раньше пропадала бы таблица.
+ */
+export type TgDraftData = Record<string, string | TgDraftLine[] | undefined>;
+
 export interface TgForm {
+  /** Какую форму открыли. Сервер сводит незнакомый тип к отсутствию. */
+  memoType: TgMemoType;
   fields: TgFieldDef[];
   departments: { id: string; name: string }[];
+  /** Справочники, нужные формам. Подписи приходят с сервера, а не зашиты. */
+  options: {
+    reasons: { value: string; label: string }[];
+    rebilled: { value: string; label: string }[];
+    currencies: string[];
+    maxExpenseLines: number;
+  };
   /** Незаконченная форма, если человек не дозаполнил её в прошлый раз. */
-  draft: { data: Record<string, string>; updatedAt: string } | null;
+  draft: { memoType: TgMemoType; data: TgDraftData; updatedAt: string } | null;
 }
 
 export interface TgSession {
@@ -67,11 +92,12 @@ export const tgApi = {
     return session;
   },
 
-  form(): Promise<TgForm> {
-    return request<TgForm>('/memo-tg/form');
+  form(type?: TgMemoType): Promise<TgForm> {
+    const query = type ? `?type=${encodeURIComponent(type)}` : '';
+    return request<TgForm>(`/memo-tg/form${query}`);
   },
 
-  saveDraft(data: Record<string, string>): Promise<{ ok: true }> {
+  saveDraft(data: TgDraftData): Promise<{ ok: true }> {
     return request<{ ok: true }>('/memo-tg/draft', {
       method: 'PUT',
       body: JSON.stringify({ data }),
@@ -94,5 +120,31 @@ export const tgApi = {
       method: 'POST',
       body: JSON.stringify(input),
     });
+  },
+
+  /**
+   * Обоснование доп. расходов.
+   *
+   * Отдельный адрес, а не общий `memos`: там тело описано полями отсутствия, и
+   * проверка на сервере отвергла бы эту форму целиком.
+   */
+  createExtraExpenses(input: {
+    orderNumber: string;
+    currency: string;
+    lines: { expenseType: string; planned: number; actual: number }[];
+    incomePlanned: number;
+    incomeActual: number;
+    reason: string;
+    rebilled: string;
+    culprit?: string;
+    departmentId?: string;
+  }): Promise<CreatedMemo & { overrun: string }> {
+    return request<CreatedMemo & { overrun: string }>(
+      '/memo-tg/extra-expenses',
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
   },
 };

@@ -20,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import MemoForm from '@/components/memos/MemoForm';
+import MemoExtraExpenseBlock from '@/components/memos/MemoExtraExpenseBlock';
 import MemoRouteTimeline from '@/components/memos/MemoRouteTimeline';
 import {
   EVENT_LABEL,
@@ -93,7 +94,12 @@ export default function MemoCardPage() {
 
   const cancel = async () => {
     if (!memo) return;
-    if (!window.confirm('Отменить записку? Открытые задачи согласования будут сняты.')) return;
+    if (
+      !window.confirm(
+        'Отменить записку? Открытые задачи согласования будут сняты.',
+      )
+    )
+      return;
     setBusy(true);
     try {
       await memoApi.cancel(memo.id);
@@ -117,7 +123,10 @@ export default function MemoCardPage() {
   if (!memo) {
     return (
       <div className="space-y-3">
-        <Link to="/memos" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+        <Link
+          to="/memos"
+          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+        >
           <ArrowLeft size={12} /> К реестру
         </Link>
         <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -128,11 +137,15 @@ export default function MemoCardPage() {
   }
 
   const status = MEMO_STATUS[memo.status];
-  const fields = meta?.types.find((t) => t.type === memo.memoType)?.fields ?? [];
+  const fields =
+    meta?.types.find((t) => t.type === memo.memoType)?.fields ?? [];
 
   return (
     <div className="space-y-4">
-      <Link to="/memos" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+      <Link
+        to="/memos"
+        className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+      >
         <ArrowLeft size={12} /> К реестру
       </Link>
 
@@ -140,7 +153,12 @@ export default function MemoCardPage() {
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold">{memo.number ?? 'Черновик'}</h1>
-            <span className={cn('px-2 py-0.5 rounded border text-xs font-medium', status.chip)}>
+            <span
+              className={cn(
+                'px-2 py-0.5 rounded border text-xs font-medium',
+                status.chip,
+              )}
+            >
               {status.label}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded border bg-muted/50">
@@ -150,8 +168,10 @@ export default function MemoCardPage() {
           <p className="text-sm mt-1">{memo.title}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {memo.authorName}
-            {memo.department && ` · ${memo.department.name}`} · создана {fmtDateTime(memo.createdAt)}
-            {memo.submittedAt && ` · отправлена ${fmtDateTime(memo.submittedAt)}`}
+            {memo.department && ` · ${memo.department.name}`} · создана{' '}
+            {fmtDateTime(memo.createdAt)}
+            {memo.submittedAt &&
+              ` · отправлена ${fmtDateTime(memo.submittedAt)}`}
           </p>
         </div>
 
@@ -180,8 +200,14 @@ export default function MemoCardPage() {
               title={problems.length ? problems.join('; ') : undefined}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-40"
             >
-              {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-              {memo.status === 'changes_requested' ? 'Отправить повторно' : 'Отправить'}
+              {busy ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Send size={13} />
+              )}
+              {memo.status === 'changes_requested'
+                ? 'Отправить повторно'
+                : 'Отправить'}
             </button>
           )}
         </div>
@@ -210,47 +236,75 @@ export default function MemoCardPage() {
         </div>
       )}
 
+      {/* Правка этого типа в кабинете закрыта намеренно: кабинет не умеет
+          рисовать таблицу расходов, и открытый ящик правки стал бы ловушкой —
+          автор увидел бы пустую форму без таблицы и «сохранил» бы впустую. */}
+      {memo.extraExpense &&
+        memo.isAuthor &&
+        ['draft', 'changes_requested'].includes(memo.status) && (
+          <div className="rounded-lg border bg-muted/40 px-4 py-2.5 text-xs text-muted-foreground flex items-start gap-2">
+            <Pencil size={13} className="mt-0.5 shrink-0" />
+            <span>
+              Эта записка заполняется в Telegram: таблицу расходов кабинет не
+              рисует. Откройте бота записок и исправьте её там.
+            </span>
+          </div>
+        )}
+
       {/* Повторная подача идёт с шага, который вернул — объясняем, чтобы автор
           не искал, почему маршрут не начался заново. */}
       {memo.status === 'changes_requested' && memo.isAuthor && (
         <div className="rounded-lg border bg-muted/40 px-4 py-2.5 text-xs text-muted-foreground flex items-start gap-2">
           <RotateCcw size={13} className="mt-0.5 shrink-0" />
           <span>
-            Записку вернули на доработку. После исправления она пойдёт <b>к тому же
-            согласующему</b>, который её вернул — ранее данные согласования сохраняются и заново
-            не запрашиваются.
+            Записку вернули на доработку. После исправления она пойдёт{' '}
+            <b>к тому же согласующему</b>, который её вернул — ранее данные
+            согласования сохраняются и заново не запрашиваются.
           </span>
         </div>
       )}
 
       {memo.myTaskId && (
-        <DecisionPanel
-          memoId={memo.id}
-          taskId={memo.myTaskId}
-          onDone={load}
-        />
+        <DecisionPanel memoId={memo.id} taskId={memo.myTaskId} onDone={load} />
       )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-3 pt-4">
-              <Row label="Сумма" value={fmtMoney(memo.amount, memo.currency)} />
+              {/* У доп. расходов в сумме лежит превышение — подписываем как
+                  есть, иначе «Сумма» читается как стоимость перевозки. */}
+              <Row
+                label={memo.extraExpense ? 'Превышение по расходам' : 'Сумма'}
+                value={fmtMoney(memo.amount, memo.currency)}
+              />
               {fields.map((f) => {
                 const value = memo.payload[f.key];
                 if (value === undefined || value === '') return null;
                 // Для выбора показываем подпись: в базе лежит значение, и
                 // согласующий иначе читал бы «vacation» вместо «Отпуск».
-                return <Row key={f.key} label={f.label} value={optionLabel(f, value)} />;
+                return (
+                  <Row
+                    key={f.key}
+                    label={f.label}
+                    value={optionLabel(f, value)}
+                  />
+                );
               })}
               <div>
-                <div className="text-xs text-muted-foreground mb-1">Обоснование</div>
+                <div className="text-xs text-muted-foreground mb-1">
+                  {memo.extraExpense ? 'Причина перерасхода' : 'Обоснование'}
+                </div>
                 <div className="text-sm whitespace-pre-wrap leading-relaxed">
                   {memo.justification}
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {memo.extraExpense && (
+            <MemoExtraExpenseBlock extra={memo.extraExpense} />
+          )}
 
           <Attachments memo={memo} onChanged={load} />
         </div>
@@ -297,7 +351,9 @@ export default function MemoCardPage() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-3 text-sm">
-      <span className="text-xs text-muted-foreground shrink-0 pt-0.5">{label}</span>
+      <span className="text-xs text-muted-foreground shrink-0 pt-0.5">
+        {label}
+      </span>
       <span className="text-right break-words">{value}</span>
     </div>
   );
@@ -350,10 +406,30 @@ function DecisionPanel({
         <div className="flex items-center gap-2 flex-wrap">
           {(
             [
-              { k: 'approve' as const, label: 'Согласовать', icon: Check, cls: 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600' },
-              { k: 'return' as const, label: 'На доработку', icon: RotateCcw, cls: 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500' },
-              { k: 'reject' as const, label: 'Отклонить', icon: X, cls: 'bg-red-600 hover:bg-red-700 text-white border-red-600' },
-            ] satisfies { k: MemoDecisionKind; label: string; icon: typeof Check; cls: string }[]
+              {
+                k: 'approve' as const,
+                label: 'Согласовать',
+                icon: Check,
+                cls: 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600',
+              },
+              {
+                k: 'return' as const,
+                label: 'На доработку',
+                icon: RotateCcw,
+                cls: 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500',
+              },
+              {
+                k: 'reject' as const,
+                label: 'Отклонить',
+                icon: X,
+                cls: 'bg-red-600 hover:bg-red-700 text-white border-red-600',
+              },
+            ] satisfies {
+              k: MemoDecisionKind;
+              label: string;
+              icon: typeof Check;
+              cls: string;
+            }[]
           ).map(({ k, label, icon: Icon, cls }) => (
             <button
               key={k}
@@ -398,7 +474,13 @@ function DecisionPanel({
 }
 
 /** Вложения: приложить можно, пока записку можно править. */
-function Attachments({ memo, onChanged }: { memo: MemoCard; onChanged: () => Promise<void> }) {
+function Attachments({
+  memo,
+  onChanged,
+}: {
+  memo: MemoCard;
+  onChanged: () => Promise<void>;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -488,7 +570,9 @@ function Attachments({ memo, onChanged }: { memo: MemoCard; onChanged: () => Pro
                   <Download size={11} className="shrink-0" />
                   <span className="truncate">{a.name}</span>
                 </button>
-                <span className="text-muted-foreground shrink-0">{fmtSize(a.size)}</span>
+                <span className="text-muted-foreground shrink-0">
+                  {fmtSize(a.size)}
+                </span>
                 {memo.canEdit && (
                   <button
                     onClick={() => remove(a.id)}

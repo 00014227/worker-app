@@ -32,7 +32,12 @@ export default function MemoForm({
   onSaved: (id: string) => void;
 }) {
   const editing = !!memo;
-  const [type, setType] = useState<MemoType>(memo?.memoType ?? 'payment');
+  // Начальный тип берём из того, что кабинет умеет создавать. Зашитый
+  // `payment` ломал создание: этот тип из создаваемых убран, и отправка
+  // падала с «Этот тип записки больше не создаётся».
+  const [type, setType] = useState<MemoType>(
+    memo?.memoType ?? meta.cabinetCreatableTypes[0] ?? 'other',
+  );
   const [title, setTitle] = useState(memo?.title ?? '');
   const [departmentId, setDepartmentId] = useState(memo?.department?.id ?? '');
   const [justification, setJustification] = useState(memo?.justification ?? '');
@@ -52,7 +57,9 @@ export default function MemoForm({
   // Поле с невыполненным условием не показываем: своя причина спрашивается
   // только при «Иное».
   const fields = (spec?.fields ?? []).filter(
-    (f) => !f.requiredWhen || f.requiredWhen.equals.includes(payload[f.requiredWhen.key] ?? ''),
+    (f) =>
+      !f.requiredWhen ||
+      f.requiredWhen.equals.includes(payload[f.requiredWhen.key] ?? ''),
   );
   const setField = (key: string, value: string) =>
     setPayload((prev) => ({ ...prev, [key]: value }));
@@ -85,16 +92,24 @@ export default function MemoForm({
   const ready = title.trim().length >= 3 && justification.trim().length >= 5;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 flex justify-end" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-xl h-full bg-background shadow-xl p-5 overflow-y-auto space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <h2 className="font-semibold text-sm">
-            {editing ? `Правка записки ${memo!.number ?? ''}` : 'Новая служебная записка'}
+            {editing
+              ? `Правка записки ${memo!.number ?? ''}`
+              : 'Новая служебная записка'}
           </h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <X size={18} />
           </button>
         </div>
@@ -104,21 +119,21 @@ export default function MemoForm({
             <Label>Тип записки *</Label>
             <div className="grid grid-cols-2 gap-2">
               {meta.types
-                .filter((t) => meta.creatableTypes.includes(t.type))
+                .filter((t) => meta.cabinetCreatableTypes.includes(t.type))
                 .map((t) => (
-                <button
-                  key={t.type}
-                  onClick={() => setType(t.type)}
-                  className={cn(
-                    'px-3 py-2 rounded-lg border text-xs font-medium transition-colors text-left',
-                    type === t.type
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'hover:bg-muted/50',
-                  )}
-                >
-                  {MEMO_TYPE[t.type].label}
-                </button>
-              ))}
+                  <button
+                    key={t.type}
+                    onClick={() => setType(t.type)}
+                    className={cn(
+                      'px-3 py-2 rounded-lg border text-xs font-medium transition-colors text-left',
+                      type === t.type
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'hover:bg-muted/50',
+                    )}
+                  >
+                    {MEMO_TYPE[t.type].label}
+                  </button>
+                ))}
             </div>
           </div>
         )}
@@ -213,13 +228,21 @@ export default function MemoForm({
                   />
                 ) : (
                   <Input
-                    type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                    type={
+                      field.type === 'number'
+                        ? 'number'
+                        : field.type === 'date'
+                          ? 'date'
+                          : 'text'
+                    }
                     value={payload[field.key] ?? ''}
                     onChange={(e) => setField(field.key, e.target.value)}
                     maxLength={field.maxLength}
                   />
                 )}
-                {field.hint && <p className="text-xs text-muted-foreground">{field.hint}</p>}
+                {field.hint && (
+                  <p className="text-xs text-muted-foreground">{field.hint}</p>
+                )}
               </div>
             ))}
           </div>
