@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tgApi } from './tgApi';
-import type { TgDraftData, TgForm } from './tgApi';
+import type { TgDraftData, TgForm, TgSupplier } from './tgApi';
 import { mainButton } from './telegram';
 
 /** Задержка перед сохранением черновика: раз в полторы секунды после правки. */
 const SAVE_DELAY_MS = 1500;
 
+/** Задержка перед запросом подсказок: пока человек печатает, сервер не дёргаем. */
+const SUGGEST_DELAY_MS = 300;
+
 export interface ExpenseRow {
   /** Ключ строки для React. На сервер не уходит. */
   id: string;
   expenseType: string;
+  /** Кому платим — как ввёл человек. */
+  supplierName: string;
+  /** Подрядчик из подсказки. Пусто, когда имя вписали руками. */
+  supplierId: string;
   planned: string;
   actual: string;
 }
@@ -33,6 +40,8 @@ let rowSeq = 0;
 const newRow = (): ExpenseRow => ({
   id: `r${(rowSeq += 1)}`,
   expenseType: '',
+  supplierName: '',
+  supplierId: '',
   planned: '',
   actual: '',
 });
@@ -208,6 +217,10 @@ export default function ExtraExpenseForm({
           .filter((l) => !isBlank(l))
           .map((l) => ({
             expenseType: l.expenseType.trim(),
+            supplierName: l.supplierName.trim(),
+            // Ссылку шлём только вместе с именем из справочника: сервер всё
+            // равно сверит её и выдуманную сотрёт.
+            supplierId: l.supplierId || undefined,
             planned: toCents(l.planned) / 100,
             actual: toCents(l.actual) / 100,
           })),
@@ -310,6 +323,21 @@ export default function ExtraExpenseForm({
                   </button>
                 )}
               </div>
+              <SupplierField
+                value={line.supplierName}
+                onType={(v) =>
+                  // Имя правят руками — значит это уже не выбранный из
+                  // справочника подрядчик, и ссылку надо снять.
+                  setLine(line.id, { supplierName: v, supplierId: '' })
+                }
+                onPick={(found) =>
+                  setLine(line.id, {
+                    supplierName: found.name,
+                    supplierId: found.id,
+                  })
+                }
+              />
+
               <div className="grid grid-cols-2 gap-2">
                 <Money
                   label="План"
@@ -464,6 +492,8 @@ function toDraft(values: ExtraExpenseValues) {
     currency: values.currency,
     lines: values.lines.map((l) => ({
       expenseType: l.expenseType,
+      supplierName: l.supplierName,
+      supplierId: l.supplierId,
       planned: l.planned,
       actual: l.actual,
     })),
@@ -512,6 +542,107 @@ function diffClass(cents: number, higherIsBetter = false): string {
   if (cents === 0) return '';
   const bad = higherIsBetter ? cents < 0 : cents > 0;
   return bad ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium';
+}
+
+/**
+ * «Кому платим» с подсказками из справочника подрядчиков.
+ *
+ * Поле остаётся обычным текстовым: справочник неполон (1С его не отдаёт), и
+ * нового получателя нельзя отвергать только потому, что его там ещё нет.
+ * Подсказка — помощь, а не ограничение.
+ *
+ * Запрос уходит с задержкой и только от двух букв: иначе на каждое нажатие
+ * клавиши шёл бы запрос, а по одной букве вернулся бы весь справочник.
+ */
+function SupplierField({
+  value,
+  onType,
+  onPick,
+}: {
+  value: string;
+  onType: (value: string) => void;
+  onPick: (supplier: TgSupplier) => void;
+}) {
+  const [items, setItems] = useState<TgSupplier[]>([]);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<number | null>(null);
+  const asked = useRef('');
+
+  useEffect(
+    () => () => {
+      if (timer.current) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const ask = (query: string) => {
+    if (timer.current) window.clearTimeout(timer.current);
+    if (query.trim().length < 2) {
+      setItems([]);
+      setOpen(false);
+      return;
+    }
+    timer.current = window.setTimeout(() => {
+      asked.current = query;
+      void tgApi
+        .suppliers(query)
+        .then((found) => {
+          // Ответ на устаревший запрос выбрасываем: иначе подсказки прыгали бы
+          // назад к тому, что человек уже дописал.
+          if (asked.current !== query) return;
+          setItems(found);
+          setOpen(found.length > 0);
+        })
+        // Сбой подсказок заполнению не мешает — имя всегда можно вписать.
+        .catch(() => {
+          setItems([]);
+          setOpen(false);
+        });
+    }, SUGGEST_DELAY_MS);
+  };
+
+  return (
+    <div className="tg-suggest-wrap">
+      <input
+        className="tg-input"
+        value={value}
+        onChange={(e) => {
+          onType(e.target.value);
+          ask(e.target.value);
+        }}
+        onFocus={() => setOpen(items.length > 0)}
+        // Закрываем с задержкой: без неё список исчезает раньше, чем успевает
+        // сработать нажатие по подсказке.
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        maxLength={300}
+        placeholder="Кому платим"
+      />
+      {open && (
+        <ul className="tg-suggest">
+          {items.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                className="tg-suggest-item"
+                // pointerDown, а не click: на телефоне поле теряет фокус
+                // раньше, чем доходит нажатие, и выбор не срабатывал бы.
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onPick(item);
+                  setOpen(false);
+                }}
+              >
+                {item.name}
+                {item.inn && (
+                  <span className="tg-hint-text"> ИНН {item.inn}</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function Total({ label, value }: { label: string; value: string }) {
