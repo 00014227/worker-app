@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tgApi } from './tgApi';
-import type { TgDraftData, TgForm, TgSupplier } from './tgApi';
+import type { TgDraftData, TgForm, TgCounterparty } from './tgApi';
 import { mainButton } from './telegram';
 
 /** Задержка перед сохранением черновика: раз в полторы секунды после правки. */
@@ -14,9 +14,9 @@ export interface ExpenseRow {
   id: string;
   expenseType: string;
   /** Кому платим — как ввёл человек. */
-  supplierName: string;
+  counterpartyName: string;
   /** Подрядчик из подсказки. Пусто, когда имя вписали руками. */
-  supplierId: string;
+  counterpartyId: string;
   planned: string;
   actual: string;
 }
@@ -40,8 +40,8 @@ let rowSeq = 0;
 const newRow = (): ExpenseRow => ({
   id: `r${(rowSeq += 1)}`,
   expenseType: '',
-  supplierName: '',
-  supplierId: '',
+  counterpartyName: '',
+  counterpartyId: '',
   planned: '',
   actual: '',
 });
@@ -217,10 +217,10 @@ export default function ExtraExpenseForm({
           .filter((l) => !isBlank(l))
           .map((l) => ({
             expenseType: l.expenseType.trim(),
-            supplierName: l.supplierName.trim(),
-            // Ссылку шлём только вместе с именем из справочника: сервер всё
-            // равно сверит её и выдуманную сотрёт.
-            supplierId: l.supplierId || undefined,
+            counterpartyName: l.counterpartyName.trim(),
+            // Ссылку шлём только когда имя выбрано из 1С: сервер всё равно
+            // сверит её и выдуманную сотрёт.
+            counterpartyId: l.counterpartyId || undefined,
             planned: toCents(l.planned) / 100,
             actual: toCents(l.actual) / 100,
           })),
@@ -323,17 +323,17 @@ export default function ExtraExpenseForm({
                   </button>
                 )}
               </div>
-              <SupplierField
-                value={line.supplierName}
+              <CounterpartyField
+                value={line.counterpartyName}
                 onType={(v) =>
                   // Имя правят руками — значит это уже не выбранный из
                   // справочника подрядчик, и ссылку надо снять.
-                  setLine(line.id, { supplierName: v, supplierId: '' })
+                  setLine(line.id, { counterpartyName: v, counterpartyId: '' })
                 }
                 onPick={(found) =>
                   setLine(line.id, {
-                    supplierName: found.name,
-                    supplierId: found.id,
+                    counterpartyName: found.name,
+                    counterpartyId: found.id,
                   })
                 }
               />
@@ -492,8 +492,8 @@ function toDraft(values: ExtraExpenseValues) {
     currency: values.currency,
     lines: values.lines.map((l) => ({
       expenseType: l.expenseType,
-      supplierName: l.supplierName,
-      supplierId: l.supplierId,
+      counterpartyName: l.counterpartyName,
+      counterpartyId: l.counterpartyId,
       planned: l.planned,
       actual: l.actual,
     })),
@@ -545,25 +545,25 @@ function diffClass(cents: number, higherIsBetter = false): string {
 }
 
 /**
- * «Кому платим» с подсказками из справочника подрядчиков.
+ * «Кому платим» с подсказками из справочника контрагентов 1С.
  *
- * Поле остаётся обычным текстовым: справочник неполон (1С его не отдаёт), и
- * нового получателя нельзя отвергать только потому, что его там ещё нет.
- * Подсказка — помощь, а не ограничение.
+ * Поле остаётся обычным текстовым: в подсказках есть не все, и нового
+ * получателя нельзя отвергать только потому, что его там ещё нет. Подсказка —
+ * помощь, а не ограничение.
  *
  * Запрос уходит с задержкой и только от двух букв: иначе на каждое нажатие
  * клавиши шёл бы запрос, а по одной букве вернулся бы весь справочник.
  */
-function SupplierField({
+function CounterpartyField({
   value,
   onType,
   onPick,
 }: {
   value: string;
   onType: (value: string) => void;
-  onPick: (supplier: TgSupplier) => void;
+  onPick: (found: TgCounterparty) => void;
 }) {
-  const [items, setItems] = useState<TgSupplier[]>([]);
+  const [items, setItems] = useState<TgCounterparty[]>([]);
   const [open, setOpen] = useState(false);
   const timer = useRef<number | null>(null);
   const asked = useRef('');
@@ -585,7 +585,7 @@ function SupplierField({
     timer.current = window.setTimeout(() => {
       asked.current = query;
       void tgApi
-        .suppliers(query)
+        .counterparties(query)
         .then((found) => {
           // Ответ на устаревший запрос выбрасываем: иначе подсказки прыгали бы
           // назад к тому, что человек уже дописал.
