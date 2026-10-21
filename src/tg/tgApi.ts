@@ -19,8 +19,17 @@ export type TgMemoType = 'absence' | 'extra_expenses';
 /** Строка расходов в черновике — строками, как её держат поля ввода. */
 export interface TgDraftLine {
   expenseType: string;
+  supplierName: string;
+  supplierId: string;
   planned: string;
   actual: string;
+}
+
+/** Подрядчик в подсказке. Ничего, кроме названия и ИНН, сервер не отдаёт. */
+export interface TgSupplier {
+  id: string;
+  name: string;
+  inn: string | null;
 }
 
 /**
@@ -104,6 +113,13 @@ export const tgApi = {
     });
   },
 
+  /** Подсказки «кому платим». Меньше двух букв сервер не ищет. */
+  suppliers(q: string): Promise<TgSupplier[]> {
+    return request<TgSupplier[]>(
+      `/memo-tg/suppliers?q=${encodeURIComponent(q)}`,
+    );
+  },
+
   dropDraft(): Promise<{ ok: true }> {
     return request<{ ok: true }>('/memo-tg/draft', { method: 'DELETE' });
   },
@@ -131,7 +147,13 @@ export const tgApi = {
   createExtraExpenses(input: {
     orderNumber: string;
     currency: string;
-    lines: { expenseType: string; planned: number; actual: number }[];
+    lines: {
+      expenseType: string;
+      supplierName: string;
+      supplierId?: string;
+      planned: number;
+      actual: number;
+    }[];
     incomePlanned: number;
     incomeActual: number;
     reason: string;
