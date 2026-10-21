@@ -80,3 +80,41 @@
   border: 1px solid #fecdca;
   border-radius: 10px;
 }
+
+/* Кнопка удаления строки таблицы. Размером с палец — 44 точки, иначе на
+   телефоне в неё не попасть. */
+.tg-icon-button {
+  flex: 0 0 auto;
+  width: 44px;
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--tg-hint, #8a8a8e);
+  background: transparent;
+  border: 1px solid var(--tg-hint, #c7c7cc);
+  border-radius: 10px;
+}
+
+/* Добавление строки. Пунктиром — чтобы не спорила видом с отправкой. */
+.tg-add-row {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tg-link, #2481cc);
+  background: transparent;
+  border: 2px dashed var(--tg-hint, #c7c7cc);
+  border-radius: 10px;
+}
+
+/* Выбор типа записки: широкая карточка-кнопка с подписью под названием. */
+.tg-choice {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  color: var(--tg-text, #111111);
+  background: var(--tg-secondary-bg, #f4f4f5);
+  border: none;
+  border-radius: 12px;
+}

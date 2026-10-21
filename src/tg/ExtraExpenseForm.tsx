@@ -1,0 +1,570 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { tgApi } from './tgApi';
+import type { TgDraftData, TgForm } from './tgApi';
+import { mainButton } from './telegram';
+
+/** Задержка перед сохранением черновика: раз в полторы секунды после правки. */
+const SAVE_DELAY_MS = 1500;
+
+export interface ExpenseRow {
+  /** Ключ строки для React. На сервер не уходит. */
+  id: string;
+  expenseType: string;
+  planned: string;
+  actual: string;
+}
+
+export interface ExtraExpenseValues {
+  orderNumber: string;
+  currency: string;
+  lines: ExpenseRow[];
+  incomePlanned: string;
+  incomeActual: string;
+  reason: string;
+  rebilled: string;
+  culprit: string;
+  departmentId: string;
+}
+
+/** Деньги вводят и с запятой, и с пробелами — принимаем оба написания. */
+const MONEY = /^\d{0,15}([.,]\d{0,2})?$/;
+
+let rowSeq = 0;
+const newRow = (): ExpenseRow => ({
+  id: `r${(rowSeq += 1)}`,
+  expenseType: '',
+  planned: '',
+  actual: '',
+});
+
+/**
+ * Черновик с сервера — в значения формы.
+ *
+ * Ключи строк выдаём заново: в черновике их нет, они нужны только React, а
+ * без них React перепутал бы строки при удалении из середины таблицы.
+ */
+export function extraValuesFromDraft(
+  data: TgDraftData,
+  currency: string,
+): ExtraExpenseValues {
+  const text = (key: string): string => {
+    const raw = data[key];
+    return typeof raw === 'string' ? raw : '';
+  };
+  const raw = data.lines;
+  const lines = Array.isArray(raw)
+    ? raw.map((l) => ({
+        ...newRow(),
+        expenseType: l.expenseType,
+        planned: l.planned,
+        actual: l.actual,
+      }))
+    : [];
+
+  return {
+    orderNumber: text('orderNumber'),
+    currency: text('currency') || currency,
+    lines: lines.length ? lines : [newRow()],
+    incomePlanned: text('incomePlanned'),
+    incomeActual: text('incomeActual'),
+    reason: text('reason'),
+    rebilled: text('rebilled'),
+    culprit: text('culprit'),
+    departmentId: text('departmentId'),
+  };
+}
+
+/** Есть ли в черновике хоть что-то. Пустой предлагать продолжать незачем. */
+export function extraHasAnything(values: ExtraExpenseValues): boolean {
+  if (values.orderNumber.trim() || values.reason.trim() || values.rebilled)
+    return true;
+  if (values.incomePlanned.trim() || values.incomeActual.trim()) return true;
+  return values.lines.some((l) => !isBlank(l));
+}
+
+export const emptyExtraExpense = (currency: string): ExtraExpenseValues => ({
+  orderNumber: '',
+  currency,
+  lines: [newRow()],
+  incomePlanned: '',
+  incomeActual: '',
+  reason: '',
+  rebilled: '',
+  culprit: '',
+  departmentId: '',
+});
+
+/**
+ * Форма обоснования доп. расходов.
+ *
+ * Таблица на телефоне — карточка на строку, а не `<table>`: четыре колонки в
+ * 360 точках превращаются в нечитаемую сетку, а поля денег становятся уже
+ * пальца.
+ *
+ * Итоги считаются **целыми копейками**: на сложении чисел с плавающей точкой
+ * человек увидел бы `0.30000000000000004` прямо на экране. Окончательный счёт
+ * всё равно за сервером — там `Decimal`, здесь только подсказка по ходу.
+ */
+export default function ExtraExpenseForm({
+  form,
+  initial,
+  onSent,
+}: {
+  form: TgForm;
+  /** Черновик, если человек решил продолжить. */
+  initial: ExtraExpenseValues | null;
+  onSent: (memo: { number: string; title: string }) => void;
+}) {
+  const [values, setValues] = useState<ExtraExpenseValues>(
+    () => initial ?? emptyExtraExpense(form.options.currencies[0] ?? 'UZS'),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const set = (patch: Partial<ExtraExpenseValues>) =>
+    setValues((v) => ({ ...v, ...patch }));
+
+  const setLine = (id: string, patch: Partial<ExpenseRow>) =>
+    setValues((v) => ({
+      ...v,
+      lines: v.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+    }));
+
+  const addLine = () =>
+    setValues((v) =>
+      v.lines.length >= form.options.maxExpenseLines
+        ? v
+        : { ...v, lines: [...v.lines, newRow()] },
+    );
+
+  const dropLine = (id: string) =>
+    setValues((v) => ({ ...v, lines: v.lines.filter((l) => l.id !== id) }));
+
+  // ── Черновик ──
+  const saveTimer = useRef<number | null>(null);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      // Сбой сохранения черновика не должен мешать заполнению.
+      void tgApi.saveDraft(toDraft(values)).catch(() => undefined);
+    }, SAVE_DELAY_MS);
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, [values]);
+
+  // ── Итоги по ходу заполнения ──
+  const totals = useMemo(() => {
+    let planned = 0;
+    let actual = 0;
+    for (const line of values.lines) {
+      planned += toCents(line.planned);
+      actual += toCents(line.actual);
+    }
+    return { planned, actual, overrun: actual - planned };
+  }, [values.lines]);
+
+  const incomeDiff =
+    toCents(values.incomeActual) - toCents(values.incomePlanned);
+  const needsCulprit =
+    values.rebilled === 'no' || values.rebilled === 'partial';
+  /** Строки, которые человек хоть как-то тронул. Пустые в счёт не идут. */
+  const filled = values.lines.filter((l) => !isBlank(l));
+
+  /** Чего не хватает. Проверяет и сервер — здесь только чтобы не отправлять зря. */
+  const problem = useMemo(() => {
+    if (!values.orderNumber.trim()) return 'Укажите номер перевозки';
+    if (!filled.length) return 'Добавьте хотя бы одну строку расходов';
+    if (filled.some((l) => l.expenseType.trim().length < 2))
+      return 'Укажите вид расхода в каждой строке';
+    if (
+      values.lines.some((l) => !MONEY.test(l.planned) || !MONEY.test(l.actual))
+    )
+      return 'Суммы расходов вводятся числами';
+    if (!MONEY.test(values.incomePlanned) || !MONEY.test(values.incomeActual))
+      return 'Суммы дохода вводятся числами';
+    if (!values.incomePlanned.trim() || !values.incomeActual.trim())
+      return 'Укажите планируемый и фактический доход';
+    if (values.reason.trim().length < 5) return 'Опишите причину перерасхода';
+    if (!values.rebilled) return 'Ответьте, перевыставлен ли расход клиенту';
+    if (needsCulprit && values.culprit.trim().length < 2)
+      return 'Укажите, по чьей вине возник расход';
+    return null;
+  }, [values, filled, needsCulprit]);
+
+  const submit = useCallback(async () => {
+    setSending(true);
+    setError(null);
+    try {
+      const created = await tgApi.createExtraExpenses({
+        orderNumber: values.orderNumber.trim(),
+        currency: values.currency,
+        lines: values.lines
+          .filter((l) => !isBlank(l))
+          .map((l) => ({
+            expenseType: l.expenseType.trim(),
+            planned: toCents(l.planned) / 100,
+            actual: toCents(l.actual) / 100,
+          })),
+        incomePlanned: toCents(values.incomePlanned) / 100,
+        incomeActual: toCents(values.incomeActual) / 100,
+        reason: values.reason.trim(),
+        rebilled: values.rebilled,
+        // Виноватого отправляем только там, где его спрашивали: иначе в базе
+        // остался бы ответ на вопрос, которого не задавали.
+        culprit: needsCulprit ? values.culprit.trim() : undefined,
+        departmentId: values.departmentId || undefined,
+      });
+      onSent(created);
+    } catch (e) {
+      setError((e as Error).message);
+      setSending(false);
+    }
+  }, [values, needsCulprit, onSent]);
+
+  // ── Нижняя кнопка Telegram ──
+  useEffect(() => {
+    const button = mainButton();
+    if (!button) return;
+
+    button.setText('Отправить на согласование');
+    button.show();
+    if (problem || sending) button.disable();
+    else button.enable();
+    if (sending) button.showProgress(false);
+    else button.hideProgress();
+
+    const click = () => {
+      if (!problem && !sending) void submit();
+    };
+    button.onClick(click);
+    // Обработчик снимаем обязательно: кнопка одна на всё приложение, и забытый
+    // обработчик сработал бы уже на другом экране.
+    return () => {
+      button.offClick(click);
+      button.hideProgress();
+    };
+  }, [problem, sending, submit]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <Field label="Номер перевозки" required hint="Как он записан в заявке">
+          <input
+            className="tg-input"
+            value={values.orderNumber}
+            onChange={(e) => set({ orderNumber: e.target.value })}
+            maxLength={50}
+            placeholder="25-001234"
+          />
+        </Field>
+        <Field label="Валюта" required>
+          <select
+            className="tg-input"
+            value={values.currency}
+            onChange={(e) => set({ currency: e.target.value })}
+          >
+            {form.options.currencies.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      {/* ── Таблица расходов ── */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium">
+          Расходы по перевозке<span className="text-red-500"> *</span>
+        </p>
+        {values.lines.map((line, i) => {
+          const diff = toCents(line.actual) - toCents(line.planned);
+          return (
+            <div key={line.id} className="tg-card space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  className="tg-input"
+                  value={line.expenseType}
+                  onChange={(e) =>
+                    setLine(line.id, { expenseType: e.target.value })
+                  }
+                  maxLength={200}
+                  placeholder={`Вид расхода №${i + 1}`}
+                />
+                {/* Удаление скрыто, когда строка одна: пустая таблица всё равно
+                    не отправится, а кнопка только путала бы. */}
+                {values.lines.length > 1 && (
+                  <button
+                    type="button"
+                    className="tg-icon-button"
+                    onClick={() => dropLine(line.id)}
+                    aria-label="Удалить строку"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Money
+                  label="План"
+                  value={line.planned}
+                  onChange={(v) => setLine(line.id, { planned: v })}
+                />
+                <Money
+                  label="Факт"
+                  value={line.actual}
+                  onChange={(v) => setLine(line.id, { actual: v })}
+                />
+              </div>
+              <p className="tg-hint-text">
+                Разница: <span className={diffClass(diff)}>{signed(diff)}</span>
+              </p>
+            </div>
+          );
+        })}
+
+        {values.lines.length < form.options.maxExpenseLines ? (
+          <button type="button" className="tg-add-row" onClick={addLine}>
+            + Добавить строку
+          </button>
+        ) : (
+          <p className="tg-hint-text">
+            Больше {form.options.maxExpenseLines} строк в одной записке не
+            поместится.
+          </p>
+        )}
+      </div>
+
+      {/* ── Итоги ── */}
+      <div className="tg-card space-y-1.5">
+        <Total label="Расходы по плану" value={fromCents(totals.planned)} />
+        <Total label="Расходы по факту" value={fromCents(totals.actual)} />
+        <div className="flex items-baseline justify-between pt-1.5 border-t border-black/10">
+          <span className="text-sm font-medium">
+            {totals.overrun < 0 ? 'Экономия' : 'Превышение'}
+          </span>
+          <span
+            className={`text-base font-semibold ${diffClass(totals.overrun)}`}
+          >
+            {signed(totals.overrun)} {values.currency}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Доход ── */}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Планируемый доход" required>
+          <input
+            className="tg-input"
+            inputMode="decimal"
+            value={values.incomePlanned}
+            onChange={(e) => set({ incomePlanned: e.target.value })}
+            placeholder="0"
+          />
+        </Field>
+        <Field label="Фактический доход" required>
+          <input
+            className="tg-input"
+            inputMode="decimal"
+            value={values.incomeActual}
+            onChange={(e) => set({ incomeActual: e.target.value })}
+            placeholder="0"
+          />
+        </Field>
+      </div>
+      <p className="tg-hint-text -mt-2">
+        Разница по доходу:{' '}
+        <span className={diffClass(incomeDiff, true)}>
+          {signed(incomeDiff)}
+        </span>{' '}
+        {values.currency}
+      </p>
+
+      {/* ── Три ответа про превышение ── */}
+      <Field
+        label="Причина перерасхода"
+        required
+        hint="Почему расходы вышли за план: что произошло, где и из-за кого"
+      >
+        <textarea
+          className="tg-input min-h-[96px]"
+          value={values.reason}
+          onChange={(e) => set({ reason: e.target.value })}
+          maxLength={5000}
+          placeholder="Простой на границе четыре дня из-за очереди"
+        />
+      </Field>
+
+      <Field label="Расход перевыставлен клиенту?" required>
+        <select
+          className="tg-input"
+          value={values.rebilled}
+          onChange={(e) => set({ rebilled: e.target.value })}
+        >
+          <option value="">— выберите —</option>
+          {form.options.rebilled.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      {/* Виноватого спрашиваем только там, где расход лёг на нас. */}
+      {needsCulprit && (
+        <Field
+          label="По чьей вине возник расход"
+          required
+          hint="Сотрудник, перевозчик, клиент или обстоятельства"
+        >
+          <input
+            className="tg-input"
+            value={values.culprit}
+            onChange={(e) => set({ culprit: e.target.value })}
+            maxLength={300}
+            placeholder="Коротко"
+          />
+        </Field>
+      )}
+
+      {form.departments.length > 0 && (
+        <Field label="Подразделение">
+          <select
+            className="tg-input"
+            value={values.departmentId}
+            onChange={(e) => set({ departmentId: e.target.value })}
+          >
+            <option value="">— не указано —</option>
+            {form.departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+
+      {error && <div className="tg-error">{error}</div>}
+      {problem && !error && <div className="tg-hint-text">{problem}</div>}
+    </div>
+  );
+}
+
+/** Строка черновика: ключ строки наружу не уходит, он нужен только React. */
+function toDraft(values: ExtraExpenseValues) {
+  return {
+    memoType: 'extra_expenses',
+    orderNumber: values.orderNumber,
+    currency: values.currency,
+    lines: values.lines.map((l) => ({
+      expenseType: l.expenseType,
+      planned: l.planned,
+      actual: l.actual,
+    })),
+    incomePlanned: values.incomePlanned,
+    incomeActual: values.incomeActual,
+    reason: values.reason,
+    rebilled: values.rebilled,
+    culprit: values.culprit,
+    departmentId: values.departmentId,
+  };
+}
+
+/** Строка, в которой человек ничего не написал. На сервер не отправляется. */
+function isBlank(line: ExpenseRow): boolean {
+  return (
+    !line.expenseType.trim() && !line.planned.trim() && !line.actual.trim()
+  );
+}
+
+/** Деньги в целые копейки. Непонятное считаем нулём — о нём скажет проверка. */
+function toCents(raw: string): number {
+  const text = raw.replace(/\s/g, '').replace(',', '.');
+  if (!text) return 0;
+  const value = Number(text);
+  return Number.isFinite(value) ? Math.round(value * 100) : 0;
+}
+
+function fromCents(cents: number): string {
+  return (cents / 100).toLocaleString('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/** Со знаком: по нему сразу видно перерасход это или экономия. */
+function signed(cents: number): string {
+  if (cents === 0) return fromCents(0);
+  return `${cents > 0 ? '+' : '−'}${fromCents(Math.abs(cents))}`;
+}
+
+/**
+ * Цвет разницы. У расходов рост — плохо, у дохода наоборот, поэтому цвет
+ * зависит не только от знака.
+ */
+function diffClass(cents: number, higherIsBetter = false): string {
+  if (cents === 0) return '';
+  const bad = higherIsBetter ? cents < 0 : cents > 0;
+  return bad ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium';
+}
+
+function Total({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <span className="tg-hint-text">{label}</span>
+      <span className="text-sm">{value}</span>
+    </div>
+  );
+}
+
+function Money({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="tg-hint-text">{label}</span>
+      <input
+        className="tg-input"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="0"
+      />
+    </label>
+  );
+}
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block space-y-1.5">
+      <span className="text-sm font-medium">
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </span>
+      {children}
+      {hint && <span className="tg-hint-text block">{hint}</span>}
+    </label>
+  );
+}
