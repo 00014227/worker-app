@@ -20,23 +20,8 @@ export type TgMemoType = 'absence' | 'extra_expenses';
 export interface TgDraftLine {
   expenseType: string;
   counterpartyName: string;
-  counterpartyId: string;
   planned: string;
   actual: string;
-}
-
-/**
- * Контрагент в подсказке. Кроме названия и ИНН сервер ничего не отдаёт.
- *
- * `source` говорит, откуда имя: `onec` — справочник 1С, `own` — наш список
- * подрядчиков. Ссылку на строку расхода кладём только у первых: записи из
- * нашего справочника в 1С нет, и связывать не с чем.
- */
-export interface TgCounterparty {
-  id: string;
-  name: string;
-  inn: string | null;
-  source: 'onec' | 'own';
 }
 
 /**
@@ -120,13 +105,6 @@ export const tgApi = {
     });
   },
 
-  /** Подсказки «кому платим». Меньше двух букв сервер не ищет. */
-  counterparties(q: string): Promise<TgCounterparty[]> {
-    return request<TgCounterparty[]>(
-      `/memo-tg/counterparties?q=${encodeURIComponent(q)}`,
-    );
-  },
-
   dropDraft(): Promise<{ ok: true }> {
     return request<{ ok: true }>('/memo-tg/draft', { method: 'DELETE' });
   },
@@ -157,7 +135,6 @@ export const tgApi = {
     lines: {
       expenseType: string;
       counterpartyName: string;
-      counterpartyId?: string;
       planned: number;
       actual: number;
     }[];
