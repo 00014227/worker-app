@@ -52,7 +52,8 @@ export default function AbsenceForm({
   const otherField = form.fields.find((f) => f.key === 'reasonOther');
   const needsOwnReason = values.reason === 'other';
 
-  const set = (patch: Partial<AbsenceValues>) => setValues((v) => ({ ...v, ...patch }));
+  const set = (patch: Partial<AbsenceValues>) =>
+    setValues((v) => ({ ...v, ...patch }));
 
   // ── Черновик ──
   // Сохраняем с задержкой: иначе запрос уходил бы на каждое нажатие клавиши.
@@ -77,7 +78,8 @@ export default function AbsenceForm({
   /** Чего не хватает. Проверяет и сервер — здесь только чтобы не отправлять зря. */
   const problem = useMemo(() => {
     if (!values.reason) return 'Выберите причину';
-    if (needsOwnReason && values.reasonOther.trim().length < 2) return 'Опишите причину';
+    if (needsOwnReason && values.reasonOther.trim().length < 2)
+      return 'Опишите причину';
     if (!values.dateFrom) return 'Укажите, с какого дня';
     if (!values.dateTo) return 'Укажите, по какой день';
     // Порядок дат проверяем здесь, потому что ограничения выбора даты в
@@ -148,7 +150,11 @@ export default function AbsenceForm({
 
       {/* Своя причина спрашивается только при «Иное» — иначе поле лишнее. */}
       {needsOwnReason && (
-        <Field label={otherField?.label ?? 'Причина своими словами'} required hint={otherField?.hint}>
+        <Field
+          label={otherField?.label ?? 'Причина своими словами'}
+          required
+          hint={otherField?.hint}
+        >
           <input
             className="tg-input"
             value={values.reasonOther}
@@ -171,7 +177,9 @@ export default function AbsenceForm({
               set({
                 dateFrom: e.target.value,
                 dateTo:
-                  !values.dateTo || values.dateTo < e.target.value ? e.target.value : values.dateTo,
+                  !values.dateTo || values.dateTo < e.target.value
+                    ? e.target.value
+                    : values.dateTo,
               })
             }
           />
@@ -219,7 +227,11 @@ export default function AbsenceForm({
         .filter((f) => !OWN_KEYS.has(f.key))
         .map((f) => (
           <Field key={f.key} label={f.label} hint={f.hint}>
-            <input className="tg-input" disabled placeholder="Заполняется в кабинете" />
+            <input
+              className="tg-input"
+              disabled
+              placeholder="Заполняется в кабинете"
+            />
           </Field>
         ))}
 

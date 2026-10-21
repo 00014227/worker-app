@@ -1,7 +1,13 @@
 import { Check, Clock, MessageSquare, RotateCcw, Send, X } from 'lucide-react';
 import type { MemoRouteStepView } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { DECISION, TASK_STATUS, dueLabel, fmtDateTime, overdueClass } from './memo-meta';
+import {
+  DECISION,
+  TASK_STATUS,
+  dueLabel,
+  fmtDateTime,
+  overdueClass,
+} from './memo-meta';
 
 /**
  * Маршрут согласования с историей решений.
@@ -11,7 +17,11 @@ import { DECISION, TASK_STATUS, dueLabel, fmtDateTime, overdueClass } from './me
  * понятно, что именно просили исправить. Ровно это и просил заказчик —
  * повторная подача идёт с вернувшего шага, а не обнуляет маршрут.
  */
-export default function MemoRouteTimeline({ route }: { route: MemoRouteStepView[] }) {
+export default function MemoRouteTimeline({
+  route,
+}: {
+  route: MemoRouteStepView[];
+}) {
   if (route.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -46,7 +56,9 @@ export default function MemoRouteTimeline({ route }: { route: MemoRouteStepView[
                 </span>
               )}
               {!step.isMandatory && (
-                <span className="text-[10px] text-muted-foreground">необязательный</span>
+                <span className="text-[10px] text-muted-foreground">
+                  необязательный
+                </span>
               )}
 
               <span
@@ -61,8 +73,14 @@ export default function MemoRouteTimeline({ route }: { route: MemoRouteStepView[
 
             {/* Ждёт решения — показываем срок: именно по нему напоминает бот. */}
             {step.status === 'pending' && step.dueAt && (
-              <div className={cn('mt-1.5 text-[11px] flex items-center gap-1', overdueClass(step.dueAt))}>
-                <Clock size={11} /> {dueLabel(step.dueAt)} · срок {fmtDateTime(step.dueAt)}
+              <div
+                className={cn(
+                  'mt-1.5 text-[11px] flex items-center gap-1',
+                  overdueClass(step.dueAt),
+                )}
+              >
+                <Clock size={11} /> {dueLabel(step.dueAt)} · срок{' '}
+                {fmtDateTime(step.dueAt)}
               </div>
             )}
 
@@ -85,7 +103,9 @@ export default function MemoRouteTimeline({ route }: { route: MemoRouteStepView[
                     {DECISION[decision.decision].label}
                   </span>
                   <span className="font-medium">{decision.byName}</span>
-                  <span className="text-muted-foreground">{fmtDateTime(decision.at)}</span>
+                  <span className="text-muted-foreground">
+                    {fmtDateTime(decision.at)}
+                  </span>
                   {/* Откуда решение: с телефона или из кабинета — в споре важно. */}
                   <span className="text-muted-foreground inline-flex items-center gap-1">
                     {decision.source === 'telegram' ? (
@@ -99,7 +119,10 @@ export default function MemoRouteTimeline({ route }: { route: MemoRouteStepView[
                 </div>
                 {decision.comment && (
                   <div className="text-xs bg-muted/50 rounded px-2 py-1.5 flex gap-1.5">
-                    <MessageSquare size={12} className="mt-0.5 shrink-0 text-muted-foreground" />
+                    <MessageSquare
+                      size={12}
+                      className="mt-0.5 shrink-0 text-muted-foreground"
+                    />
                     <span className="break-words">{decision.comment}</span>
                   </div>
                 )}
