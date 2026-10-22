@@ -1830,7 +1830,13 @@ export interface MemoExtraExpenseView {
   incomeActual: string;
   incomeDiff: string;
   rebilled: string;
-  culprit: string | null;
+  /** contractor | own. Пусто, когда расход перевыставлен клиенту. */
+  expenseBearer: string | null;
+  /** На каком основании предъявляем подрядчику. */
+  contractorClaim: string | null;
+  /** В зоне ответственности какого отдела возник расход. */
+  responsibleDepartment: { id: string; name: string } | null;
+  responsiblePerson: string | null;
 }
 
 export interface MemoCard {

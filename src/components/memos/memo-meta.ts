@@ -69,6 +69,12 @@ export const REBILLED_LABEL: Record<string, string> = {
   partial: 'Перевыставлен частично',
 };
 
+/** Кто несёт расход, если клиенту он не перевыставлен. */
+export const EXPENSE_BEARER_LABEL: Record<string, string> = {
+  contractor: 'Платит подрядчик',
+  own: 'Платим мы',
+};
+
 /** Состояние этапа в маршруте. */
 export const TASK_STATUS: Record<
   MemoTaskStatus,

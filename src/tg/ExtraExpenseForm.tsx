@@ -24,7 +24,11 @@ export interface ExtraExpenseValues {
   incomeActual: string;
   reason: string;
   rebilled: string;
-  culprit: string;
+  /** contractor | own — кто несёт расход, если клиенту он не перевыставлен. */
+  expenseBearer: string;
+  contractorClaim: string;
+  responsibleDepartmentId: string;
+  responsiblePerson: string;
   departmentId: string;
 }
 
@@ -72,7 +76,10 @@ export function extraValuesFromDraft(
     incomeActual: text('incomeActual'),
     reason: text('reason'),
     rebilled: text('rebilled'),
-    culprit: text('culprit'),
+    expenseBearer: text('expenseBearer'),
+    contractorClaim: text('contractorClaim'),
+    responsibleDepartmentId: text('responsibleDepartmentId'),
+    responsiblePerson: text('responsiblePerson'),
     departmentId: text('departmentId'),
   };
 }
@@ -93,7 +100,10 @@ export const emptyExtraExpense = (currency: string): ExtraExpenseValues => ({
   incomeActual: '',
   reason: '',
   rebilled: '',
-  culprit: '',
+  expenseBearer: '',
+  contractorClaim: '',
+  responsibleDepartmentId: '',
+  responsiblePerson: '',
   departmentId: '',
 });
 
@@ -174,8 +184,11 @@ export default function ExtraExpenseForm({
 
   const incomeDiff =
     toCents(values.incomeActual) - toCents(values.incomePlanned);
-  const needsCulprit =
-    values.rebilled === 'no' || values.rebilled === 'partial';
+  // Кто несёт расход спрашиваем и при «частично»: часть расхода осталась на
+  // нас, и на неё вопрос осмыслен.
+  const needsBearer = values.rebilled === 'no' || values.rebilled === 'partial';
+  const byContractor = needsBearer && values.expenseBearer === 'contractor';
+  const byUs = needsBearer && values.expenseBearer === 'own';
   /** Строки, которые человек хоть как-то тронул. Пустые в счёт не идут. */
   const filled = values.lines.filter((l) => !isBlank(l));
 
@@ -195,10 +208,16 @@ export default function ExtraExpenseForm({
       return 'Укажите планируемый и фактический доход';
     if (values.reason.trim().length < 5) return 'Опишите причину перерасхода';
     if (!values.rebilled) return 'Ответьте, перевыставлен ли расход клиенту';
-    if (needsCulprit && values.culprit.trim().length < 2)
-      return 'Укажите, по чьей вине возник расход';
+    if (needsBearer && !values.expenseBearer)
+      return 'Ответьте, кто несёт расход';
+    if (byContractor && values.contractorClaim.trim().length < 2)
+      return 'Укажите, на каком основании предъявляем подрядчику';
+    if (byUs && !values.responsibleDepartmentId)
+      return 'Выберите отдел ответственности';
+    if (byUs && values.responsiblePerson.trim().length < 2)
+      return 'Укажите, в зоне ответственности кого возник расход';
     return null;
-  }, [values, filled, needsCulprit]);
+  }, [values, filled, needsBearer, byContractor, byUs]);
 
   const submit = useCallback(async () => {
     setSending(true);
@@ -219,9 +238,16 @@ export default function ExtraExpenseForm({
         incomeActual: toCents(values.incomeActual) / 100,
         reason: values.reason.trim(),
         rebilled: values.rebilled,
-        // Виноватого отправляем только там, где его спрашивали: иначе в базе
-        // остался бы ответ на вопрос, которого не задавали.
-        culprit: needsCulprit ? values.culprit.trim() : undefined,
+        // Отправляем только то, что спрашивали: иначе в базе остался бы ответ
+        // на вопрос, которого не задавали. Сервер это всё равно перепроверит.
+        expenseBearer: needsBearer ? values.expenseBearer : undefined,
+        contractorClaim: byContractor
+          ? values.contractorClaim.trim()
+          : undefined,
+        responsibleDepartmentId: byUs
+          ? values.responsibleDepartmentId
+          : undefined,
+        responsiblePerson: byUs ? values.responsiblePerson.trim() : undefined,
         departmentId: values.departmentId || undefined,
       });
       onSent(created);
@@ -229,7 +255,7 @@ export default function ExtraExpenseForm({
       setError((e as Error).message);
       setSending(false);
     }
-  }, [values, needsCulprit, onSent]);
+  }, [values, needsBearer, byContractor, byUs, onSent]);
 
   // ── Нижняя кнопка Telegram ──
   useEffect(() => {
@@ -430,25 +456,76 @@ export default function ExtraExpenseForm({
         </select>
       </Field>
 
-      {/* Виноватого спрашиваем только там, где расход лёг на нас. */}
-      {needsCulprit && (
-        <Field
-          label="По чьей вине возник расход"
-          required
-          hint="Сотрудник, перевозчик, клиент или обстоятельства"
-        >
-          <input
+      {/* Кто несёт расход спрашиваем только там, где он лёг не на клиента. */}
+      {needsBearer && (
+        <Field label="Кто несёт расход?" required>
+          <select
             className="tg-input"
-            value={values.culprit}
-            onChange={(e) => set({ culprit: e.target.value })}
-            maxLength={300}
-            placeholder="Коротко"
+            value={values.expenseBearer}
+            onChange={(e) => set({ expenseBearer: e.target.value })}
+          >
+            <option value="">— выберите —</option>
+            {form.options.expenseBearers.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+
+      {byContractor && (
+        <Field
+          label="На каком основании предъявляем подрядчику"
+          required
+          hint="Чтобы бухгалтерия не ходила переспрашивать: что нарушено и чем подтверждается"
+        >
+          <textarea
+            className="tg-input min-h-[88px]"
+            value={values.contractorClaim}
+            onChange={(e) => set({ contractorClaim: e.target.value })}
+            maxLength={1000}
+            placeholder="Простой по вине перевозчика, претензия по п. 4.2 договора"
           />
         </Field>
       )}
 
+      {byUs && (
+        <>
+          <Field
+            label="Отдел, в зоне ответственности которого возник расход"
+            required
+          >
+            <select
+              className="tg-input"
+              value={values.responsibleDepartmentId}
+              onChange={(e) => set({ responsibleDepartmentId: e.target.value })}
+            >
+              <option value="">— выберите —</option>
+              {form.departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Кто именно" required hint="Фамилия и инициалы">
+            <input
+              className="tg-input"
+              value={values.responsiblePerson}
+              onChange={(e) => set({ responsiblePerson: e.target.value })}
+              maxLength={300}
+              placeholder="Иванов И."
+            />
+          </Field>
+        </>
+      )}
+
       {form.departments.length > 0 && (
-        <Field label="Подразделение">
+        <Field
+          label="Подразделение записки"
+          hint="К какому подразделению относится сама записка"
+        >
           <select
             className="tg-input"
             value={values.departmentId}
@@ -486,7 +563,10 @@ function toDraft(values: ExtraExpenseValues) {
     incomeActual: values.incomeActual,
     reason: values.reason,
     rebilled: values.rebilled,
-    culprit: values.culprit,
+    expenseBearer: values.expenseBearer,
+    contractorClaim: values.contractorClaim,
+    responsibleDepartmentId: values.responsibleDepartmentId,
+    responsiblePerson: values.responsiblePerson,
     departmentId: values.departmentId,
   };
 }
