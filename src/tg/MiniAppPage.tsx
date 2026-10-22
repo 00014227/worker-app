@@ -6,6 +6,11 @@ import {
 } from '@/lib/auth';
 import AbsenceForm from './AbsenceForm';
 import type { AbsenceValues } from './AbsenceForm';
+import ExpeditedInvoiceForm, {
+  invoiceHasAnything,
+  invoiceValuesFromDraft,
+} from './ExpeditedInvoiceForm';
+import type { InvoiceValues } from './ExpeditedInvoiceForm';
 import ExtraExpenseForm, {
   extraHasAnything,
   extraValuesFromDraft,
@@ -28,7 +33,8 @@ import './miniapp.css';
 /** Заполненная форма — своя на каждый тип. */
 type Values =
   | { kind: 'absence'; values: AbsenceValues }
-  | { kind: 'extra_expenses'; values: ExtraExpenseValues };
+  | { kind: 'extra_expenses'; values: ExtraExpenseValues }
+  | { kind: 'expedited_invoice'; values: InvoiceValues };
 
 type Stage =
   | { kind: 'booting' }
@@ -53,6 +59,10 @@ const TYPE_LABEL: Record<TgMemoType, { title: string; hint: string }> = {
   extra_expenses: {
     title: 'Обоснование доп. расходов',
     hint: 'Почему по перевозке потратили больше плана',
+  },
+  expedited_invoice: {
+    title: 'Ускоренное выставление счёта (АВР)',
+    hint: 'Счёт нужен раньше, чем пришли документы',
   },
 };
 
@@ -252,6 +262,18 @@ export default function MiniAppPage() {
         />
       )}
 
+      {stage.kind === 'form' && stage.form.memoType === 'expedited_invoice' && (
+        <ExpeditedInvoiceForm
+          form={stage.form}
+          initial={
+            stage.initial?.kind === 'expedited_invoice'
+              ? stage.initial.values
+              : null
+          }
+          onSent={(memo) => setStage({ kind: 'sent', ...memo })}
+        />
+      )}
+
       {stage.kind === 'sent' && (
         <div className="tg-card space-y-2">
           <p className="text-sm font-medium">
@@ -277,6 +299,12 @@ function toValues(
   data: TgDraftData,
   form: TgForm,
 ): Values {
+  if (memoType === 'expedited_invoice') {
+    return {
+      kind: 'expedited_invoice',
+      values: invoiceValuesFromDraft(data, form.options.currencies[0] ?? 'UZS'),
+    };
+  }
   if (memoType === 'extra_expenses') {
     return {
       kind: 'extra_expenses',
@@ -302,9 +330,11 @@ function toValues(
 
 /** Есть ли в черновике хоть что-то. Пустой предлагать продолжать незачем. */
 function hasAnything(started: Values): boolean {
-  return started.kind === 'extra_expenses'
-    ? extraHasAnything(started.values)
-    : Object.values(started.values).some((v) => v.trim() !== '');
+  if (started.kind === 'extra_expenses')
+    return extraHasAnything(started.values);
+  if (started.kind === 'expedited_invoice')
+    return invoiceHasAnything(started.values);
+  return Object.values(started.values).some((v) => v.trim() !== '');
 }
 
 function savedAgo(iso: string): string {

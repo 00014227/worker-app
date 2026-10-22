@@ -1687,7 +1687,13 @@ export const tenderApi = {
 
 /** Все известные типы. Прежние остаются: их записки надо открывать. */
 export type MemoType =
-  'absence' | 'extra_expenses' | 'payment' | 'purchase' | 'trip' | 'other';
+  | 'absence'
+  | 'extra_expenses'
+  | 'expedited_invoice'
+  | 'payment'
+  | 'purchase'
+  | 'trip'
+  | 'other';
 export type MemoStatus =
   | 'draft'
   | 'pending_approval'
@@ -1708,7 +1714,7 @@ export type MemoTaskStatus =
 export interface MemoFieldDef {
   key: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'date' | 'select';
+  type: 'text' | 'textarea' | 'number' | 'date' | 'datetime' | 'select';
   required: boolean;
   hint?: string;
   maxLength?: number;

@@ -29,7 +29,7 @@ import {
   fmtDateTime,
   fmtMoney,
   fmtSize,
-  optionLabel,
+  fieldValue,
 } from '@/components/memos/memo-meta';
 
 export default function MemoCardPage() {
@@ -281,13 +281,14 @@ export default function MemoCardPage() {
               {fields.map((f) => {
                 const value = memo.payload[f.key];
                 if (value === undefined || value === '') return null;
-                // Для выбора показываем подпись: в базе лежит значение, и
-                // согласующий иначе читал бы «vacation» вместо «Отпуск».
+                // Для выбора показываем подпись, для дат — привычный вид: в
+                // базе лежит «vacation» и «2026-10-24T15:00», а согласующий
+                // должен прочесть «Отпуск» и «24.10.2026 к 15:00».
                 return (
                   <Row
                     key={f.key}
                     label={f.label}
-                    value={optionLabel(f, value)}
+                    value={fieldValue(f, value)}
                   />
                 );
               })}
