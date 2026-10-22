@@ -5,7 +5,7 @@ import { saveMiniAppToken } from '@/lib/auth';
 export interface TgFieldDef {
   key: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'date' | 'select';
+  type: 'text' | 'textarea' | 'number' | 'date' | 'datetime' | 'select';
   required: boolean;
   hint?: string;
   maxLength?: number;
@@ -14,7 +14,7 @@ export interface TgFieldDef {
 }
 
 /** Какие формы умеет приложение. Больше одной — с тех пор как типов два. */
-export type TgMemoType = 'absence' | 'extra_expenses';
+export type TgMemoType = 'absence' | 'extra_expenses' | 'expedited_invoice';
 
 /** Строка расходов в черновике — строками, как её держат поля ввода. */
 export interface TgDraftLine {
@@ -156,5 +156,26 @@ export const tgApi = {
         body: JSON.stringify(input),
       },
     );
+  },
+
+  /**
+   * Ускоренное выставление счёта (АВР).
+   *
+   * Свой адрес, как у доп. расходов: у общего `memos` тело описано полями
+   * отсутствия, и проверка на сервере отвергла бы эту форму целиком.
+   */
+  createExpeditedInvoice(input: {
+    orderNumber: string;
+    counterpartyName: string;
+    amount: number;
+    currency: string;
+    reason: string;
+    documentsExpectedAt: string;
+    departmentId?: string;
+  }): Promise<CreatedMemo> {
+    return request<CreatedMemo>('/memo-tg/expedited-invoice', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
   },
 };
