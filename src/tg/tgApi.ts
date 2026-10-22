@@ -39,6 +39,7 @@ export interface TgForm {
   options: {
     reasons: { value: string; label: string }[];
     rebilled: { value: string; label: string }[];
+    expenseBearers: { value: string; label: string }[];
     currencies: string[];
     maxExpenseLines: number;
   };
@@ -142,7 +143,10 @@ export const tgApi = {
     incomeActual: number;
     reason: string;
     rebilled: string;
-    culprit?: string;
+    expenseBearer?: string;
+    contractorClaim?: string;
+    responsibleDepartmentId?: string;
+    responsiblePerson?: string;
     departmentId?: string;
   }): Promise<CreatedMemo & { overrun: string }> {
     return request<CreatedMemo & { overrun: string }>(
