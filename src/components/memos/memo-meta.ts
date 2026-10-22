@@ -56,6 +56,10 @@ export const MEMO_STATUS: Record<
 export const MEMO_TYPE: Record<MemoType, { label: string; short: string }> = {
   absence: { label: 'Отсутствие на рабочем месте', short: 'Отсутствие' },
   extra_expenses: { label: 'Обоснование доп. расходов', short: 'Доп. расходы' },
+  expedited_invoice: {
+    label: 'Ускоренное выставление счёта (АВР)',
+    short: 'Ускор. счёт',
+  },
   payment: { label: 'Оплата', short: 'Оплата' },
   purchase: { label: 'Закупка', short: 'Закупка' },
   trip: { label: 'Командировка', short: 'Команд.' },
@@ -198,6 +202,30 @@ export function dueLabel(dueAt: string | null): string {
   const left = Math.abs(hours);
   if (left > 48) return `осталось ${Math.floor(left / 24)} дн.`;
   return `осталось ${Math.max(1, Math.floor(left))} ч`;
+}
+
+/**
+ * Значение поля в карточке.
+ *
+ * Дата и дата со временем приходят строками «2026-10-24» и «2026-10-24T15:00»,
+ * и показывать их как есть нельзя: согласующий читает документ, а не машинный
+ * формат. Час разбираем из строки, а не через `Date`: значение хранится без
+ * часового пояса, и разбор сдвинул бы его на машине с другим поясом.
+ */
+export function fieldValue(
+  field: MemoFieldDef,
+  value: string | number,
+): string {
+  const text = String(value);
+  if (field.type === 'date') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : text;
+  }
+  if (field.type === 'datetime') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(text);
+    return m ? `${m[3]}.${m[2]}.${m[1]} к ${m[4]}:${m[5]}` : text;
+  }
+  return optionLabel(field, value);
 }
 
 /**
