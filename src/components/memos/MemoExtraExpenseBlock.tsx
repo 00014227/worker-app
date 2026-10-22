@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import type { MemoExtraExpenseView } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
-import { fmtMoney, REBILLED_LABEL } from './memo-meta';
+import { EXPENSE_BEARER_LABEL, fmtMoney, REBILLED_LABEL } from './memo-meta';
 
 /**
  * Табличная часть обоснования доп. расходов.
@@ -130,8 +130,33 @@ export default function MemoExtraExpenseBlock({
             label="Расход клиенту"
             value={REBILLED_LABEL[extra.rebilled] ?? extra.rebilled}
           />
-          {/* Виноватого спрашивают только когда расход клиенту не перевыставлен. */}
-          {extra.culprit && <Row label="По чьей вине" value={extra.culprit} />}
+          {/* Кто несёт расход спрашивают только там, где клиенту не
+              перевыставлено: иначе вопрос не возникает. */}
+          {extra.expenseBearer && (
+            <Row
+              label="Кто несёт расход"
+              value={
+                EXPENSE_BEARER_LABEL[extra.expenseBearer] ?? extra.expenseBearer
+              }
+            />
+          )}
+          {extra.contractorClaim && (
+            <Row
+              label="Основание для подрядчика"
+              value={extra.contractorClaim}
+            />
+          )}
+          {(extra.responsibleDepartment || extra.responsiblePerson) && (
+            <Row
+              label="Зона ответственности"
+              value={[
+                extra.responsibleDepartment?.name,
+                extra.responsiblePerson,
+              ]
+                .filter(Boolean)
+                .join(', ')}
+            />
+          )}
         </div>
       </CardContent>
     </Card>
