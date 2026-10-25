@@ -47,6 +47,13 @@ export interface TgForm {
   draft: { memoType: TgMemoType; data: TgDraftData; updatedAt: string } | null;
 }
 
+/** Сотрудник в подсказке: кроме имени и отдела сервер ничего не отдаёт. */
+export interface TgEmployee {
+  id: string;
+  name: string;
+  department: { id: string; name: string } | null;
+}
+
 export interface TgSession {
   token: string;
   employee: { id: string; name: string };
@@ -106,6 +113,13 @@ export const tgApi = {
     });
   },
 
+  /** Подсказки «в зоне ответственности кого». Меньше двух букв сервер не ищет. */
+  employees(q: string): Promise<TgEmployee[]> {
+    return request<TgEmployee[]>(
+      `/memo-tg/employees?q=${encodeURIComponent(q)}`,
+    );
+  },
+
   dropDraft(): Promise<{ ok: true }> {
     return request<{ ok: true }>('/memo-tg/draft', { method: 'DELETE' });
   },
@@ -146,7 +160,7 @@ export const tgApi = {
     expenseBearer?: string;
     contractorClaim?: string;
     responsibleDepartmentId?: string;
-    responsiblePerson?: string;
+    responsibleEmployeeId?: string;
     departmentId?: string;
   }): Promise<CreatedMemo & { overrun: string }> {
     return request<CreatedMemo & { overrun: string }>(
