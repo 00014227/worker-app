@@ -36,7 +36,6 @@ export interface ExtraExpenseValues {
   responsibleEmployeeId: string;
   responsiblePerson: string;
   responsibleDepartmentName: string;
-  departmentId: string;
 }
 
 /** Деньги вводят и с запятой, и с пробелами — принимаем оба написания. */
@@ -89,7 +88,6 @@ export function extraValuesFromDraft(
     responsibleEmployeeId: text('responsibleEmployeeId'),
     responsiblePerson: text('responsiblePerson'),
     responsibleDepartmentName: text('responsibleDepartmentName'),
-    departmentId: text('departmentId'),
   };
 }
 
@@ -115,7 +113,6 @@ export const emptyExtraExpense = (currency: string): ExtraExpenseValues => ({
   responsibleEmployeeId: '',
   responsiblePerson: '',
   responsibleDepartmentName: '',
-  departmentId: '',
 });
 
 /**
@@ -269,7 +266,6 @@ export default function ExtraExpenseForm({
           byUs && !values.responsibleDepartmentName
             ? values.responsibleDepartmentId
             : undefined,
-        departmentId: values.departmentId || undefined,
       });
       onSent(created);
     } catch (e) {
@@ -573,26 +569,6 @@ export default function ExtraExpenseForm({
         </>
       )}
 
-      {form.departments.length > 0 && (
-        <Field
-          label="Подразделение записки"
-          hint="К какому подразделению относится сама записка"
-        >
-          <select
-            className="tg-input"
-            value={values.departmentId}
-            onChange={(e) => set({ departmentId: e.target.value })}
-          >
-            <option value="">— не указано —</option>
-            {form.departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
-
       {error && <div className="tg-error">{error}</div>}
       {problem && !error && <div className="tg-hint-text">{problem}</div>}
     </div>
@@ -621,7 +597,6 @@ function toDraft(values: ExtraExpenseValues) {
     responsibleEmployeeId: values.responsibleEmployeeId,
     responsiblePerson: values.responsiblePerson,
     responsibleDepartmentName: values.responsibleDepartmentName,
-    departmentId: values.departmentId,
   };
 }
 

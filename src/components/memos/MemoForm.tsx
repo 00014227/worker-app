@@ -39,7 +39,9 @@ export default function MemoForm({
     memo?.memoType ?? meta.cabinetCreatableTypes[0] ?? 'other',
   );
   const [title, setTitle] = useState(memo?.title ?? '');
-  const [departmentId, setDepartmentId] = useState(memo?.department?.id ?? '');
+  // Подразделение не спрашиваем: при создании его ставит сервер из профиля
+  // автора. У правки сохраняем прежнее, чтобы не обнулить уже выбранное.
+  const departmentId = memo?.department?.id ?? '';
   const [justification, setJustification] = useState(memo?.justification ?? '');
   const [amount, setAmount] = useState(memo?.amount ?? '');
   const [currency, setCurrency] = useState(memo?.currency ?? 'UZS');
@@ -151,22 +153,6 @@ export default function MemoForm({
             placeholder="Коротко о чём записка"
             maxLength={300}
           />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Подразделение</Label>
-          <select
-            className={selectCls}
-            value={departmentId}
-            onChange={(e) => setDepartmentId(e.target.value)}
-          >
-            <option value="">— не указано —</option>
-            {meta.departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
         </div>
 
         <div className="grid grid-cols-[1fr_120px] gap-3">
