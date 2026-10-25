@@ -12,7 +12,6 @@ export interface AbsenceValues {
   dateFrom: string;
   dateTo: string;
   comment: string;
-  departmentId: string;
 }
 
 const EMPTY: AbsenceValues = {
@@ -21,7 +20,6 @@ const EMPTY: AbsenceValues = {
   dateFrom: '',
   dateTo: '',
   comment: '',
-  departmentId: '',
 };
 
 /** Поля, которые форма рисует сама; остальное берётся из описания с сервера. */
@@ -98,7 +96,6 @@ export default function AbsenceForm({
         dateFrom: values.dateFrom,
         dateTo: values.dateTo,
         comment: values.comment.trim() || undefined,
-        departmentId: values.departmentId || undefined,
       });
       onSent(created);
     } catch (e) {
@@ -195,23 +192,6 @@ export default function AbsenceForm({
         </Field>
       </div>
 
-      {form.departments.length > 0 && (
-        <Field label="Подразделение">
-          <select
-            className="tg-input"
-            value={values.departmentId}
-            onChange={(e) => set({ departmentId: e.target.value })}
-          >
-            <option value="">— не указано —</option>
-            {form.departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
-
       <Field label="Комментарий" hint="Что важно знать согласующим">
         <textarea
           className="tg-input min-h-[88px]"
@@ -250,7 +230,6 @@ function toDraft(values: AbsenceValues): Record<string, string> {
     dateFrom: values.dateFrom,
     dateTo: values.dateTo,
     comment: values.comment,
-    departmentId: values.departmentId,
   };
 }
 
