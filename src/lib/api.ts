@@ -1938,6 +1938,8 @@ export interface MemoDepartmentRow {
   name: string;
   isActive: boolean;
   _count?: { memos: number };
+  /** Состав отдела. Ведётся в настройках, со стороны отдела. */
+  staff: { id: string; name: string }[];
 }
 
 export interface MemoRoleRow {
@@ -1969,6 +1971,8 @@ export interface MemoCandidate {
   email: string | null;
   login: string | null;
   memoTelegramLink: { unlinkedAt: string | null } | null;
+  /** Где человек числится сейчас — чтобы перевод не был неожиданностью. */
+  memoDepartment: { id: string; name: string } | null;
 }
 
 export interface MemoLinkStatus {
@@ -2096,6 +2100,32 @@ export const memoApi = {
   },
 
   admin: {
+    /**
+     * Назначить сотруднику этот отдел.
+     *
+     * Отдел один на человека, поэтому числившийся в другом переезжает —
+     * сервер возвращает прежний, чтобы об этом можно было сказать.
+     */
+    addDepartmentMember(
+      departmentId: string,
+      employeeId: string,
+    ): Promise<{ previous: { id: string; name: string } | null }> {
+      return req(`/worker/memos/admin/departments/${departmentId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ employeeId }),
+      });
+    },
+    removeDepartmentMember(
+      departmentId: string,
+      employeeId: string,
+    ): Promise<{ removed: boolean }> {
+      return req(
+        `/worker/memos/admin/departments/${departmentId}/members/${employeeId}`,
+        {
+          method: 'DELETE',
+        },
+      );
+    },
     departments(): Promise<MemoDepartmentRow[]> {
       return req<MemoDepartmentRow[]>('/worker/memos/admin/departments');
     },
