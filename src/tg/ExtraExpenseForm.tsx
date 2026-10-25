@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tgApi } from './tgApi';
-import type { TgDraftData, TgForm } from './tgApi';
+import type { TgDraftData, TgEmployee, TgForm } from './tgApi';
 import { mainButton } from './telegram';
 
 /** Задержка перед сохранением черновика: раз в полторы секунды после правки. */
 const SAVE_DELAY_MS = 1500;
+
+/** Задержка перед запросом подсказок: пока человек печатает, сервер не дёргаем. */
+const SUGGEST_DELAY_MS = 300;
 
 export interface ExpenseRow {
   /** Ключ строки для React. На сервер не уходит. */
@@ -27,8 +30,12 @@ export interface ExtraExpenseValues {
   /** contractor | own — кто несёт расход, если клиенту он не перевыставлен. */
   expenseBearer: string;
   contractorClaim: string;
+  /** Отдел спрашиваем, только если у выбранного сотрудника он не проставлен. */
   responsibleDepartmentId: string;
+  /** Кого выбрали: ссылка, имя и его отдел — последние два для показа. */
+  responsibleEmployeeId: string;
   responsiblePerson: string;
+  responsibleDepartmentName: string;
   departmentId: string;
 }
 
@@ -79,7 +86,9 @@ export function extraValuesFromDraft(
     expenseBearer: text('expenseBearer'),
     contractorClaim: text('contractorClaim'),
     responsibleDepartmentId: text('responsibleDepartmentId'),
+    responsibleEmployeeId: text('responsibleEmployeeId'),
     responsiblePerson: text('responsiblePerson'),
+    responsibleDepartmentName: text('responsibleDepartmentName'),
     departmentId: text('departmentId'),
   };
 }
@@ -103,7 +112,9 @@ export const emptyExtraExpense = (currency: string): ExtraExpenseValues => ({
   expenseBearer: '',
   contractorClaim: '',
   responsibleDepartmentId: '',
+  responsibleEmployeeId: '',
   responsiblePerson: '',
+  responsibleDepartmentName: '',
   departmentId: '',
 });
 
@@ -214,8 +225,15 @@ export default function ExtraExpenseForm({
       return 'Укажите, на каком основании предъявляем подрядчику';
     if (byUs && !values.responsibleDepartmentId)
       return 'Выберите отдел ответственности';
-    if (byUs && values.responsiblePerson.trim().length < 2)
-      return 'Укажите, в зоне ответственности кого возник расход';
+    if (byUs && !values.responsibleEmployeeId)
+      return 'Выберите, в зоне ответственности кого возник расход';
+    // Отдел спрашиваем только у того, кому его ещё не проставили.
+    if (
+      byUs &&
+      !values.responsibleDepartmentName &&
+      !values.responsibleDepartmentId
+    )
+      return 'У сотрудника не указан отдел — выберите его';
     return null;
   }, [values, filled, needsBearer, byContractor, byUs]);
 
@@ -244,10 +262,13 @@ export default function ExtraExpenseForm({
         contractorClaim: byContractor
           ? values.contractorClaim.trim()
           : undefined,
-        responsibleDepartmentId: byUs
-          ? values.responsibleDepartmentId
-          : undefined,
-        responsiblePerson: byUs ? values.responsiblePerson.trim() : undefined,
+        responsibleEmployeeId: byUs ? values.responsibleEmployeeId : undefined,
+        // Отдел шлём только когда у сотрудника его нет: иначе сервер всё равно
+        // возьмёт отдел из профиля, а не присланный.
+        responsibleDepartmentId:
+          byUs && !values.responsibleDepartmentName
+            ? values.responsibleDepartmentId
+            : undefined,
         departmentId: values.departmentId || undefined,
       });
       onSent(created);
@@ -493,31 +514,62 @@ export default function ExtraExpenseForm({
       {byUs && (
         <>
           <Field
-            label="Отдел, в зоне ответственности которого возник расход"
+            label="В зоне ответственности кого возник расход"
             required
+            hint={
+              values.responsibleDepartmentName
+                ? `Отдел: ${values.responsibleDepartmentName}`
+                : 'Начните набирать фамилию'
+            }
           >
-            <select
-              className="tg-input"
-              value={values.responsibleDepartmentId}
-              onChange={(e) => set({ responsibleDepartmentId: e.target.value })}
-            >
-              <option value="">— выберите —</option>
-              {form.departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Кто именно" required hint="Фамилия и инициалы">
-            <input
-              className="tg-input"
+            <EmployeeField
               value={values.responsiblePerson}
-              onChange={(e) => set({ responsiblePerson: e.target.value })}
-              maxLength={300}
-              placeholder="Иванов И."
+              onType={(v) =>
+                // Правят имя руками — значит выбранный сотрудник больше не он,
+                // и ссылку с отделом надо снять.
+                set({
+                  responsiblePerson: v,
+                  responsibleEmployeeId: '',
+                  responsibleDepartmentName: '',
+                })
+              }
+              onPick={(found) =>
+                set({
+                  responsiblePerson: found.name,
+                  responsibleEmployeeId: found.id,
+                  responsibleDepartmentName: found.department?.name ?? '',
+                  responsibleDepartmentId: '',
+                })
+              }
             />
           </Field>
+
+          {/* Отдел спрашиваем, только если у выбранного он не проставлен:
+              иначе записку нельзя было бы подать, пока админ не заполнит
+              справочник. */}
+          {values.responsibleEmployeeId &&
+            !values.responsibleDepartmentName && (
+              <Field
+                label="Отдел ответственного"
+                required
+                hint="У сотрудника отдел не указан — выберите вручную или проставьте его в настройках записок"
+              >
+                <select
+                  className="tg-input"
+                  value={values.responsibleDepartmentId}
+                  onChange={(e) =>
+                    set({ responsibleDepartmentId: e.target.value })
+                  }
+                >
+                  <option value="">— выберите —</option>
+                  {form.departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
         </>
       )}
 
@@ -566,7 +618,9 @@ function toDraft(values: ExtraExpenseValues) {
     expenseBearer: values.expenseBearer,
     contractorClaim: values.contractorClaim,
     responsibleDepartmentId: values.responsibleDepartmentId,
+    responsibleEmployeeId: values.responsibleEmployeeId,
     responsiblePerson: values.responsiblePerson,
+    responsibleDepartmentName: values.responsibleDepartmentName,
     departmentId: values.departmentId,
   };
 }
@@ -607,6 +661,110 @@ function diffClass(cents: number, higherIsBetter = false): string {
   if (cents === 0) return '';
   const bad = higherIsBetter ? cents < 0 : cents > 0;
   return bad ? 'text-red-600 font-medium' : 'text-emerald-600 font-medium';
+}
+
+/**
+ * «В зоне ответственности кого» — поиск по справочнику сотрудников.
+ *
+ * Здесь подсказки уместны, в отличие от «кому платим»: справочник закрытый и
+ * полный — семьсот человек из 1С, — и выбор из него избавляет от «Иванова»,
+ * «Иванова И.» и «иванов и.и.» как трёх разных людей. Поле всё же остаётся
+ * текстовым: пока человека не выбрали, набранное видно на экране.
+ *
+ * Запрос уходит с задержкой и только от двух букв: иначе на каждое нажатие шёл
+ * бы запрос, а по одной букве вернулся бы весь справочник.
+ */
+function EmployeeField({
+  value,
+  onType,
+  onPick,
+}: {
+  value: string;
+  onType: (value: string) => void;
+  onPick: (employee: TgEmployee) => void;
+}) {
+  const [items, setItems] = useState<TgEmployee[]>([]);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<number | null>(null);
+  const asked = useRef('');
+
+  useEffect(
+    () => () => {
+      if (timer.current) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const ask = (query: string) => {
+    if (timer.current) window.clearTimeout(timer.current);
+    if (query.trim().length < 2) {
+      setItems([]);
+      setOpen(false);
+      return;
+    }
+    timer.current = window.setTimeout(() => {
+      asked.current = query;
+      void tgApi
+        .employees(query)
+        .then((found) => {
+          // Ответ на устаревший запрос выбрасываем: иначе список прыгал бы
+          // назад к тому, что человек уже дописал.
+          if (asked.current !== query) return;
+          setItems(found);
+          setOpen(found.length > 0);
+        })
+        .catch(() => {
+          setItems([]);
+          setOpen(false);
+        });
+    }, SUGGEST_DELAY_MS);
+  };
+
+  return (
+    <div className="tg-suggest-wrap">
+      <input
+        className="tg-input"
+        value={value}
+        onChange={(e) => {
+          onType(e.target.value);
+          ask(e.target.value);
+        }}
+        onFocus={() => setOpen(items.length > 0)}
+        // Закрываем с задержкой: без неё список исчезает раньше, чем успевает
+        // сработать нажатие по подсказке.
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        maxLength={300}
+        placeholder="Фамилия"
+      />
+      {open && (
+        <ul className="tg-suggest">
+          {items.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                className="tg-suggest-item"
+                // pointerDown, а не click: на телефоне поле теряет фокус
+                // раньше, чем доходит нажатие, и выбор не срабатывал бы.
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onPick(item);
+                  setOpen(false);
+                }}
+              >
+                {item.name}
+                {item.department && (
+                  <span className="tg-hint-text">
+                    {' '}
+                    · {item.department.name}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function Total({ label, value }: { label: string; value: string }) {
