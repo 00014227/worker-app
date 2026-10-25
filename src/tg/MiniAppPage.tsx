@@ -323,7 +323,6 @@ function toValues(
       dateFrom: text('dateFrom'),
       dateTo: text('dateTo'),
       comment: text('comment'),
-      departmentId: text('departmentId'),
     },
   };
 }

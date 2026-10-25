@@ -17,7 +17,6 @@ export interface InvoiceValues {
   reason: string;
   /** «ГГГГ-ММ-ДДTЧЧ:ММ» — ровно то, что отдаёт datetime-local. */
   documentsExpectedAt: string;
-  departmentId: string;
 }
 
 export const emptyInvoice = (currency: string): InvoiceValues => ({
@@ -27,7 +26,6 @@ export const emptyInvoice = (currency: string): InvoiceValues => ({
   currency,
   reason: '',
   documentsExpectedAt: '',
-  departmentId: '',
 });
 
 /** Черновик с сервера — в значения формы. Неизвестные ключи отбрасываем. */
@@ -46,7 +44,6 @@ export function invoiceValuesFromDraft(
     currency: text('currency') || currency,
     reason: text('reason'),
     documentsExpectedAt: text('documentsExpectedAt'),
-    departmentId: text('departmentId'),
   };
 }
 
@@ -143,7 +140,6 @@ export default function ExpeditedInvoiceForm({
         currency: values.currency,
         reason: values.reason.trim(),
         documentsExpectedAt: values.documentsExpectedAt,
-        departmentId: values.departmentId || undefined,
       });
       onSent(created);
     } catch (e) {
@@ -260,26 +256,6 @@ export default function ExpeditedInvoiceForm({
           onChange={(e) => set({ documentsExpectedAt: e.target.value })}
         />
       </Field>
-
-      {form.departments.length > 0 && (
-        <Field
-          label="Подразделение записки"
-          hint="К какому подразделению относится сама записка"
-        >
-          <select
-            className="tg-input"
-            value={values.departmentId}
-            onChange={(e) => set({ departmentId: e.target.value })}
-          >
-            <option value="">— не указано —</option>
-            {form.departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
 
       {/* Поля, которых форма не знает: появятся, если на сервере добавят новое. */}
       {form.fields
