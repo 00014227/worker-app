@@ -1,5 +1,5 @@
 import { request } from '@/lib/api';
-import { saveMiniAppToken } from '@/lib/auth';
+import { authHeaders, saveMiniAppToken } from '@/lib/auth';
 
 /** Описание поля формы — то же, что отдаёт кабинет. */
 export interface TgFieldDef {
@@ -35,13 +35,19 @@ export interface TgForm {
   memoType: TgMemoType;
   fields: TgFieldDef[];
   departments: { id: string; name: string }[];
+  /** Уже приложенные файлы: форма открывается заново, а они остаются. */
+  attachments: TgAttachment[];
   /** Справочники, нужные формам. Подписи приходят с сервера, а не зашиты. */
   options: {
+    /** Типы перевозки из 1С. От выбранного зависит маршрут согласования. */
+    transportationTypes: { id: string; name: string }[];
     reasons: { value: string; label: string }[];
     rebilled: { value: string; label: string }[];
     expenseBearers: { value: string; label: string }[];
     currencies: string[];
     maxExpenseLines: number;
+    /** Сколько файлов принимает одна записка. */
+    maxAttachments: number;
   };
   /** Незаконченная форма, если человек не дозаполнил её в прошлый раз. */
   draft: { memoType: TgMemoType; data: TgDraftData; updatedAt: string } | null;
@@ -52,6 +58,14 @@ export interface TgEmployee {
   id: string;
   name: string;
   department: { id: string; name: string } | null;
+}
+
+/** Файл, приложенный к заполняемой форме. */
+export interface TgAttachment {
+  id: string;
+  name: string;
+  size: number;
+  mime: string;
 }
 
 export interface TgSession {
@@ -113,6 +127,41 @@ export const tgApi = {
     });
   },
 
+  /**
+   * Приложить файл к заполняемой форме.
+   *
+   * Отдельно от общего `request`, как и загрузки тарифов: тело — multipart, а
+   * общая обёртка ставит `Content-Type: application/json`, и браузер тогда не
+   * допишет границу частей — сервер такое тело не разберёт.
+   */
+  async addAttachment(file: File): Promise<TgAttachment> {
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch('/api/memo-tg/attachments', {
+      method: 'POST',
+      headers: authHeaders(),
+      body,
+    });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as {
+        message?: unknown;
+      };
+      const text = Array.isArray(payload.message)
+        ? payload.message.join('; ')
+        : typeof payload.message === 'string'
+          ? payload.message
+          : 'Файл не приложился';
+      throw new Error(text);
+    }
+    return (await res.json()) as TgAttachment;
+  },
+
+  removeAttachment(id: string): Promise<{ removed: boolean }> {
+    return request<{ removed: boolean }>(`/memo-tg/attachments/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   /** Подсказки «в зоне ответственности кого». Меньше двух букв сервер не ищет. */
   employees(q: string): Promise<TgEmployee[]> {
     return request<TgEmployee[]>(
@@ -146,6 +195,7 @@ export const tgApi = {
    */
   createExtraExpenses(input: {
     orderNumber: string;
+    transportationTypeId: string;
     currency: string;
     lines: {
       expenseType: string;

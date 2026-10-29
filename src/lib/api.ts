@@ -1824,6 +1824,8 @@ export interface MemoExpenseLineView {
 /** Табличная часть обоснования доп. расходов. */
 export interface MemoExtraExpenseView {
   orderNumber: string;
+  /** Тип перевозки: по нему выбирался маршрут согласования. */
+  transportationType: { id: string; name: string } | null;
   /** Есть, только если по номеру нашлась ровно одна перевозка. */
   orderId: string | null;
   currency: string | null;
@@ -1953,6 +1955,12 @@ export interface MemoRoleRow {
 export interface MemoRouteRow {
   id: string;
   memoType: MemoType;
+  /** Для какого типа перевозки маршрут. Пусто — общий, подходит любому. */
+  transportationType: {
+    id: string;
+    name: string;
+    displayName: string | null;
+  } | null;
   name: string;
   isActive: boolean;
   versionNo: number;
@@ -2186,14 +2194,21 @@ export const memoApi = {
     routes(): Promise<MemoRouteRow[]> {
       return req<MemoRouteRow[]>('/worker/memos/admin/routes');
     },
+    /** Справочник типов перевозки — для выбора в маршруте. */
+    transportationTypes(): Promise<
+      { id: string; name: string; displayName: string | null }[]
+    > {
+      return req('/worker/memos/admin/transportation-types');
+    },
     createRoute(
       memoType: MemoType,
       name: string,
       steps: { roleId: string; isMandatory?: boolean; slaHours?: number }[],
+      transportationTypeId?: string,
     ): Promise<{ id: string }> {
       return req<{ id: string }>('/worker/memos/admin/routes', {
         method: 'POST',
-        body: JSON.stringify({ memoType, name, steps }),
+        body: JSON.stringify({ memoType, name, steps, transportationTypeId }),
       });
     },
     saveSteps(

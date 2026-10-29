@@ -27,7 +27,7 @@ import {
   showAlert,
 } from './telegram';
 import { tgApi } from './tgApi';
-import type { TgDraftData, TgForm, TgMemoType } from './tgApi';
+import type { TgAttachment, TgDraftData, TgForm, TgMemoType } from './tgApi';
 import './miniapp.css';
 
 /** Заполненная форма — своя на каждый тип. */
@@ -76,6 +76,10 @@ const TYPE_LABEL: Record<TgMemoType, { title: string; hint: string }> = {
 export default function MiniAppPage() {
   const [stage, setStage] = useState<Stage>({ kind: 'booting' });
   const [who, setWho] = useState<string | null>(null);
+  // Файлы держим на странице, а не в форме: при переключении типа форма
+  // пересоздаётся, а приложенное остаётся на сервере и должно остаться на
+  // экране.
+  const [files, setFiles] = useState<TgAttachment[]>([]);
   const booted = useRef(false);
 
   /** Загрузить форму под тип и открыть её. Черновик подставляем по просьбе. */
@@ -83,6 +87,7 @@ export default function MiniAppPage() {
     setStage({ kind: 'loading' });
     try {
       const form = await tgApi.form(memoType);
+      setFiles(form.attachments);
       const draft = withDraft && form.draft ? form.draft.data : null;
       setStage({
         kind: 'form',
@@ -125,6 +130,7 @@ export default function MiniAppPage() {
         // Форму спрашиваем без типа: на этом шаге нужен только черновик, а он
         // один на человека и знает свой тип сам.
         const form = await tgApi.form();
+        setFiles(form.attachments);
         const draft = form.draft;
         const started = draft
           ? toValues(draft.memoType, draft.data, form)
@@ -231,6 +237,7 @@ export default function MiniAppPage() {
               className="tg-button-secondary"
               onClick={() => {
                 void tgApi.dropDraft().catch(() => undefined);
+                setFiles([]);
                 setStage({ kind: 'choose' });
               }}
             >
@@ -243,6 +250,9 @@ export default function MiniAppPage() {
       {stage.kind === 'form' && stage.form.memoType === 'absence' && (
         <AbsenceForm
           form={stage.form}
+          files={files}
+          onFilesChanged={setFiles}
+          maxFiles={stage.form.options.maxAttachments}
           initial={
             stage.initial?.kind === 'absence' ? stage.initial.values : null
           }
@@ -253,6 +263,9 @@ export default function MiniAppPage() {
       {stage.kind === 'form' && stage.form.memoType === 'extra_expenses' && (
         <ExtraExpenseForm
           form={stage.form}
+          files={files}
+          onFilesChanged={setFiles}
+          maxFiles={stage.form.options.maxAttachments}
           initial={
             stage.initial?.kind === 'extra_expenses'
               ? stage.initial.values
@@ -265,6 +278,9 @@ export default function MiniAppPage() {
       {stage.kind === 'form' && stage.form.memoType === 'expedited_invoice' && (
         <ExpeditedInvoiceForm
           form={stage.form}
+          files={files}
+          onFilesChanged={setFiles}
+          maxFiles={stage.form.options.maxAttachments}
           initial={
             stage.initial?.kind === 'expedited_invoice'
               ? stage.initial.values

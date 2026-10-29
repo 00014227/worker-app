@@ -106,7 +106,9 @@ export default function ContractDiffPage() {
       pollFor.current = started.id;
       setReport(started);
       const res =
-        started.status === 'processing' ? await awaitReady(started.id) : started;
+        started.status === 'processing'
+          ? await awaitReady(started.id)
+          : started;
       if (res) setActiveId(res.items[0]?.id ?? null);
       loadHistory();
     } catch (e) {

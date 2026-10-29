@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tgApi } from './tgApi';
-import type { TgDraftData, TgFieldDef, TgForm } from './tgApi';
+import AttachmentsField from './AttachmentsField';
+import type { TgAttachment, TgDraftData, TgFieldDef, TgForm } from './tgApi';
 import { mainButton } from './telegram';
 
 /** Задержка перед сохранением черновика: раз в полторы секунды после правки. */
@@ -69,11 +70,17 @@ export function invoiceHasAnything(values: InvoiceValues): boolean {
 export default function ExpeditedInvoiceForm({
   form,
   initial,
+  files,
+  onFilesChanged,
+  maxFiles,
   onSent,
 }: {
   form: TgForm;
   /** Черновик, если человек решил продолжить. */
   initial: InvoiceValues | null;
+  files: TgAttachment[];
+  onFilesChanged: (files: TgAttachment[]) => void;
+  maxFiles: number;
   onSent: (memo: { number: string; title: string }) => void;
 }) {
   const [values, setValues] = useState<InvoiceValues>(
@@ -269,6 +276,12 @@ export default function ExpeditedInvoiceForm({
             />
           </Field>
         ))}
+
+      <AttachmentsField
+        files={files}
+        onChanged={onFilesChanged}
+        max={maxFiles}
+      />
 
       {error && <div className="tg-error">{error}</div>}
       {problem && !error && <div className="tg-hint-text">{problem}</div>}
