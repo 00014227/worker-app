@@ -18,6 +18,7 @@ import { getUser } from '@/lib/auth';
 import { memoApi } from '@/lib/api';
 import type {
   MemoCandidate,
+  MemoType,
   MemoDepartmentRow,
   MemoLinkStatus,
   MemoRoleRow,
@@ -52,6 +53,9 @@ export default function MemoSettingsPage() {
   const [departments, setDepartments] = useState<MemoDepartmentRow[]>([]);
   const [links, setLinks] = useState<MemoLinkStatus[]>([]);
   const [candidates, setCandidates] = useState<MemoCandidate[]>([]);
+  const [transportationTypes, setTransportationTypes] = useState<
+    { id: string; name: string; displayName: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,18 +63,20 @@ export default function MemoSettingsPage() {
     if (!isAdmin) return;
     setError(null);
     try {
-      const [r, rt, d, l, c] = await Promise.all([
+      const [r, rt, d, l, c, tt] = await Promise.all([
         memoApi.admin.roles(),
         memoApi.admin.routes(),
         memoApi.admin.departments(),
         memoApi.admin.links(),
         memoApi.admin.candidates(),
+        memoApi.admin.transportationTypes(),
       ]);
       setRoles(r);
       setRoutes(rt);
       setDepartments(d);
       setLinks(l);
       setCandidates(c);
+      setTransportationTypes(tt);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -198,7 +204,12 @@ export default function MemoSettingsPage() {
       ) : tab === 'roles' ? (
         <Roles roles={roles} candidates={candidates} onChanged={load} />
       ) : tab === 'routes' ? (
-        <Routes routes={routes} roles={roles} onChanged={load} />
+        <Routes
+          routes={routes}
+          roles={roles}
+          transportationTypes={transportationTypes}
+          onChanged={load}
+        />
       ) : tab === 'departments' ? (
         <Departments
           departments={departments}
@@ -367,16 +378,28 @@ function Roles({
 function Routes({
   routes,
   roles,
+  transportationTypes,
   onChanged,
 }: {
   routes: MemoRouteRow[];
   roles: MemoRoleRow[];
+  transportationTypes: {
+    id: string;
+    name: string;
+    displayName: string | null;
+  }[];
   onChanged: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Поля формы создания. Открывается по кнопке — обычно маршруты не заводят. */
+  const [adding, setAdding] = useState(false);
+  const [newType, setNewType] = useState<MemoType>('extra_expenses');
+  const [newTransport, setNewTransport] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newSteps, setNewSteps] = useState<string[]>([]);
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -416,6 +439,146 @@ function Routes({
         можно в любой момент, не ломая работу.
       </div>
 
+      {adding ? (
+        <Card>
+          <CardContent className="pt-4 space-y-2">
+            <div className="text-sm font-medium">Новый маршрут</div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="space-y-1">
+                <span className="text-xs text-muted-foreground">
+                  Тип записки
+                </span>
+                <select
+                  className="h-8 w-full rounded-md border bg-transparent px-2 text-sm"
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value as MemoType)}
+                >
+                  {(Object.keys(MEMO_TYPE) as MemoType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {MEMO_TYPE[t].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-muted-foreground">
+                  Тип перевозки
+                </span>
+                <select
+                  className="h-8 w-full rounded-md border bg-transparent px-2 text-sm"
+                  value={newTransport}
+                  onChange={(e) => setNewTransport(e.target.value)}
+                >
+                  {/* Пусто — общий маршрут: по нему пойдут записки тех типов
+                      перевозки, для которых своего маршрута не завели. */}
+                  <option value="">Любой</option>
+                  {transportationTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.displayName?.trim() || t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <Input
+              className="h-8 text-sm"
+              placeholder="Название маршрута"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+
+            <div className="space-y-1.5">
+              <span className="text-xs text-muted-foreground">
+                Этапы по порядку
+              </span>
+              {newSteps.map((roleId, i) => (
+                <div key={`${roleId}-${i}`} className="flex items-center gap-2">
+                  <span className="w-5 text-xs text-muted-foreground">
+                    {i + 1}.
+                  </span>
+                  <select
+                    className="h-8 flex-1 rounded-md border bg-transparent px-2 text-sm"
+                    value={roleId}
+                    onChange={(e) =>
+                      setNewSteps((prev) =>
+                        prev.map((r, j) => (j === i ? e.target.value : r)),
+                      )
+                    }
+                  >
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() =>
+                      setNewSteps((prev) => prev.filter((_, j) => j !== i))
+                    }
+                    className="p-1 rounded border hover:bg-muted/50"
+                    title="Убрать этап"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() =>
+                  roles[0] && setNewSteps((prev) => [...prev, roles[0].id])
+                }
+                disabled={!roles.length}
+                className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-40"
+              >
+                <Plus size={11} /> Добавить этап
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() =>
+                  act(async () => {
+                    await memoApi.admin.createRoute(
+                      newType,
+                      newName.trim(),
+                      newSteps.map((roleId) => ({ roleId })),
+                      newTransport || undefined,
+                    );
+                    setAdding(false);
+                    setNewName('');
+                    setNewSteps([]);
+                    setNewTransport('');
+                  })
+                }
+                disabled={
+                  busy || newName.trim().length < 2 || newSteps.length === 0
+                }
+                className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium disabled:opacity-40"
+              >
+                Создать
+              </button>
+              <button
+                onClick={() => setAdding(false)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Отмена
+              </button>
+              {/* Создаётся выключенным: включать маршрут должен человек,
+                  проверив состав этапов. */}
+              <span className="text-xs text-muted-foreground">
+                Создастся выключенным
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          <Plus size={11} /> Новый маршрут
+        </button>
+      )}
+
       {routes.map((route) => (
         <Card key={route.id}>
           <CardContent className="pt-4 space-y-2">
@@ -425,6 +588,14 @@ function Routes({
                   {route.name}
                   <span className="text-[10px] px-1.5 py-0.5 rounded border bg-muted/50">
                     {MEMO_TYPE[route.memoType].label}
+                  </span>
+                  {/* Без типа перевозки маршрут общий: по нему идут записки,
+                      для типа перевозки которых своего маршрута нет. */}
+                  <span className="text-[10px] px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200">
+                    {route.transportationType
+                      ? route.transportationType.displayName?.trim() ||
+                        route.transportationType.name
+                      : 'любой тип перевозки'}
                   </span>
                   <span className="text-[10px] text-muted-foreground">
                     версия {route.versionNo}

@@ -25,7 +25,16 @@ export default function MemoExtraExpenseBlock({
     <Card>
       <CardContent className="pt-4 space-y-4">
         <div className="flex items-baseline justify-between gap-3">
-          <div className="text-xs font-medium">Расходы по перевозке</div>
+          <div className="text-xs font-medium">
+            Расходы по перевозке
+            {/* Тип перевозки показываем рядом: по нему выбирался маршрут, и
+                согласующий должен видеть, почему записка пришла именно ему. */}
+            {extra.transportationType && (
+              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded border bg-muted/50 font-normal">
+                {extra.transportationType.name}
+              </span>
+            )}
+          </div>
           {/* Ссылка есть, только если по номеру нашлась ровно одна перевозка:
               номера заказов в базе не уникальны. Номер показываем всегда — он
               остаётся главным, ссылка лишь удобство. */}

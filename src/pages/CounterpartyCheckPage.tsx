@@ -104,7 +104,8 @@ export default function CounterpartyCheckPage() {
       const res = await legalCheckApi.byId(id);
       if (pollFor.current !== id) return null;
       setCheck(res);
-      if (res.status === 'failed') throw new Error(res.error || 'Проверка не удалась');
+      if (res.status === 'failed')
+        throw new Error(res.error || 'Проверка не удалась');
       if (res.status !== 'processing') return res;
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
@@ -153,7 +154,6 @@ export default function CounterpartyCheckPage() {
     if (!history.some((h) => h.status === 'processing')) return;
     const timer = setInterval(loadHistory, POLL_MS * 2);
     return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history]);
 
   const parts = useMemo(() => (check ? withCitations(check) : []), [check]);
@@ -436,7 +436,9 @@ function CheckProgress({ query }: { query: string }) {
     <div className="rounded-xl border p-5 space-y-3">
       <div className="flex items-center gap-2.5 flex-wrap">
         <Loader2 size={16} className="animate-spin text-primary shrink-0" />
-        <span className="text-sm font-semibold">Ищем в открытых источниках</span>
+        <span className="text-sm font-semibold">
+          Ищем в открытых источниках
+        </span>
         <span className="text-xs text-muted-foreground tabular-nums">
           {elapsed < 60
             ? `${elapsed} с`

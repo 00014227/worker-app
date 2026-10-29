@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tgApi } from './tgApi';
-import type { TgDraftData, TgEmployee, TgForm } from './tgApi';
+import AttachmentsField from './AttachmentsField';
+import type { TgAttachment, TgDraftData, TgEmployee, TgForm } from './tgApi';
 import { mainButton } from './telegram';
 
 /** Задержка перед сохранением черновика: раз в полторы секунды после правки. */
@@ -21,6 +22,8 @@ export interface ExpenseRow {
 
 export interface ExtraExpenseValues {
   orderNumber: string;
+  /** Тип перевозки: от него зависит, кому записка уйдёт на согласование. */
+  transportationTypeId: string;
   currency: string;
   lines: ExpenseRow[];
   incomePlanned: string;
@@ -76,6 +79,7 @@ export function extraValuesFromDraft(
 
   return {
     orderNumber: text('orderNumber'),
+    transportationTypeId: text('transportationTypeId'),
     currency: text('currency') || currency,
     lines: lines.length ? lines : [newRow()],
     incomePlanned: text('incomePlanned'),
@@ -101,6 +105,7 @@ export function extraHasAnything(values: ExtraExpenseValues): boolean {
 
 export const emptyExtraExpense = (currency: string): ExtraExpenseValues => ({
   orderNumber: '',
+  transportationTypeId: '',
   currency,
   lines: [newRow()],
   incomePlanned: '',
@@ -129,11 +134,17 @@ export const emptyExtraExpense = (currency: string): ExtraExpenseValues => ({
 export default function ExtraExpenseForm({
   form,
   initial,
+  files,
+  onFilesChanged,
+  maxFiles,
   onSent,
 }: {
   form: TgForm;
   /** Черновик, если человек решил продолжить. */
   initial: ExtraExpenseValues | null;
+  files: TgAttachment[];
+  onFilesChanged: (files: TgAttachment[]) => void;
+  maxFiles: number;
   onSent: (memo: { number: string; title: string }) => void;
 }) {
   const [values, setValues] = useState<ExtraExpenseValues>(
@@ -203,6 +214,7 @@ export default function ExtraExpenseForm({
   /** Чего не хватает. Проверяет и сервер — здесь только чтобы не отправлять зря. */
   const problem = useMemo(() => {
     if (!values.orderNumber.trim()) return 'Укажите номер перевозки';
+    if (!values.transportationTypeId) return 'Выберите тип перевозки';
     if (!filled.length) return 'Добавьте хотя бы одну строку расходов';
     if (filled.some((l) => l.expenseType.trim().length < 2))
       return 'Укажите вид расхода в каждой строке';
@@ -240,6 +252,7 @@ export default function ExtraExpenseForm({
     try {
       const created = await tgApi.createExtraExpenses({
         orderNumber: values.orderNumber.trim(),
+        transportationTypeId: values.transportationTypeId,
         currency: values.currency,
         lines: values.lines
           .filter((l) => !isBlank(l))
@@ -309,6 +322,24 @@ export default function ExtraExpenseForm({
             maxLength={50}
             placeholder="25-001234"
           />
+        </Field>
+        <Field
+          label="Тип перевозки"
+          required
+          hint="От него зависит, кто согласует"
+        >
+          <select
+            className="tg-input"
+            value={values.transportationTypeId}
+            onChange={(e) => set({ transportationTypeId: e.target.value })}
+          >
+            <option value="">— выберите —</option>
+            {form.options.transportationTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Валюта" required>
           <select
@@ -569,6 +600,12 @@ export default function ExtraExpenseForm({
         </>
       )}
 
+      <AttachmentsField
+        files={files}
+        onChanged={onFilesChanged}
+        max={maxFiles}
+      />
+
       {error && <div className="tg-error">{error}</div>}
       {problem && !error && <div className="tg-hint-text">{problem}</div>}
     </div>
@@ -580,6 +617,7 @@ function toDraft(values: ExtraExpenseValues) {
   return {
     memoType: 'extra_expenses',
     orderNumber: values.orderNumber,
+    transportationTypeId: values.transportationTypeId,
     currency: values.currency,
     lines: values.lines.map((l) => ({
       expenseType: l.expenseType,
