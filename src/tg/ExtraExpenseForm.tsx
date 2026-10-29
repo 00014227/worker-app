@@ -323,24 +323,6 @@ export default function ExtraExpenseForm({
             placeholder="25-001234"
           />
         </Field>
-        <Field
-          label="Тип перевозки"
-          required
-          hint="От него зависит, кто согласует"
-        >
-          <select
-            className="tg-input"
-            value={values.transportationTypeId}
-            onChange={(e) => set({ transportationTypeId: e.target.value })}
-          >
-            <option value="">— выберите —</option>
-            {form.options.transportationTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </Field>
         <Field label="Валюта" required>
           <select
             className="tg-input"
@@ -355,6 +337,27 @@ export default function ExtraExpenseForm({
           </select>
         </Field>
       </div>
+
+      {/* Своей строкой, а не в сетке с номером: подписи длинные, и в колонку
+          рядом с валютой они не умещаются. */}
+      <Field
+        label="Тип перевозки"
+        required
+        hint="От него зависит, кто согласует"
+      >
+        <select
+          className="tg-input"
+          value={values.transportationTypeId}
+          onChange={(e) => set({ transportationTypeId: e.target.value })}
+        >
+          <option value="">— выберите —</option>
+          {form.options.transportationTypes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </Field>
 
       {/* ── Таблица расходов ── */}
       <div className="space-y-2">
