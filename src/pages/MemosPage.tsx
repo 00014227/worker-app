@@ -14,7 +14,13 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { memoApi } from '@/lib/api';
-import type { MemoListResponse, MemoMeta, MemoStatus, MemoTaskRow, MemoType } from '@/lib/api';
+import type {
+  MemoListResponse,
+  MemoMeta,
+  MemoStatus,
+  MemoTaskRow,
+  MemoType,
+} from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -34,7 +40,11 @@ const selectCls =
 /** Плитки-фильтры: как в дебиторке, но по статусам записок. */
 const BUCKETS: { key: MemoStatus | 'all'; label: string; hint: string }[] = [
   { key: 'all', label: 'Все', hint: 'доступные мне' },
-  { key: 'pending_approval', label: 'На согласовании', hint: 'идут по маршруту' },
+  {
+    key: 'pending_approval',
+    label: 'На согласовании',
+    hint: 'идут по маршруту',
+  },
   { key: 'changes_requested', label: 'На доработке', hint: 'вернули автору' },
   { key: 'approved', label: 'Утверждены', hint: 'решение принято' },
   { key: 'rejected', label: 'Отклонены', hint: 'маршрут остановлен' },
@@ -114,7 +124,13 @@ export default function MemosPage() {
 
   const refresh = async () => {
     setLoading(true);
-    await Promise.all([load(), memoApi.myTasks().then(setTasks).catch(() => undefined)]);
+    await Promise.all([
+      load(),
+      memoApi
+        .myTasks()
+        .then(setTasks)
+        .catch(() => undefined),
+    ]);
     setLoading(false);
   };
 
@@ -161,9 +177,10 @@ export default function MemosPage() {
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 flex items-start gap-2">
           <TriangleAlert size={13} className="mt-0.5 shrink-0" />
           <span>
-            Вы согласующий, но <b>не привязали Telegram</b> — уведомления и напоминания о новых
-            задачах приходят только туда. Попросите администратора выдать код привязки, иначе
-            задачи придётся искать здесь вручную.
+            Вы согласующий, но <b>не привязали Telegram</b> — уведомления и
+            напоминания о новых задачах приходят только туда. Попросите
+            администратора выдать код привязки, иначе задачи придётся искать
+            здесь вручную.
           </span>
         </div>
       )}
@@ -179,7 +196,11 @@ export default function MemosPage() {
         {(
           [
             { key: 'all' as const, label: 'Реестр', count: total },
-            { key: 'mine' as const, label: 'Ждут моего решения', count: tasks.length },
+            {
+              key: 'mine' as const,
+              label: 'Ждут моего решения',
+              count: tasks.length,
+            },
           ] satisfies { key: 'all' | 'mine'; label: string; count: number }[]
         ).map((t) => (
           <button
@@ -227,9 +248,13 @@ export default function MemosPage() {
                     status === b.key && 'border-primary ring-1 ring-primary',
                   )}
                 >
-                  <div className="text-[11px] font-medium truncate">{b.label}</div>
+                  <div className="text-[11px] font-medium truncate">
+                    {b.label}
+                  </div>
                   <div className="text-lg font-bold leading-tight">{count}</div>
-                  <div className="text-[10px] text-muted-foreground truncate">{b.hint}</div>
+                  <div className="text-[10px] text-muted-foreground truncate">
+                    {b.hint}
+                  </div>
                 </button>
               );
             })}
@@ -304,7 +329,10 @@ export default function MemosPage() {
           <Card>
             {!data ? (
               <CardContent className="py-14 text-center text-sm text-muted-foreground">
-                <Loader2 size={20} className="mx-auto mb-2 animate-spin opacity-50" />
+                <Loader2
+                  size={20}
+                  className="mx-auto mb-2 animate-spin opacity-50"
+                />
                 Загружаем реестр…
               </CardContent>
             ) : data.data.length === 0 ? (
@@ -320,20 +348,28 @@ export default function MemosPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
-                        <th className="px-4 py-2 text-left font-medium">Номер</th>
+                        <th className="px-4 py-2 text-left font-medium">
+                          Номер
+                        </th>
                         <th className="px-4 py-2 text-left font-medium">Тип</th>
-                        <th className="px-4 py-2 text-left font-medium">Заголовок</th>
+                        <th className="px-4 py-2 text-left font-medium">
+                          Заголовок
+                        </th>
                         <th className="px-4 py-2 text-left font-medium hidden md:table-cell">
                           Автор
                         </th>
                         <th className="px-4 py-2 text-left font-medium hidden lg:table-cell">
                           Подразделение
                         </th>
-                        <th className="px-4 py-2 text-right font-medium">Сумма</th>
+                        <th className="px-4 py-2 text-right font-medium">
+                          Сумма
+                        </th>
                         <th className="px-4 py-2 text-left font-medium hidden md:table-cell">
                           Сейчас у кого
                         </th>
-                        <th className="px-4 py-2 text-left font-medium">Статус</th>
+                        <th className="px-4 py-2 text-left font-medium">
+                          Статус
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -353,7 +389,9 @@ export default function MemosPage() {
                             {MEMO_TYPE[m.memoType].short}
                           </td>
                           <td className="px-4 py-2.5">
-                            <div className="max-w-[320px] truncate">{m.title}</div>
+                            <div className="max-w-[320px] truncate">
+                              {m.title}
+                            </div>
                           </td>
                           <td className="px-4 py-2.5 text-xs hidden md:table-cell">
                             {m.authorName}
@@ -369,7 +407,12 @@ export default function MemosPage() {
                               <>
                                 <div>{m.currentRoleName}</div>
                                 {m.dueAt && (
-                                  <div className={cn('text-[11px]', overdueClass(m.dueAt))}>
+                                  <div
+                                    className={cn(
+                                      'text-[11px]',
+                                      overdueClass(m.dueAt),
+                                    )}
+                                  >
                                     {dueLabel(m.dueAt)}
                                   </div>
                                 )}
@@ -397,7 +440,8 @@ export default function MemosPage() {
                 {data.meta.pages > 1 && (
                   <div className="flex items-center justify-between px-4 py-2.5 border-t text-xs">
                     <span className="text-muted-foreground">
-                      {data.meta.total} записок, страница {data.meta.page} из {data.meta.pages}
+                      {data.meta.total} записок, страница {data.meta.page} из{' '}
+                      {data.meta.pages}
                     </span>
                     <div className="flex items-center gap-1">
                       <button
@@ -444,7 +488,13 @@ export default function MemosPage() {
  * непривязанного согласующего это единственное место, где он вообще узнает о
  * задаче.
  */
-function MyTasks({ tasks, onOpen }: { tasks: MemoTaskRow[]; onOpen: (id: string) => void }) {
+function MyTasks({
+  tasks,
+  onOpen,
+}: {
+  tasks: MemoTaskRow[];
+  onOpen: (id: string) => void;
+}) {
   if (tasks.length === 0) {
     return (
       <Card>
@@ -465,13 +515,22 @@ function MyTasks({ tasks, onOpen }: { tasks: MemoTaskRow[]; onOpen: (id: string)
           className="w-full text-left rounded-xl border px-4 py-3 hover:bg-muted/30 transition-colors"
         >
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-sm">{t.number ?? 'без номера'}</span>
+            <span className="font-medium text-sm">
+              {t.number ?? 'без номера'}
+            </span>
             <span className="text-xs px-1.5 py-0.5 rounded border bg-muted/50">
               {MEMO_TYPE[t.memoType].label}
             </span>
-            <span className="text-xs text-muted-foreground">этап {t.stepNo} · {t.roleName}</span>
+            <span className="text-xs text-muted-foreground">
+              этап {t.stepNo} · {t.roleName}
+            </span>
             {t.dueAt && (
-              <span className={cn('ml-auto text-xs flex items-center gap-1', overdueClass(t.dueAt))}>
+              <span
+                className={cn(
+                  'ml-auto text-xs flex items-center gap-1',
+                  overdueClass(t.dueAt),
+                )}
+              >
                 <Clock size={11} /> {dueLabel(t.dueAt)}
               </span>
             )}

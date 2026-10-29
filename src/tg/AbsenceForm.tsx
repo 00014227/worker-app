@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tgApi } from './tgApi';
-import type { TgForm } from './tgApi';
+import AttachmentsField from './AttachmentsField';
+import type { TgAttachment, TgForm } from './tgApi';
 import { mainButton } from './telegram';
 
 /** Задержка перед сохранением черновика: раз в полторы секунды после правки. */
@@ -35,11 +36,17 @@ const OWN_KEYS = new Set(['reason', 'reasonOther', 'dateFrom', 'dateTo']);
 export default function AbsenceForm({
   form,
   initial,
+  files,
+  onFilesChanged,
+  maxFiles,
   onSent,
 }: {
   form: TgForm;
   /** Черновик, если человек решил продолжить. */
   initial: AbsenceValues | null;
+  files: TgAttachment[];
+  onFilesChanged: (files: TgAttachment[]) => void;
+  maxFiles: number;
   onSent: (memo: { number: string; title: string }) => void;
 }) {
   const [values, setValues] = useState<AbsenceValues>(initial ?? EMPTY);
@@ -214,6 +221,12 @@ export default function AbsenceForm({
             />
           </Field>
         ))}
+
+      <AttachmentsField
+        files={files}
+        onChanged={onFilesChanged}
+        max={maxFiles}
+      />
 
       {error && <div className="tg-error">{error}</div>}
 
