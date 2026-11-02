@@ -275,15 +275,31 @@ function Roles({
                   код {role.code}
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setAdding(adding === role.id ? null : role.id);
-                  setQuery('');
-                }}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium hover:bg-muted/50"
-              >
-                <Plus size={12} /> Добавить человека
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setAdding(adding === role.id ? null : role.id);
+                    setQuery('');
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium hover:bg-muted/50"
+                >
+                  <Plus size={12} /> Добавить человека
+                </button>
+                {/* Сервер откажет, если роль уже работала, и объяснит чем
+                    именно — этапами маршрута, задачами или решениями. */}
+                <button
+                  onClick={() =>
+                    window.confirm(
+                      `Удалить роль «${role.name}»? Вместе с ней уйдёт её состав.`,
+                    ) && act(() => memoApi.admin.removeRole(role.id))
+                  }
+                  disabled={busy}
+                  className="text-muted-foreground hover:text-red-600 shrink-0"
+                  title="Удалить роль"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
 
             {role.members.length === 0 ? (
@@ -627,6 +643,20 @@ function Routes({
                 >
                   {editing === route.id ? 'Отмена' : 'Изменить этапы'}
                 </button>
+                {/* Сервер откажет, если по маршруту уже ходили записки, и
+                    скажет сколько. */}
+                <button
+                  onClick={() =>
+                    window.confirm(
+                      `Удалить маршрут «${route.name}»? Уйдут все его версии и этапы.`,
+                    ) && act(() => memoApi.admin.removeRoute(route.id))
+                  }
+                  disabled={busy}
+                  className="text-muted-foreground hover:text-red-600 shrink-0"
+                  title="Удалить маршрут"
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
             </div>
 
@@ -882,6 +912,20 @@ function Departments({
                     className="px-2 py-0.5 rounded border hover:bg-muted/50 shrink-0"
                   >
                     {d.isActive ? 'Выключить' : 'Включить'}
+                  </button>
+                  {/* Удаление отдельно от выключения: сервер откажет, если по
+                      подразделению есть записки, и скажет сколько. */}
+                  <button
+                    onClick={() =>
+                      window.confirm(
+                        `Удалить подразделение «${d.name}»? Сотрудники останутся, но потеряют отдел.`,
+                      ) && act(() => memoApi.admin.removeDepartment(d.id))
+                    }
+                    disabled={busy}
+                    className="text-muted-foreground hover:text-red-600 shrink-0"
+                    title="Удалить подразделение"
+                  >
+                    <Trash2 size={11} />
                   </button>
                 </div>
 

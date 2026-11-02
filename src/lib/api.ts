@@ -2123,6 +2123,23 @@ export const memoApi = {
         body: JSON.stringify({ employeeId }),
       });
     },
+    /**
+     * Удалить подразделение целиком.
+     *
+     * Сервер откажет, если по нему есть записки: связь на SET NULL, и
+     * удаление оставило бы их без подразделения.
+     */
+    removeDepartment(id: string): Promise<{ removed: true; name: string }> {
+      return req(`/worker/memos/admin/departments/${id}`, { method: 'DELETE' });
+    },
+    /** Удалить роль. Сервер откажет, если она уже работала. */
+    removeRole(id: string): Promise<{ removed: true; name: string }> {
+      return req(`/worker/memos/admin/roles/${id}`, { method: 'DELETE' });
+    },
+    /** Удалить маршрут. Сервер откажет, если по нему ходили записки. */
+    removeRoute(id: string): Promise<{ removed: true; name: string }> {
+      return req(`/worker/memos/admin/routes/${id}`, { method: 'DELETE' });
+    },
     removeDepartmentMember(
       departmentId: string,
       employeeId: string,
