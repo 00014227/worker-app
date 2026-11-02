@@ -16,6 +16,11 @@ import ExtraExpenseForm, {
   extraValuesFromDraft,
 } from './ExtraExpenseForm';
 import type { ExtraExpenseValues } from './ExtraExpenseForm';
+import OtherForm, {
+  otherHasAnything,
+  otherValuesFromDraft,
+} from './OtherForm';
+import type { OtherValues } from './OtherForm';
 import {
   applyTheme,
   close,
@@ -34,7 +39,8 @@ import './miniapp.css';
 type Values =
   | { kind: 'absence'; values: AbsenceValues }
   | { kind: 'extra_expenses'; values: ExtraExpenseValues }
-  | { kind: 'expedited_invoice'; values: InvoiceValues };
+  | { kind: 'expedited_invoice'; values: InvoiceValues }
+  | { kind: 'other'; values: OtherValues };
 
 type Stage =
   | { kind: 'booting' }
@@ -63,6 +69,10 @@ const TYPE_LABEL: Record<TgMemoType, { title: string; hint: string }> = {
   expedited_invoice: {
     title: 'Ускоренное выставление счёта (АВР)',
     hint: 'Счёт нужен раньше, чем пришли документы',
+  },
+  other: {
+    title: 'Иное',
+    hint: 'Своя тема и текст — когда ни один из типов выше не подходит',
   },
 };
 
@@ -290,6 +300,16 @@ export default function MiniAppPage() {
         />
       )}
 
+      {stage.kind === 'form' && stage.form.memoType === 'other' && (
+        <OtherForm
+          files={files}
+          onFilesChanged={setFiles}
+          maxFiles={stage.form.options.maxAttachments}
+          initial={stage.initial?.kind === 'other' ? stage.initial.values : null}
+          onSent={(memo) => setStage({ kind: 'sent', ...memo })}
+        />
+      )}
+
       {stage.kind === 'sent' && (
         <div className="tg-card space-y-2">
           <p className="text-sm font-medium">
@@ -327,6 +347,9 @@ function toValues(
       values: extraValuesFromDraft(data, form.options.currencies[0] ?? 'UZS'),
     };
   }
+  if (memoType === 'other') {
+    return { kind: 'other', values: otherValuesFromDraft(data) };
+  }
   const text = (key: string): string => {
     const raw = data[key];
     return typeof raw === 'string' ? raw : '';
@@ -349,6 +372,7 @@ function hasAnything(started: Values): boolean {
     return extraHasAnything(started.values);
   if (started.kind === 'expedited_invoice')
     return invoiceHasAnything(started.values);
+  if (started.kind === 'other') return otherHasAnything(started.values);
   return Object.values(started.values).some((v) => v.trim() !== '');
 }
 
