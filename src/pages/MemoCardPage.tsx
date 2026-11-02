@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { memoApi } from '@/lib/api';
-import type { MemoCard, MemoDecisionKind, MemoMeta } from '@/lib/api';
+import type { MemoHistoryEntry, MemoCard, MemoDecisionKind, MemoMeta } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,6 @@ import MemoForm from '@/components/memos/MemoForm';
 import MemoExtraExpenseBlock from '@/components/memos/MemoExtraExpenseBlock';
 import MemoRouteTimeline from '@/components/memos/MemoRouteTimeline';
 import {
-  EVENT_LABEL,
   MEMO_STATUS,
   MEMO_TYPE,
   fmtDateTime,
@@ -31,6 +30,7 @@ import {
   fmtSize,
   fieldValue,
 } from '@/components/memos/memo-meta';
+import MemoHistoryList from '@/components/memos/MemoHistoryList';
 
 export default function MemoCardPage() {
   const { id = '' } = useParams();
@@ -42,12 +42,16 @@ export default function MemoCardPage() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
+  const [history, setHistory] = useState<MemoHistoryEntry[]>([]);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const card = await memoApi.byId(id);
+      // Историю обновляем вместе с карточкой: после решения в ней появилась
+      // запись, и оставить прежнюю ленту значило бы показать вчерашний день.
+      const [card, log] = await Promise.all([memoApi.byId(id), memoApi.history(id)]);
       setMemo(card);
+      setHistory(log);
       // Чего не хватает для отправки — спрашиваем сервер, чтобы правила
       // проверки лежали в одном месте, а не повторялись во фронте.
       if (card.canEdit) {
@@ -65,9 +69,14 @@ export default function MemoCardPage() {
     const run = async () => {
       setLoading(true);
       try {
-        const [card, m] = await Promise.all([memoApi.byId(id), memoApi.meta()]);
+        const [card, m, log] = await Promise.all([
+          memoApi.byId(id),
+          memoApi.meta(),
+          memoApi.history(id),
+        ]);
         setMemo(card);
         setMeta(m);
+        setHistory(log);
         if (card.canEdit) setProblems((await memoApi.readiness(id)).problems);
       } catch (e) {
         setError((e as Error).message);
@@ -321,14 +330,11 @@ export default function MemoCardPage() {
           <Card>
             <CardContent className="pt-4 space-y-1.5">
               <div className="text-xs font-medium mb-1">Что происходило</div>
-              {memo.events.map((e, i) => (
-                <div key={i} className="text-xs flex items-start gap-2">
-                  <span className="text-muted-foreground shrink-0 tabular-nums">
-                    {fmtDateTime(e.createdAt)}
-                  </span>
-                  <span>{EVENT_LABEL[e.kind] ?? e.kind}</span>
-                </div>
-              ))}
+              {/* Лента, а не прежний список дат: промежуточные согласования
+                  живут в решениях, а не в журнале, и без них история обрывалась
+                  на «перешла на следующий этап». Имя актора и комментарий
+                  раньше приходили с сервера и выбрасывались. */}
+              <MemoHistoryList entries={history} />
             </CardContent>
           </Card>
         </div>

@@ -1,4 +1,5 @@
 import { request } from '@/lib/api';
+import type { MemoCard } from '@/lib/api';
 import { authHeaders, saveMiniAppToken } from '@/lib/auth';
 
 /** Описание поля формы — то же, что отдаёт кабинет. */
@@ -82,6 +83,48 @@ export interface CreatedMemo {
   id: string;
   number: string;
   title: string;
+}
+
+/**
+ * Запись истории — то же, что отдаёт кабинету `GET memos/:id/history`.
+ *
+ * `roleName` и `source` есть только у решений согласующих: события журнала
+ * роли не знают.
+ */
+export interface TgHistoryEntry {
+  at: string;
+  kind: string;
+  actorName: string | null;
+  roleName: string | null;
+  stepNo: number | null;
+  attempt: number | null;
+  comment: string | null;
+  source: string | null;
+}
+
+/** Строка расходов в том виде, в каком её отправляют на сервер. */
+export interface TgExpenseLine {
+  expenseType: string;
+  counterpartyName: string;
+  counterpartyId?: string;
+  planned: number;
+  actual: number;
+}
+
+/** Таблица расходов целиком — и для создания, и для замены при доработке. */
+export interface TgExtraExpenseBody {
+  orderNumber: string;
+  transportationTypeId: string;
+  currency: string;
+  lines: TgExpenseLine[];
+  incomePlanned: number;
+  incomeActual: number;
+  reason: string;
+  rebilled: string;
+  expenseBearer?: string;
+  contractorClaim?: string;
+  responsibleDepartmentId?: string;
+  responsibleEmployeeId?: string;
 }
 
 export const tgApi = {
@@ -232,6 +275,92 @@ export const tgApi = {
    * Свой адрес, как у доп. расходов: у общего `memos` тело описано полями
    * отсутствия, и проверка на сервере отвергла бы эту форму целиком.
    */
+  // ── Существующая записка ──
+
+  /** Карточка записки. Тот же состав, что в кабинете — служба на сервере одна. */
+  memo(id: string): Promise<MemoCard> {
+    return request<MemoCard>(`/memo-tg/memos/${id}`);
+  },
+
+  /** Вся история одной лентой: события журнала и решения согласующих вместе. */
+  history(id: string): Promise<TgHistoryEntry[]> {
+    return request<TgHistoryEntry[]>(`/memo-tg/memos/${id}/history`);
+  },
+
+  /** Чего не хватает для отправки. По этому ответу гасим кнопку. */
+  readiness(id: string): Promise<{ ready: boolean; problems: string[] }> {
+    return request(`/memo-tg/memos/${id}/readiness`);
+  },
+
+  decide(
+    id: string,
+    taskId: string,
+    decision: 'approve' | 'reject' | 'return',
+    comment?: string,
+  ): Promise<{ outcome: string }> {
+    return request(`/memo-tg/memos/${id}/tasks/${taskId}/decision`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, comment }),
+    });
+  },
+
+  /**
+   * Правка записки на доработке.
+   *
+   * Тему и сумму здесь не передаём: у доп. расходов они вычисляются из
+   * таблицы, и правка руками развела бы шапку с таблицей.
+   */
+  editMemo(
+    id: string,
+    input: { justification?: string; payload?: Record<string, unknown> },
+  ): Promise<unknown> {
+    return request(`/memo-tg/memos/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Заменить таблицу расходов целиком. */
+  replaceExpenses(id: string, input: TgExtraExpenseBody): Promise<{ title: string }> {
+    return request(`/memo-tg/memos/${id}/extra-expenses`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Отправить заново после доработки. Ответ на замечание обязателен. */
+  resubmit(id: string, reply: string): Promise<{ number: string }> {
+    return request(`/memo-tg/memos/${id}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ reply }),
+    });
+  },
+
+  /**
+   * Приложить файл к существующей записке.
+   *
+   * Своим `fetch`, как и у файлов черновика: общий `request` ставит заголовок
+   * JSON, и multipart с ним не уходит.
+   */
+  async addMemoFile(id: string, file: File): Promise<{ id: string; name: string }> {
+    const body = new FormData();
+    body.append('file', file);
+    const res = await fetch(`/api/memo-tg/memos/${id}/attachments`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body,
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(data?.message ?? 'Не удалось приложить файл');
+    }
+    return (await res.json()) as { id: string; name: string };
+  },
+
+  removeMemoFile(id: string, attachmentId: string): Promise<unknown> {
+    return request(`/memo-tg/memos/${id}/attachments/${attachmentId}`, { method: 'DELETE' });
+  },
+
   /**
    * Прочая записка («Иное»): тема и текст.
    *
