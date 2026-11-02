@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { tgApi } from './tgApi';
 import AttachmentsField from './AttachmentsField';
 import type { TgAttachment, TgDraftData, TgEmployee, TgForm } from './tgApi';
+import type { MemoCard } from '@/lib/api';
 import { mainButton } from './telegram';
+import { fmtDateTime } from '@/components/memos/memo-meta';
 
 /** Задержка перед сохранением черновика: раз в полторы секунды после правки. */
 const SAVE_DELAY_MS = 1500;
@@ -121,6 +123,45 @@ export const emptyExtraExpense = (currency: string): ExtraExpenseValues => ({
 });
 
 /**
+ * Существующая записка — в значения формы, чтобы автор правил своё, а не
+ * заполнял заново.
+ *
+ * Деньги приходят с сервера строками и строками же кладутся в поля ввода: ни
+ * одного преобразования в число по пути, иначе на копейках появились бы
+ * хвосты вида 1499.9999999.
+ */
+export function extraValuesFromCard(memo: MemoCard): ExtraExpenseValues {
+  const extra = memo.extraExpense;
+  if (!extra) return emptyExtraExpense(memo.currency ?? 'UZS');
+
+  return {
+    orderNumber: extra.orderNumber,
+    transportationTypeId: extra.transportationType?.id ?? '',
+    currency: extra.currency ?? memo.currency ?? 'UZS',
+    lines: extra.lines.length
+      ? extra.lines.map((l, i) => ({
+          id: `line-${i}`,
+          expenseType: l.expenseType,
+          counterpartyName: l.counterpartyName ?? '',
+          planned: l.planned,
+          actual: l.actual,
+        }))
+      : [newRow()],
+    incomePlanned: extra.incomePlanned,
+    incomeActual: extra.incomeActual,
+    // Причина перерасхода живёт в обосновании записки, своего поля у неё нет.
+    reason: memo.justification,
+    rebilled: extra.rebilled,
+    expenseBearer: extra.expenseBearer ?? '',
+    contractorClaim: extra.contractorClaim ?? '',
+    responsibleDepartmentId: extra.responsibleDepartment?.id ?? '',
+    responsibleEmployeeId: extra.responsibleEmployeeId ?? '',
+    responsiblePerson: extra.responsiblePerson ?? '',
+    responsibleDepartmentName: extra.responsibleDepartment?.name ?? '',
+  };
+}
+
+/**
  * Форма обоснования доп. расходов.
  *
  * Таблица на телефоне — карточка на строку, а не `<table>`: четыре колонки в
@@ -131,6 +172,14 @@ export const emptyExtraExpense = (currency: string): ExtraExpenseValues => ({
  * человек увидел бы `0.30000000000000004` прямо на экране. Окончательный счёт
  * всё равно за сервером — там `Decimal`, здесь только подсказка по ходу.
  */
+/** Замечание, из-за которого записку вернули. Рисуется над формой правки. */
+export interface ReturnNote {
+  text: string;
+  byName: string | null;
+  roleName: string | null;
+  at: string;
+}
+
 export default function ExtraExpenseForm({
   form,
   initial,
@@ -138,6 +187,7 @@ export default function ExtraExpenseForm({
   onFilesChanged,
   maxFiles,
   onSent,
+  edit,
 }: {
   form: TgForm;
   /** Черновик, если человек решил продолжить. */
@@ -146,12 +196,22 @@ export default function ExtraExpenseForm({
   onFilesChanged: (files: TgAttachment[]) => void;
   maxFiles: number;
   onSent: (memo: { number: string; title: string }) => void;
+  /**
+   * Правка существующей записки, вернувшейся на доработку.
+   *
+   * Той же формой, а не второй копией таблицы: таблица расходов — самая
+   * громоздкая часть приложения, и два её набора разошлись бы при первой же
+   * правке полей.
+   */
+  edit?: { memoId: string; note: ReturnNote | null };
 }) {
   const [values, setValues] = useState<ExtraExpenseValues>(
     () => initial ?? emptyExtraExpense(form.options.currencies[0] ?? 'UZS'),
   );
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  /** Ответ на замечание. Обязателен при повторной подаче. */
+  const [reply, setReply] = useState('');
 
   const set = (patch: Partial<ExtraExpenseValues>) =>
     setValues((v) => ({ ...v, ...patch }));
@@ -213,6 +273,11 @@ export default function ExtraExpenseForm({
 
   /** Чего не хватает. Проверяет и сервер — здесь только чтобы не отправлять зря. */
   const problem = useMemo(() => {
+    // Ответ на замечание проверяем первым: человек пришёл сюда именно из-за
+    // него, и жаловаться на номер перевозки раньше было бы странно.
+    if (edit && reply.trim().length < 5) {
+      return 'Напишите, что изменили по замечанию';
+    }
     if (!values.orderNumber.trim()) return 'Укажите номер перевозки';
     if (!values.transportationTypeId) return 'Выберите тип перевозки';
     if (!filled.length) return 'Добавьте хотя бы одну строку расходов';
@@ -244,13 +309,13 @@ export default function ExtraExpenseForm({
     )
       return 'У сотрудника не указан отдел — выберите его';
     return null;
-  }, [values, filled, needsBearer, byContractor, byUs]);
+  }, [values, filled, needsBearer, byContractor, byUs, edit, reply]);
 
   const submit = useCallback(async () => {
     setSending(true);
     setError(null);
     try {
-      const created = await tgApi.createExtraExpenses({
+      const body = {
         orderNumber: values.orderNumber.trim(),
         transportationTypeId: values.transportationTypeId,
         currency: values.currency,
@@ -279,7 +344,18 @@ export default function ExtraExpenseForm({
           byUs && !values.responsibleDepartmentName
             ? values.responsibleDepartmentId
             : undefined,
-      });
+      };
+
+      if (edit) {
+        // Сначала таблица, потом подача: записка должна уйти на согласование
+        // уже с исправленными цифрами, иначе согласующий увидит прежние.
+        await tgApi.replaceExpenses(edit.memoId, body);
+        const sent = await tgApi.resubmit(edit.memoId, reply.trim());
+        onSent({ number: sent.number, title: values.orderNumber.trim() });
+        return;
+      }
+
+      const created = await tgApi.createExtraExpenses(body);
       onSent(created);
     } catch (e) {
       setError((e as Error).message);
@@ -292,7 +368,7 @@ export default function ExtraExpenseForm({
     const button = mainButton();
     if (!button) return;
 
-    button.setText('Отправить на согласование');
+    button.setText(edit ? 'Отправить повторно' : 'Отправить на согласование');
     button.show();
     if (problem || sending) button.disable();
     else button.enable();
@@ -313,6 +389,35 @@ export default function ExtraExpenseForm({
 
   return (
     <div className="space-y-4">
+      {/* Замечание и ответ — сверху, до таблицы: человек открыл эту форму
+          именно из-за замечания, и прятать его под цифрами нельзя. */}
+      {edit?.note && (
+        <div className="tg-card space-y-1 border-l-4 border-amber-400">
+          <p className="text-sm font-medium">Записку вернули на доработку</p>
+          <p className="tg-hint-text">
+            {[edit.note.roleName, edit.note.byName].filter(Boolean).join(': ')}
+            {edit.note.at ? ` · ${fmtDateTime(edit.note.at)}` : ''}
+          </p>
+          <p className="text-sm whitespace-pre-wrap break-words">{edit.note.text}</p>
+        </div>
+      )}
+
+      {edit && (
+        <Field
+          label="Ответ на замечание"
+          required
+          hint="Что именно изменили — это прочитает тот, кто вернул записку"
+        >
+          <textarea
+            className="tg-input min-h-[80px]"
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            maxLength={2000}
+            placeholder="Стоимость уточнена по коммерческому предложению"
+          />
+        </Field>
+      )}
+
       <div className="grid grid-cols-[1fr_auto] gap-3">
         <Field label="Номер перевозки" required hint="Как он записан в заявке">
           <input

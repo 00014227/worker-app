@@ -1845,6 +1845,21 @@ export interface MemoExtraExpenseView {
   /** В зоне ответственности какого отдела возник расход. */
   responsibleDepartment: { id: string; name: string } | null;
   responsiblePerson: string | null;
+  /** Ссылка на ответственного — нужна форме доработки, чтобы подставить его. */
+  responsibleEmployeeId: string | null;
+}
+
+/** Запись истории: события журнала и решения согласующих одним видом. */
+export interface MemoHistoryEntry {
+  at: string;
+  kind: string;
+  actorName: string | null;
+  /** Есть только у решений: события журнала роли не знают. */
+  roleName: string | null;
+  stepNo: number | null;
+  attempt: number | null;
+  comment: string | null;
+  source: string | null;
 }
 
 export interface MemoCard {
@@ -2027,6 +2042,16 @@ export const memoApi = {
       `/worker/memos/${id}/readiness`,
     );
   },
+
+    /**
+     * Вся история записки одной лентой.
+     *
+     * Отдельным адресом, а не полем карточки: карточку открывают на каждый
+     * чих, а историю листают редко, и тащить её в каждый ответ незачем.
+     */
+    history(id: string): Promise<MemoHistoryEntry[]> {
+      return req(`/worker/memos/${id}/history`);
+    },
   create(input: MemoInput): Promise<{ id: string; status: MemoStatus }> {
     return req<{ id: string; status: MemoStatus }>('/worker/memos', {
       method: 'POST',
