@@ -14,7 +14,11 @@ export interface TgFieldDef {
 }
 
 /** Какие формы умеет приложение. Больше одной — с тех пор как типов два. */
-export type TgMemoType = 'absence' | 'extra_expenses' | 'expedited_invoice';
+export type TgMemoType =
+  | 'absence'
+  | 'extra_expenses'
+  | 'expedited_invoice'
+  | 'other';
 
 /** Строка расходов в черновике — строками, как её держат поля ввода. */
 export interface TgDraftLine {
@@ -228,6 +232,19 @@ export const tgApi = {
    * Свой адрес, как у доп. расходов: у общего `memos` тело описано полями
    * отсутствия, и проверка на сервере отвергла бы эту форму целиком.
    */
+  /**
+   * Прочая записка («Иное»): тема и текст.
+   *
+   * Свой адрес, как у двух предыдущих: у общего `memos` тело описано полями
+   * отсутствия, и проверка на сервере отвергла бы это тело целиком.
+   */
+  createOther(input: { title: string; text: string }): Promise<CreatedMemo> {
+    return request<CreatedMemo>('/memo-tg/other', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
   createExpeditedInvoice(input: {
     orderNumber: string;
     counterpartyName: string;

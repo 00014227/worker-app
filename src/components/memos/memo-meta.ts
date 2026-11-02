@@ -63,7 +63,7 @@ export const MEMO_TYPE: Record<MemoType, { label: string; short: string }> = {
   payment: { label: 'Оплата', short: 'Оплата' },
   purchase: { label: 'Закупка', short: 'Закупка' },
   trip: { label: 'Командировка', short: 'Команд.' },
-  other: { label: 'Прочая записка', short: 'Прочее' },
+  other: { label: 'Иное', short: 'Иное' },
 };
 
 /** Перевыставлен ли расход клиенту — подписи для карточки. */
