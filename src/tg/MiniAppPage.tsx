@@ -21,6 +21,10 @@ import OtherForm, {
   otherValuesFromDraft,
 } from './OtherForm';
 import type { OtherValues } from './OtherForm';
+import MemoCardScreen from './MemoCardScreen';
+import { extraValuesFromCard } from './ExtraExpenseForm';
+import type { ReturnNote } from './ExtraExpenseForm';
+import type { MemoCard } from '@/lib/api';
 import {
   applyTheme,
   close,
@@ -32,7 +36,13 @@ import {
   showAlert,
 } from './telegram';
 import { tgApi } from './tgApi';
-import type { TgAttachment, TgDraftData, TgForm, TgMemoType } from './tgApi';
+import type {
+  TgAttachment,
+  TgDraftData,
+  TgFieldDef,
+  TgForm,
+  TgMemoType,
+} from './tgApi';
 import './miniapp.css';
 
 /** Заполненная форма — своя на каждый тип. */
@@ -51,7 +61,13 @@ type Stage =
   | { kind: 'resume'; memoType: TgMemoType; savedAt: string }
   | { kind: 'loading' }
   | { kind: 'form'; form: TgForm; initial: Values | null }
-  | { kind: 'sent'; number: string; title: string };
+  /** Карточка существующей записки — её открывают кнопкой из бота. */
+  | { kind: 'card'; memoId: string; fields: TgFieldDef[] }
+  /** Правка вернувшейся записки: та же форма, но по существующему документу. */
+  | { kind: 'edit'; form: TgForm; initial: Values; memoId: string; note: ReturnNote | null }
+  | { kind: 'sent'; number: string; title: string }
+  /** Решение принято — показываем итог и закрываем. */
+  | { kind: 'decided'; outcome: string };
 
 /**
  * Подписи типов. Живут здесь, а не приходят с сервера: формулировку меняют
@@ -109,6 +125,52 @@ export default function MiniAppPage() {
     }
   };
 
+  /**
+   * Открыть правку вернувшейся записки.
+   *
+   * Форму спрашиваем по типу записки, а значения берём из самой записки — так
+   * автор правит своё, а не заполняет заново. Замечание согласующего достаём из
+   * истории: в карточке оно лежит в решении последнего этапа, а в истории уже
+   * сведено с именем и временем.
+   */
+  const openEdit = async (memo: MemoCard) => {
+    setStage({ kind: 'loading' });
+    try {
+      const [form, history] = await Promise.all([
+        tgApi.form(memo.memoType as TgMemoType),
+        tgApi.history(memo.id),
+      ]);
+      setFiles(form.attachments);
+
+      const returned = [...history].reverse().find((h) => h.kind === 'returned');
+      const note: ReturnNote | null = returned?.comment
+        ? {
+            text: returned.comment,
+            byName: returned.actorName,
+            roleName: returned.roleName,
+            at: returned.at,
+          }
+        : null;
+
+      if (memo.memoType !== 'extra_expenses') {
+        // Правка остальных типов живёт в кабинете: своей формы правки у них в
+        // приложении нет, и делать её ради трёх полей пока не просили.
+        setStage({ kind: 'error', message: 'Эту записку правят в личном кабинете.' });
+        return;
+      }
+
+      setStage({
+        kind: 'edit',
+        form,
+        initial: { kind: 'extra_expenses', values: extraValuesFromCard(memo) },
+        memoId: memo.id,
+        note,
+      });
+    } catch (e) {
+      setStage({ kind: 'error', message: (e as Error).message });
+    }
+  };
+
   useEffect(() => {
     // Защита от двойного вызова в строгом режиме: обмен данных на токен
     // выполняется один раз.
@@ -137,7 +199,21 @@ export default function MiniAppPage() {
         const session = await tgApi.session(initData());
         setWho(session.employee.name);
 
-        // Форму спрашиваем без типа: на этом шаге нужен только черновик, а он
+        // Записка из адреса: бот кладёт её номер в кнопки «Подробнее»
+        // согласующему и «Открыть записку» автору. Если он есть — человек
+        // пришёл к конкретной записке, и предлагать ему создать новую значит
+        // потерять то, зачем он нажал кнопку.
+        const wanted = new URLSearchParams(window.location.search).get('memo');
+        if (wanted) {
+          // Поля типа нужны карточке, чтобы нарисовать доп. поля подписями с
+          // сервера, а не зашитыми здесь.
+          const card = await tgApi.memo(wanted);
+          const typed = await tgApi.form(card.memoType as TgMemoType);
+          setStage({ kind: 'card', memoId: wanted, fields: typed.fields });
+          return;
+        }
+
+        // Формы спрашиваем без типа: на этом шаге нужен только черновик, а он
         // один на человека и знает свой тип сам.
         const form = await tgApi.form();
         setFiles(form.attachments);
@@ -171,7 +247,7 @@ export default function MiniAppPage() {
   }, [stage.kind]);
 
   const heading =
-    stage.kind === 'form'
+    stage.kind === 'form' || stage.kind === 'edit'
       ? TYPE_LABEL[stage.form.memoType].title
       : stage.kind === 'resume'
         ? TYPE_LABEL[stage.memoType].title
@@ -308,6 +384,49 @@ export default function MiniAppPage() {
           initial={stage.initial?.kind === 'other' ? stage.initial.values : null}
           onSent={(memo) => setStage({ kind: 'sent', ...memo })}
         />
+      )}
+
+      {stage.kind === 'card' && (
+        <MemoCardScreen
+          memoId={stage.memoId}
+          fields={stage.fields}
+          onEdit={() => {
+            void (async () => {
+              const card = await tgApi.memo(stage.memoId);
+              await openEdit(card);
+            })();
+          }}
+          onClosed={(outcome) => setStage({ kind: 'decided', outcome })}
+        />
+      )}
+
+      {stage.kind === 'edit' && stage.initial.kind === 'extra_expenses' && (
+        <ExtraExpenseForm
+          form={stage.form}
+          files={files}
+          onFilesChanged={setFiles}
+          maxFiles={stage.form.options.maxAttachments}
+          initial={stage.initial.values}
+          edit={{ memoId: stage.memoId, note: stage.note }}
+          onSent={(memo) => setStage({ kind: 'sent', ...memo })}
+        />
+      )}
+
+      {stage.kind === 'decided' && (
+        <div className="tg-card space-y-2">
+          <p className="text-sm font-medium">
+            {stage.outcome === 'final_approved'
+              ? '✅ Записка утверждена — это был последний этап.'
+              : stage.outcome === 'approve'
+                ? '✅ Согласовано. Записка ушла на следующий этап.'
+                : stage.outcome === 'reject'
+                  ? '❌ Отклонено. Автору сообщили.'
+                  : '✏️ Возвращено на доработку. Автору сообщили.'}
+          </p>
+          <button className="tg-button" onClick={close}>
+            Закрыть
+          </button>
+        </div>
       )}
 
       {stage.kind === 'sent' && (
