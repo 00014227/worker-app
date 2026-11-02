@@ -1973,6 +1973,14 @@ export interface MemoRouteRow {
   }[];
 }
 
+/** Строка соответствия «тип перевозки → руководитель направления». */
+export interface MemoTransportManagerRow {
+  transportationTypeId: string;
+  /** Название типа перевозки, уже с учётом displayName из 1С. */
+  name: string;
+  employee: { id: string; name: string } | null;
+}
+
 export interface MemoCandidate {
   id: string;
   name: string;
@@ -2216,6 +2224,33 @@ export const memoApi = {
       { id: string; name: string; displayName: string | null }[]
     > {
       return req('/worker/memos/admin/transportation-types');
+    },
+    /**
+     * Соответствие «тип перевозки → руководитель направления».
+     *
+     * Отдаёт ВСЕ типы перевозки, в том числе без руководителя: пустую строку
+     * надо показать, иначе администратор не увидит направление, по которому
+     * записка не отправится.
+     */
+    transportManagers(): Promise<MemoTransportManagerRow[]> {
+      return req('/worker/memos/admin/transport-managers');
+    },
+    setTransportManager(
+      transportationTypeId: string,
+      employeeId: string,
+    ): Promise<{ transportationTypeId: string; employeeId: string }> {
+      return req(
+        `/worker/memos/admin/transport-managers/${transportationTypeId}`,
+        { method: 'PUT', body: JSON.stringify({ employeeId }) },
+      );
+    },
+    removeTransportManager(
+      transportationTypeId: string,
+    ): Promise<{ removed: boolean }> {
+      return req(
+        `/worker/memos/admin/transport-managers/${transportationTypeId}`,
+        { method: 'DELETE' },
+      );
     },
     createRoute(
       memoType: MemoType,
