@@ -18,6 +18,7 @@ import { getUser } from '@/lib/auth';
 import { memoApi } from '@/lib/api';
 import type {
   MemoCandidate,
+  MemoTransportManagerRow,
   MemoType,
   MemoDepartmentRow,
   MemoLinkStatus,
@@ -29,11 +30,12 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { MEMO_TYPE, fmtDateTime } from '@/components/memos/memo-meta';
 
-type Tab = 'roles' | 'routes' | 'departments' | 'telegram';
+type Tab = 'roles' | 'routes' | 'directions' | 'departments' | 'telegram';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'roles', label: 'Роли согласования' },
   { key: 'routes', label: 'Маршруты' },
+  { key: 'directions', label: 'Руководители направлений' },
   { key: 'departments', label: 'Подразделения' },
   { key: 'telegram', label: 'Привязки Telegram' },
 ];
@@ -56,6 +58,7 @@ export default function MemoSettingsPage() {
   const [transportationTypes, setTransportationTypes] = useState<
     { id: string; name: string; displayName: string | null }[]
   >([]);
+  const [directions, setDirections] = useState<MemoTransportManagerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,13 +66,14 @@ export default function MemoSettingsPage() {
     if (!isAdmin) return;
     setError(null);
     try {
-      const [r, rt, d, l, c, tt] = await Promise.all([
+      const [r, rt, d, l, c, tt, dir] = await Promise.all([
         memoApi.admin.roles(),
         memoApi.admin.routes(),
         memoApi.admin.departments(),
         memoApi.admin.links(),
         memoApi.admin.candidates(),
         memoApi.admin.transportationTypes(),
+        memoApi.admin.transportManagers(),
       ]);
       setRoles(r);
       setRoutes(rt);
@@ -77,6 +81,7 @@ export default function MemoSettingsPage() {
       setLinks(l);
       setCandidates(c);
       setTransportationTypes(tt);
+      setDirections(dir);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -208,6 +213,12 @@ export default function MemoSettingsPage() {
           routes={routes}
           roles={roles}
           transportationTypes={transportationTypes}
+          onChanged={load}
+        />
+      ) : tab === 'directions' ? (
+        <Directions
+          directions={directions}
+          candidates={candidates}
           onChanged={load}
         />
       ) : tab === 'departments' ? (
@@ -776,6 +787,182 @@ function Routes({
         </Card>
       ))}
     </div>
+  );
+}
+
+/**
+ * Руководители направлений: кто согласует доп. расходы по каждому типу
+ * перевозки.
+ *
+ * Показываем ВСЕ типы, в том числе незаполненные и выделенные: записка по типу
+ * без руководителя не отправится вовсе, и администратор должен видеть это
+ * заранее, а не узнавать от автора, которому отказали.
+ *
+ * Своих запросов блок не делает: и типы перевозки, и список сотрудников
+ * страница уже загрузила для маршрутов и ролей.
+ */
+function Directions({
+  directions,
+  candidates,
+  onChanged,
+}: {
+  directions: MemoTransportManagerRow[];
+  candidates: MemoCandidate[];
+  onChanged: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** Какому направлению сейчас выбирают руководителя. */
+  const [picking, setPicking] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const missing = directions.filter((d) => !d.employee).length;
+  const found = candidates.filter((c) =>
+    c.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
+  return (
+    <Card>
+      <CardContent className="pt-4 space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Этап «Руководитель направления» в маршруте доп. расходов отдаёт записку
+          тому, кто указан здесь напротив типа перевозки из записки. Один человек
+          может вести несколько направлений.
+        </p>
+
+        {missing > 0 && (
+          <div className="text-xs text-amber-700">
+            Без руководителя {missing} из {directions.length}: записка с таким
+            типом перевозки не отправится.
+          </div>
+        )}
+
+        {error && <div className="text-xs text-red-600">{error}</div>}
+
+        <div className="space-y-1.5">
+          {directions.map((d) => (
+            <div
+              key={d.transportationTypeId}
+              className={`rounded-lg border p-3 space-y-2 ${
+                d.employee ? '' : 'border-amber-300 bg-amber-50/40'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-xs">
+                <span className="flex-1 min-w-0 truncate font-medium">
+                  {d.name}
+                </span>
+                {d.employee ? (
+                  <>
+                    <span className="truncate text-muted-foreground">
+                      {d.employee.name}
+                    </span>
+                    <button
+                      onClick={() =>
+                        act(() =>
+                          memoApi.admin.removeTransportManager(
+                            d.transportationTypeId,
+                          ),
+                        )
+                      }
+                      disabled={busy}
+                      className="text-muted-foreground hover:text-red-600 disabled:opacity-40 shrink-0"
+                      title="Снять руководителя"
+                    >
+                      <X size={12} />
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-amber-700 shrink-0">не назначен</span>
+                )}
+                <button
+                  onClick={() => {
+                    setPicking(
+                      picking === d.transportationTypeId
+                        ? null
+                        : d.transportationTypeId,
+                    );
+                    setQuery('');
+                  }}
+                  disabled={busy}
+                  className="text-primary hover:underline disabled:opacity-40 shrink-0"
+                >
+                  {d.employee ? 'Заменить' : 'Назначить'}
+                </button>
+              </div>
+
+              {picking === d.transportationTypeId && (
+                <div className="pt-2 border-t space-y-2">
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="Поиск по фамилии"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  <div className="max-h-56 overflow-y-auto space-y-0.5">
+                    {found.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() =>
+                          act(async () => {
+                            await memoApi.admin.setTransportManager(
+                              d.transportationTypeId,
+                              c.id,
+                            );
+                            setPicking(null);
+                            setQuery('');
+                          })
+                        }
+                        disabled={busy || c.id === d.employee?.id}
+                        className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted/50 disabled:opacity-30 flex items-center gap-2"
+                      >
+                        <span className="flex-1 min-w-0 truncate">{c.name}</span>
+                        {/* Без действующей привязки Telegram решение придётся
+                            принимать в кабинете: уведомление боту уйти не
+                            сможет. Отвязанный считается непривязанным. */}
+                        {!(
+                          c.memoTelegramLink && !c.memoTelegramLink.unlinkedAt
+                        ) && (
+                          <span className="text-[10px] text-amber-700 shrink-0">
+                            без Telegram
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                    {found.length === 0 && (
+                      <p className="text-xs text-muted-foreground px-2 py-1.5">
+                        Никого не нашли
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setPicking(null);
+                      setQuery('');
+                    }}
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
