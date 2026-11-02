@@ -32,6 +32,16 @@ import { MEMO_TYPE, fmtDateTime } from '@/components/memos/memo-meta';
 
 type Tab = 'roles' | 'routes' | 'directions' | 'departments' | 'telegram';
 
+/**
+ * Роль, у которой согласующий подбирается по типу перевозки записки.
+ *
+ * Такой роли состав не задают: человек определяется таблицей «тип перевозки →
+ * руководитель». Отличать её приходится в нескольких местах экрана, поэтому
+ * проверка вынесена сюда, а не повторяется строкой сравнения.
+ */
+const byTransport = (role: { resolveBy: string }) =>
+  role.resolveBy === 'transport_manager';
+
 const TABS: { key: Tab; label: string }[] = [
   { key: 'roles', label: 'Роли согласования' },
   { key: 'routes', label: 'Маршруты' },
@@ -99,7 +109,7 @@ export default function MemoSettingsPage() {
   const unlinked = links.filter((l) => !l.linked).length;
   const noActiveRoute = routes.filter((r) => r.isActive).length === 0;
   const emptyRoles = roles.filter(
-    (r) => r.isActive && r.members.length === 0,
+    (r) => r.isActive && !byTransport(r) && r.members.length === 0,
   ).length;
 
   if (!isAdmin) {
@@ -287,15 +297,21 @@ function Roles({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    setAdding(adding === role.id ? null : role.id);
-                    setQuery('');
-                  }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium hover:bg-muted/50"
-                >
-                  <Plus size={12} /> Добавить человека
-                </button>
+                {/* У роли с подбором по типу перевозки состава нет: согласующий
+                    определяется типом перевозки записки, и сервер откажет, если
+                    сюда попробовать добавить человека. Поэтому кнопки здесь
+                    быть не должно вовсе. */}
+                {!byTransport(role) && (
+                  <button
+                    onClick={() => {
+                      setAdding(adding === role.id ? null : role.id);
+                      setQuery('');
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium hover:bg-muted/50"
+                  >
+                    <Plus size={12} /> Добавить человека
+                  </button>
+                )}
                 {/* Сервер откажет, если роль уже работала, и объяснит чем
                     именно — этапами маршрута, задачами или решениями. */}
                 <button
@@ -313,7 +329,13 @@ function Roles({
               </div>
             </div>
 
-            {role.members.length === 0 ? (
+            {byTransport(role) ? (
+              <p className="text-xs text-muted-foreground">
+                Состава у этой роли нет: записку согласует руководитель того
+                направления, которое указано в типе перевозки. Кого назначить —
+                в табе «Руководители направлений».
+              </p>
+            ) : role.members.length === 0 ? (
               <p className="text-xs text-amber-700">
                 Никого не назначено — записки на этом этапе согласовать будет
                 некому.

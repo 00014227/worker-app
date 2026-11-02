@@ -1949,6 +1949,11 @@ export interface MemoRoleRow {
   code: string;
   name: string;
   isActive: boolean;
+  /**
+   * Откуда у роли согласующие: 'members' — обычный состав,
+   * 'transport_manager' — подбор по типу перевозки записки.
+   */
+  resolveBy: string;
   members: { employeeId: string; name: string; telegramLinked: boolean }[];
 }
 
