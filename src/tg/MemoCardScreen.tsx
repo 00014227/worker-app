@@ -123,6 +123,11 @@ export default function MemoCardScreen({
           {MEMO_TYPE[memo.memoType]?.short ?? memo.memoType} · {memo.authorName}
           {memo.department ? ` · ${memo.department.name}` : ''}
         </p>
+        {/* У доп. расходов тип перевозки уже стоит в блоке таблицы, рядом с
+            номером перевозки; второй раз его показывать незачем. */}
+        {memo.transportationType && !extra && (
+          <p className="tg-hint-text">перевозка: {memo.transportationType.name}</p>
+        )}
         <p className="tg-hint-text">создана {fmtDateTime(memo.createdAt)}</p>
       </div>
 

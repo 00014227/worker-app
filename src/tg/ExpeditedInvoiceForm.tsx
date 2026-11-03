@@ -12,6 +12,8 @@ const MONEY = /^\d{0,15}([.,]\d{0,2})?$/;
 
 export interface InvoiceValues {
   orderNumber: string;
+  /** Тип перевозки: от него зависит, кому записка уйдёт на согласование. */
+  transportationTypeId: string;
   counterpartyName: string;
   amount: string;
   currency: string;
@@ -22,6 +24,7 @@ export interface InvoiceValues {
 
 export const emptyInvoice = (currency: string): InvoiceValues => ({
   orderNumber: '',
+  transportationTypeId: '',
   counterpartyName: '',
   amount: '',
   currency,
@@ -40,6 +43,7 @@ export function invoiceValuesFromDraft(
   };
   return {
     orderNumber: text('orderNumber'),
+    transportationTypeId: text('transportationTypeId'),
     counterpartyName: text('counterpartyName'),
     amount: text('amount'),
     currency: text('currency') || currency,
@@ -52,6 +56,7 @@ export function invoiceValuesFromDraft(
 export function invoiceHasAnything(values: InvoiceValues): boolean {
   return [
     values.orderNumber,
+    values.transportationTypeId,
     values.counterpartyName,
     values.amount,
     values.reason,
@@ -121,6 +126,7 @@ export default function ExpeditedInvoiceForm({
   /** Чего не хватает. Проверяет и сервер — здесь только чтобы не отправлять зря. */
   const problem = useMemo(() => {
     if (!values.orderNumber.trim()) return 'Укажите номер перевозки';
+    if (!values.transportationTypeId) return 'Выберите тип перевозки';
     if (values.counterpartyName.trim().length < 2)
       return 'Укажите имя контрагента';
     if (!MONEY.test(values.amount)) return 'Сумма вводится числом';
@@ -142,6 +148,7 @@ export default function ExpeditedInvoiceForm({
     try {
       const created = await tgApi.createExpeditedInvoice({
         orderNumber: values.orderNumber.trim(),
+        transportationTypeId: values.transportationTypeId,
         counterpartyName: values.counterpartyName.trim(),
         amount: toNumber(values.amount),
         currency: values.currency,
@@ -193,6 +200,25 @@ export default function ExpeditedInvoiceForm({
           maxLength={orderField?.maxLength ?? 50}
           placeholder="RUUZ-00191"
         />
+      </Field>
+
+      <Field
+        label="Тип перевозки"
+        required
+        hint="От него зависит, кому записка уйдёт на согласование"
+      >
+        <select
+          className="tg-input"
+          value={values.transportationTypeId}
+          onChange={(e) => set({ transportationTypeId: e.target.value })}
+        >
+          <option value="">— выберите —</option>
+          {form.options.transportationTypes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
       </Field>
 
       <Field
