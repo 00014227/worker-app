@@ -177,8 +177,12 @@ export default function MemoCardPage() {
           <p className="text-sm mt-1">{memo.title}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {memo.authorName}
-            {memo.department && ` · ${memo.department.name}`} · создана{' '}
-            {fmtDateTime(memo.createdAt)}
+            {memo.department && ` · ${memo.department.name}`}
+            {/* У доп. расходов тип перевозки уже показан в блоке таблицы. */}
+            {memo.transportationType &&
+              !memo.extraExpense &&
+              ` · ${memo.transportationType.name}`}{' '}
+            · создана {fmtDateTime(memo.createdAt)}
             {memo.submittedAt &&
               ` · отправлена ${fmtDateTime(memo.submittedAt)}`}
           </p>

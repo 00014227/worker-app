@@ -376,6 +376,7 @@ export const tgApi = {
 
   createExpeditedInvoice(input: {
     orderNumber: string;
+    transportationTypeId: string;
     counterpartyName: string;
     amount: number;
     currency: string;
