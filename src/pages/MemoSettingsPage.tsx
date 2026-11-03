@@ -1384,10 +1384,17 @@ function TelegramLinks({
       )}
 
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="pt-4 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Здесь все, кому Telegram нужен: состав ролей согласования,
+            руководители направлений и отделов, и сотрудники подразделений.
+            Последним он нужен, чтобы вообще писать записки — доп. расходы,
+            ускоренный счёт и «Иное» заполняются только в приложении бота.
+          </p>
           {links.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              Пока никто не назначен в роли согласования — привязывать некого.
+              Пока никого нет ни в ролях, ни в подразделениях — привязывать
+              некого.
             </p>
           ) : (
             <ul className="space-y-1.5">
