@@ -1879,6 +1879,8 @@ export interface MemoCard {
   authorName: string;
   isAuthor: boolean;
   department: { id: string; name: string } | null;
+  /** Тип перевозки записки. От него зависел маршрут согласования. */
+  transportationType: { id: string; name: string } | null;
   attachments: MemoAttachmentView[];
   route: MemoRouteStepView[];
   /** Задача, по которой этот человек может решать прямо сейчас. */
