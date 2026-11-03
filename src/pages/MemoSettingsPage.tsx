@@ -331,9 +331,12 @@ function Roles({
 
             {byTransport(role) ? (
               <p className="text-xs text-muted-foreground">
-                Состава у этой роли нет: записку согласует руководитель того
-                направления, которое указано в типе перевозки. Кого назначить —
-                в табе «Руководители направлений».
+                Состава у этой роли нет. Записку из операционного отдела
+                согласует руководитель этого отдела — его задают в табе
+                «Подразделения». Остальные идут к руководителю того направления,
+                которое указано в типе перевозки — таб «Руководители
+                направлений». Если не задан ни тот, ни другой, этап
+                пропускается, и записка идёт к следующему согласующему.
               </p>
             ) : role.members.length === 0 ? (
               <p className="text-xs text-amber-700">
@@ -1136,6 +1139,60 @@ function Departments({
                   >
                     <Trash2 size={11} />
                   </button>
+                </div>
+
+                {/* Руководитель отдела. Показываем у всех, но смысл он имеет
+                    пока только у операционного: именно его записки идут к
+                    своему руководителю вместо руководителя направления. */}
+                <div className="flex items-center gap-2 text-xs border-t pt-2">
+                  <span className="text-muted-foreground shrink-0">
+                    Руководитель:
+                  </span>
+                  {d.head ? (
+                    <>
+                      <span className="flex-1 min-w-0 truncate">
+                        {d.head.name}
+                      </span>
+                      <button
+                        onClick={() =>
+                          act(() => memoApi.admin.removeDepartmentHead(d.id))
+                        }
+                        disabled={busy}
+                        className="text-muted-foreground hover:text-red-600 shrink-0"
+                        title="Снять руководителя"
+                      >
+                        <X size={11} />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="flex-1 text-muted-foreground">
+                      не назначен
+                    </span>
+                  )}
+                  <select
+                    className="h-7 text-xs rounded border bg-background px-1.5 shrink-0"
+                    value=""
+                    disabled={busy}
+                    onChange={(e) => {
+                      const employeeId = e.target.value;
+                      if (!employeeId) return;
+                      void act(() =>
+                        memoApi.admin.setDepartmentHead(d.id, employeeId),
+                      );
+                    }}
+                  >
+                    <option value="">
+                      {d.head ? 'заменить…' : 'назначить…'}
+                    </option>
+                    {/* Руководителем ставим кого угодно из справочника, а не
+                        только состав отдела: руководитель направления нередко
+                        числится в другом отделе. */}
+                    {candidates.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {d.staff.length === 0 ? (
