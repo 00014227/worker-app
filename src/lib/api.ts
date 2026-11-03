@@ -1959,6 +1959,13 @@ export interface MemoDepartmentRow {
   _count?: { memos: number };
   /** Состав отдела. Ведётся в настройках, со стороны отдела. */
   staff: { id: string; name: string }[];
+  /**
+   * Руководитель отдела.
+   *
+   * У операционного отдела он согласует записки своих сотрудников вместо
+   * руководителя направления — независимо от типа перевозки.
+   */
+  head: { id: string; name: string } | null;
 }
 
 export interface MemoRoleRow {
@@ -2154,6 +2161,20 @@ export const memoApi = {
      * Отдел один на человека, поэтому числившийся в другом переезжает —
      * сервер возвращает прежний, чтобы об этом можно было сказать.
      */
+    setDepartmentHead(
+      departmentId: string,
+      employeeId: string,
+    ): Promise<{ id: string; head: { id: string; name: string } | null }> {
+      return req(`/worker/memos/admin/departments/${departmentId}/head`, {
+        method: 'PUT',
+        body: JSON.stringify({ employeeId }),
+      });
+    },
+    removeDepartmentHead(departmentId: string): Promise<{ removed: boolean }> {
+      return req(`/worker/memos/admin/departments/${departmentId}/head`, {
+        method: 'DELETE',
+      });
+    },
     addDepartmentMember(
       departmentId: string,
       employeeId: string,
