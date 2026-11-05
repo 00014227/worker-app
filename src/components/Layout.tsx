@@ -18,6 +18,7 @@ import {
   Loader2,
   HandCoins,
   ClipboardList,
+  Calculator,
 } from 'lucide-react';
 import { getUser, clearAuth } from '../lib/auth';
 import { closeSocket } from '../lib/socket';
@@ -38,6 +39,7 @@ const nav = [
   { to: '/memos', label: 'Служебные записки', icon: ClipboardList },
   { to: '/telegram-accounts', label: 'Telegram', icon: Send },
   { to: '/tariff-sources', label: 'Тарифы', icon: Database },
+  { to: '/calculator', label: 'Калькулятор', icon: Calculator },
   { to: '/ai-deal', label: 'Сделка через ИИ', icon: Sparkles },
 ];
 

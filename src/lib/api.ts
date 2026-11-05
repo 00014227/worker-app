@@ -282,6 +282,48 @@ export async function listLocations(search?: string): Promise<Location[]> {
   return res.json();
 }
 
+// ── Tariff calculator (AI pricing over price sheets) ─────────────────────────
+
+/** Вариант расчёта. `total` — уже цена клиенту с наценкой; себестоимость
+ *  бэкенд не отдаёт. `total: null` — маршрут в прайсе есть, цены нет («по запросу»). */
+export interface TariffEstimate {
+  departure: string;
+  destination: string;
+  transitPoint: string | null;
+  transportType: string | null;
+  currency: string;
+  total: number | null;
+  basis: string | null;
+  breakdown: string | null;
+  included: string | null;
+  excluded: string | null;
+  transitTime: string | null;
+  conditions: string | null;
+  sourceName: string | null;
+  freightOnly: boolean;
+}
+
+export interface TariffEstimateParams {
+  departure: string;
+  destination: string;
+  transportType?: 'auto' | 'rail' | 'sea' | 'air' | 'multimodal';
+  weightKg?: number;
+  volumeCbm?: number;
+  containers?: number;
+  containerType?: string;
+}
+
+/** Офис прайсов бэкенд берёт из подразделения сотрудника — передавать не нужно. */
+export function estimateTariff(
+  params: TariffEstimateParams,
+): Promise<{ estimates: TariffEstimate[] }> {
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') q.set(key, String(value));
+  }
+  return req(`/worker/tariffs/estimate?${q}`);
+}
+
 // ── Tariff sources (raw price sheets for AI pricing) ──────────────────────────
 
 export interface TariffSource {
