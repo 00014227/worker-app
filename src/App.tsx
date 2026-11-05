@@ -22,6 +22,7 @@ const RateRequestDetailPage = lazy(
 const MapPage = lazy(() => import('./pages/MapPage'));
 const AiDealPage = lazy(() => import('./pages/AiDealPage'));
 const TariffSourcesPage = lazy(() => import('./pages/TariffSourcesPage'));
+const TariffCalculatorPage = lazy(() => import('./pages/TariffCalculatorPage'));
 const EmployeesPage = lazy(() => import('./pages/EmployeesPage'));
 const CounterpartyCheckPage = lazy(
   () => import('./pages/CounterpartyCheckPage'),
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/map" element={<MapPage />} />
           <Route path="/ai-deal" element={<AiDealPage />} />
           <Route path="/tariff-sources" element={<TariffSourcesPage />} />
+          <Route path="/calculator" element={<TariffCalculatorPage />} />
           <Route path="/employees" element={<EmployeesPage />} />
           <Route
             path="/counterparty-check"
