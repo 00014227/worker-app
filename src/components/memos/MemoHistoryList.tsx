@@ -11,7 +11,11 @@ import type { MemoHistoryEntry } from '@/lib/api';
  * Один компонент на кабинет и на Telegram: состав записи с сервера один, и две
  * ленты разошлись бы в подписях.
  */
-export default function MemoHistoryList({ entries }: { entries: MemoHistoryEntry[] }) {
+export default function MemoHistoryList({
+  entries,
+}: {
+  entries: MemoHistoryEntry[];
+}) {
   if (entries.length === 0) {
     return <p className="tg-hint-text">Пока ничего не происходило.</p>;
   }
@@ -28,7 +32,9 @@ export default function MemoHistoryList({ entries }: { entries: MemoHistoryEntry
               </span>
               <span className="flex-1 min-w-0">
                 {EVENT_LABEL[e.kind] ?? e.kind}
-                {e.stepNo !== null && <span className="tg-hint-text"> · этап {e.stepNo}</span>}
+                {e.stepNo !== null && (
+                  <span className="tg-hint-text"> · этап {e.stepNo}</span>
+                )}
                 {/* Номер попытки показываем только со второй: «попытка 1» у
                     всего подряд засоряет ленту, а второй круг надо видеть. */}
                 {e.attempt !== null && e.attempt > 1 && (
