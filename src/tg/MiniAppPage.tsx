@@ -64,7 +64,15 @@ type Stage =
   /** Карточка существующей записки — её открывают кнопкой из бота. */
   | { kind: 'card'; memoId: string; fields: TgFieldDef[] }
   /** Правка вернувшейся записки: та же форма, но по существующему документу. */
-  | { kind: 'edit'; form: TgForm; initial: Values; memoId: string; note: ReturnNote | null }
+  | {
+      kind: 'edit';
+      form: TgForm;
+      initial: Values;
+      memoId: string;
+      note: ReturnNote | null;
+      /** Ответ на замечание из черновика, если его успели набрать. */
+      savedReply: string;
+    }
   | { kind: 'sent'; number: string; title: string }
   /** Решение принято — показываем итог и закрываем. */
   | { kind: 'decided'; outcome: string };
@@ -159,12 +167,19 @@ export default function MiniAppPage() {
         return;
       }
 
+      // Ответ из черновика: приложение могло перезагрузиться на полуслове, и
+      // набранный ответ пропадать не должен. Значения самой записки берём из
+      // карточки, а не из черновика — они уже сохранены в документе.
+      const savedReply =
+        typeof form.draft?.data.reply === 'string' ? form.draft.data.reply : '';
+
       setStage({
         kind: 'edit',
         form,
         initial: { kind: 'extra_expenses', values: extraValuesFromCard(memo) },
         memoId: memo.id,
         note,
+        savedReply,
       });
     } catch (e) {
       setStage({ kind: 'error', message: (e as Error).message });
@@ -407,7 +422,11 @@ export default function MiniAppPage() {
           onFilesChanged={setFiles}
           maxFiles={stage.form.options.maxAttachments}
           initial={stage.initial.values}
-          edit={{ memoId: stage.memoId, note: stage.note }}
+          edit={{
+            memoId: stage.memoId,
+            note: stage.note,
+            savedReply: stage.savedReply,
+          }}
           onSent={(memo) => setStage({ kind: 'sent', ...memo })}
         />
       )}
