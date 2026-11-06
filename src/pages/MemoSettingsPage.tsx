@@ -863,9 +863,9 @@ function Directions({
     <Card>
       <CardContent className="pt-4 space-y-3">
         <p className="text-xs text-muted-foreground">
-          Этап «Руководитель направления» в маршруте доп. расходов отдаёт записку
-          тому, кто указан здесь напротив типа перевозки из записки. Один человек
-          может вести несколько направлений.
+          Этап «Руководитель направления» в маршруте доп. расходов отдаёт
+          записку тому, кто указан здесь напротив типа перевозки из записки.
+          Один человек может вести несколько направлений.
         </p>
 
         {missing > 0 && (
@@ -953,7 +953,9 @@ function Directions({
                         disabled={busy || c.id === d.employee?.id}
                         className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted/50 disabled:opacity-30 flex items-center gap-2"
                       >
-                        <span className="flex-1 min-w-0 truncate">{c.name}</span>
+                        <span className="flex-1 min-w-0 truncate">
+                          {c.name}
+                        </span>
                         {/* Без действующей привязки Telegram решение придётся
                             принимать в кабинете: уведомление боту уйти не
                             сможет. Отвязанный считается непривязанным. */}
