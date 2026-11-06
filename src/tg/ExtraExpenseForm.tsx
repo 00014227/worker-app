@@ -180,6 +180,60 @@ export interface ReturnNote {
   at: string;
 }
 
+/**
+ * Чего не хватает для отправки. `null` — можно отправлять.
+ *
+ * Чистой функцией и снаружи компонента намеренно. Внутри `useMemo` её нельзя
+ * было накрыть тестом, и там две недели пролежала забытая строка: она требовала
+ * отдел ответственности ВСЕГДА, хотя список отдела рисуется только у
+ * сотрудника без отдела. Форма упиралась в поле, которого сама не показывала, и
+ * доп. расходы на боевом перестали отправляться совсем.
+ *
+ * Проверяет и сервер; здесь — только чтобы не отправлять зря и объяснить сразу.
+ */
+export function extraExpenseProblem(
+  values: ExtraExpenseValues,
+  opts: { editing?: boolean; reply?: string } = {},
+): string | null {
+  const reply = opts.reply ?? '';
+  // Кто несёт расход спрашиваем и при «частично»: часть расхода осталась на
+  // нас, и на неё вопрос осмыслен.
+  const needsBearer = values.rebilled === 'no' || values.rebilled === 'partial';
+  const byContractor = needsBearer && values.expenseBearer === 'contractor';
+  const byUs = needsBearer && values.expenseBearer === 'own';
+  const filled = values.lines.filter((l) => !isBlank(l));
+
+  // Ответ на замечание проверяем первым: человек пришёл сюда именно из-за
+  // него, и жаловаться на номер перевозки раньше было бы странно.
+  if (opts.editing && reply.trim().length < 5) {
+    return 'Напишите, что изменили по замечанию';
+  }
+  if (!values.orderNumber.trim()) return 'Укажите номер перевозки';
+  if (!values.transportationTypeId) return 'Выберите тип перевозки';
+  if (!filled.length) return 'Добавьте хотя бы одну строку расходов';
+  if (filled.some((l) => l.expenseType.trim().length < 2))
+    return 'Укажите вид расхода в каждой строке';
+  if (values.lines.some((l) => !MONEY.test(l.planned) || !MONEY.test(l.actual)))
+    return 'Суммы расходов вводятся числами';
+  if (!MONEY.test(values.incomePlanned) || !MONEY.test(values.incomeActual))
+    return 'Суммы дохода вводятся числами';
+  if (!values.incomePlanned.trim() || !values.incomeActual.trim())
+    return 'Укажите планируемый и фактический доход';
+  if (values.reason.trim().length < 5) return 'Опишите причину перерасхода';
+  if (!values.rebilled) return 'Ответьте, перевыставлен ли расход клиенту';
+  if (needsBearer && !values.expenseBearer) return 'Ответьте, кто несёт расход';
+  if (byContractor && values.contractorClaim.trim().length < 2)
+    return 'Укажите, на каком основании предъявляем подрядчику';
+  if (byUs && !values.responsibleEmployeeId)
+    return 'Выберите сотрудника из списка — набранное вручную не считается';
+  // Отдел спрашиваем ТОЛЬКО у того, кому его ещё не проставили: у остальных
+  // сервер берёт отдел из профиля, и требовать выбор значило бы не дать подать
+  // записку вовсе.
+  if (byUs && !values.responsibleDepartmentName && !values.responsibleDepartmentId)
+    return 'У сотрудника не указан отдел — выберите его';
+  return null;
+}
+
 export default function ExtraExpenseForm({
   form,
   initial,
@@ -268,48 +322,11 @@ export default function ExtraExpenseForm({
   const needsBearer = values.rebilled === 'no' || values.rebilled === 'partial';
   const byContractor = needsBearer && values.expenseBearer === 'contractor';
   const byUs = needsBearer && values.expenseBearer === 'own';
-  /** Строки, которые человек хоть как-то тронул. Пустые в счёт не идут. */
-  const filled = values.lines.filter((l) => !isBlank(l));
 
-  /** Чего не хватает. Проверяет и сервер — здесь только чтобы не отправлять зря. */
-  const problem = useMemo(() => {
-    // Ответ на замечание проверяем первым: человек пришёл сюда именно из-за
-    // него, и жаловаться на номер перевозки раньше было бы странно.
-    if (edit && reply.trim().length < 5) {
-      return 'Напишите, что изменили по замечанию';
-    }
-    if (!values.orderNumber.trim()) return 'Укажите номер перевозки';
-    if (!values.transportationTypeId) return 'Выберите тип перевозки';
-    if (!filled.length) return 'Добавьте хотя бы одну строку расходов';
-    if (filled.some((l) => l.expenseType.trim().length < 2))
-      return 'Укажите вид расхода в каждой строке';
-    if (
-      values.lines.some((l) => !MONEY.test(l.planned) || !MONEY.test(l.actual))
-    )
-      return 'Суммы расходов вводятся числами';
-    if (!MONEY.test(values.incomePlanned) || !MONEY.test(values.incomeActual))
-      return 'Суммы дохода вводятся числами';
-    if (!values.incomePlanned.trim() || !values.incomeActual.trim())
-      return 'Укажите планируемый и фактический доход';
-    if (values.reason.trim().length < 5) return 'Опишите причину перерасхода';
-    if (!values.rebilled) return 'Ответьте, перевыставлен ли расход клиенту';
-    if (needsBearer && !values.expenseBearer)
-      return 'Ответьте, кто несёт расход';
-    if (byContractor && values.contractorClaim.trim().length < 2)
-      return 'Укажите, на каком основании предъявляем подрядчику';
-    if (byUs && !values.responsibleDepartmentId)
-      return 'Выберите отдел ответственности';
-    if (byUs && !values.responsibleEmployeeId)
-      return 'Выберите, в зоне ответственности кого возник расход';
-    // Отдел спрашиваем только у того, кому его ещё не проставили.
-    if (
-      byUs &&
-      !values.responsibleDepartmentName &&
-      !values.responsibleDepartmentId
-    )
-      return 'У сотрудника не указан отдел — выберите его';
-    return null;
-  }, [values, filled, needsBearer, byContractor, byUs, edit, reply]);
+  const problem = useMemo(
+    () => extraExpenseProblem(values, { editing: !!edit, reply }),
+    [values, edit, reply],
+  );
 
   const submit = useCallback(async () => {
     setSending(true);
@@ -652,9 +669,13 @@ export default function ExtraExpenseForm({
             label="В зоне ответственности кого возник расход"
             required
             hint={
-              values.responsibleDepartmentName
-                ? `Отдел: ${values.responsibleDepartmentName}`
-                : 'Начните набирать фамилию'
+              values.responsibleEmployeeId
+                ? values.responsibleDepartmentName
+                  ? `Отдел: ${values.responsibleDepartmentName}`
+                  : 'У сотрудника не указан отдел — выберите его ниже'
+                : values.responsiblePerson.trim()
+                  ? '⚠️ Сотрудник не выбран: нажмите на нужного в списке подсказок'
+                  : 'Начните набирать фамилию'
             }
           >
             <EmployeeField
