@@ -231,7 +231,11 @@ export function extraExpenseProblem(
   // Отдел спрашиваем ТОЛЬКО у того, кому его ещё не проставили: у остальных
   // сервер берёт отдел из профиля, и требовать выбор значило бы не дать подать
   // записку вовсе.
-  if (byUs && !values.responsibleDepartmentName && !values.responsibleDepartmentId)
+  if (
+    byUs &&
+    !values.responsibleDepartmentName &&
+    !values.responsibleDepartmentId
+  )
     return 'У сотрудника не указан отдел — выберите его';
   return null;
 }
@@ -262,10 +266,18 @@ export default function ExtraExpenseForm({
   edit?: {
     memoId: string;
     note: ReturnNote | null;
-    /** Ответ из черновика: приложение могло перезагрузиться на полуслове. */
-    savedReply?: string;
   };
 }) {
+  /**
+   * Записка, если это доработка.
+   *
+   * Отдельной переменной, а не через `edit`: объект свойства страница создаёт
+   * заново на каждой отрисовке, и зависящий от него `submit` пересоздавался бы
+   * вместе с ним. А без него в зависимостях `submit` держал бы **устаревший
+   * ответ** — набранный текст до отправки не доходил.
+   */
+  const editMemoId = edit?.memoId;
+
   const [values, setValues] = useState<ExtraExpenseValues>(
     () => initial ?? emptyExtraExpense(form.options.currencies[0] ?? 'UZS'),
   );
@@ -274,10 +286,12 @@ export default function ExtraExpenseForm({
   /**
    * Ответ на замечание. Обязателен при повторной подаче.
    *
-   * Начальное значение берём из черновика: Telegram закрывает и открывает
-   * webview сам, и набранный ответ не должен пропадать.
+   * Начальное значение — с устройства: Telegram закрывает и открывает webview
+   * сам, и набранный ответ не должен пропадать.
    */
-  const [reply, setReply] = useState(edit?.savedReply ?? '');
+  const [reply, setReply] = useState(() =>
+    editMemoId ? readReply(editMemoId) : '',
+  );
 
   const set = (patch: Partial<ExtraExpenseValues>) =>
     setValues((v) => ({ ...v, ...patch }));
@@ -308,16 +322,24 @@ export default function ExtraExpenseForm({
     }
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
+      if (editMemoId) {
+        // При доработке черновик на сервере не трогаем: он один на человека.
+        // Запись правки затёрла бы незаконченную новую записку, а после
+        // отправки осталась бы и предложила «продолжить» уже отправленное.
+        // Ответ храним на устройстве — он нужен только до отправки.
+        storeReply(editMemoId, reply);
+        return;
+      }
       // Сбой сохранения черновика не должен мешать заполнению.
-      void tgApi.saveDraft(toDraft(values, reply)).catch(() => undefined);
+      void tgApi.saveDraft(toDraft(values)).catch(() => undefined);
     }, SAVE_DELAY_MS);
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
     // Ответ в зависимостях обязателен: иначе его правка не запускала бы
-    // сохранение, и в черновик он попадал бы только вместе со следующей
+    // сохранение, и он попадал бы в хранилище только вместе со следующей
     // правкой любого другого поля.
-  }, [values, reply]);
+  }, [values, reply, editMemoId]);
 
   // ── Итоги по ходу заполнения ──
   const totals = useMemo(() => {
@@ -339,8 +361,8 @@ export default function ExtraExpenseForm({
   const byUs = needsBearer && values.expenseBearer === 'own';
 
   const problem = useMemo(
-    () => extraExpenseProblem(values, { editing: !!edit, reply }),
-    [values, edit, reply],
+    () => extraExpenseProblem(values, { editing: !!editMemoId, reply }),
+    [values, editMemoId, reply],
   );
 
   const submit = useCallback(async () => {
@@ -378,11 +400,13 @@ export default function ExtraExpenseForm({
             : undefined,
       };
 
-      if (edit) {
+      if (editMemoId) {
         // Сначала таблица, потом подача: записка должна уйти на согласование
         // уже с исправленными цифрами, иначе согласующий увидит прежние.
-        await tgApi.replaceExpenses(edit.memoId, body);
-        const sent = await tgApi.resubmit(edit.memoId, reply.trim());
+        await tgApi.replaceExpenses(editMemoId, body);
+        const sent = await tgApi.resubmit(editMemoId, reply.trim());
+        // Ответ дошёл до записки — на устройстве его держать больше незачем.
+        forgetReply(editMemoId);
         onSent({ number: sent.number, title: values.orderNumber.trim() });
         return;
       }
@@ -393,14 +417,19 @@ export default function ExtraExpenseForm({
       setError((e as Error).message);
       setSending(false);
     }
-  }, [values, needsBearer, byContractor, byUs, onSent]);
+    // `editMemoId` и `reply` здесь обязательны: без них набранный ответ
+    // оставался бы в замыкании прошлой отрисовки, и сервер отвечал бы
+    // «Напишите, что изменили по замечанию» на уже написанное.
+  }, [values, needsBearer, byContractor, byUs, onSent, editMemoId, reply]);
 
   // ── Нижняя кнопка Telegram ──
   useEffect(() => {
     const button = mainButton();
     if (!button) return;
 
-    button.setText(edit ? 'Отправить повторно' : 'Отправить на согласование');
+    button.setText(
+      editMemoId ? 'Отправить повторно' : 'Отправить на согласование',
+    );
     button.show();
     if (problem || sending) button.disable();
     else button.enable();
@@ -417,7 +446,7 @@ export default function ExtraExpenseForm({
       button.offClick(click);
       button.hideProgress();
     };
-  }, [problem, sending, submit]);
+  }, [problem, sending, submit, editMemoId]);
 
   return (
     <div className="space-y-4">
@@ -430,11 +459,13 @@ export default function ExtraExpenseForm({
             {[edit.note.roleName, edit.note.byName].filter(Boolean).join(': ')}
             {edit.note.at ? ` · ${fmtDateTime(edit.note.at)}` : ''}
           </p>
-          <p className="text-sm whitespace-pre-wrap break-words">{edit.note.text}</p>
+          <p className="text-sm whitespace-pre-wrap break-words">
+            {edit.note.text}
+          </p>
         </div>
       )}
 
-      {edit && (
+      {editMemoId && (
         <Field
           label="Ответ на замечание"
           required
@@ -752,6 +783,7 @@ export default function ExtraExpenseForm({
         files={files}
         onChanged={onFilesChanged}
         max={maxFiles}
+        memoId={editMemoId}
       />
 
       {error && <div className="tg-error">{error}</div>}
@@ -760,14 +792,41 @@ export default function ExtraExpenseForm({
   );
 }
 
+// ── Ответ на замечание: хранение на устройстве ──
+//
+// Своё хранилище, а не черновик на сервере: черновик один на человека и занят
+// новой запиской, а ответ относится к конкретной доработке. Потеря ответа при
+// очистке данных Telegram не страшна — это удобство на время заполнения, а
+// обязательность проверяют и форма, и сервер.
+
+const REPLY_KEY = 'memo-reply:';
+
+function readReply(memoId: string): string {
+  try {
+    return window.localStorage.getItem(REPLY_KEY + memoId) ?? '';
+  } catch {
+    // В webview хранилище может быть недоступно — это не повод падать.
+    return '';
+  }
+}
+
+function storeReply(memoId: string, reply: string) {
+  try {
+    if (reply) window.localStorage.setItem(REPLY_KEY + memoId, reply);
+    else window.localStorage.removeItem(REPLY_KEY + memoId);
+  } catch {
+    // см. выше
+  }
+}
+
+function forgetReply(memoId: string) {
+  storeReply(memoId, '');
+}
+
 /** Строка черновика: ключ строки наружу не уходит, он нужен только React. */
-function toDraft(values: ExtraExpenseValues, reply = '') {
+function toDraft(values: ExtraExpenseValues) {
   return {
     memoType: 'extra_expenses',
-    // Ответ на замечание — такое же введённое, как остальное. Без него
-    // перезагрузка приложения стирала именно ответ, а форма продолжала его
-    // требовать: человек видел «напишите» после того, как уже написал.
-    reply,
     orderNumber: values.orderNumber,
     transportationTypeId: values.transportationTypeId,
     currency: values.currency,

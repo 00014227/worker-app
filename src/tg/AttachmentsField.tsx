@@ -3,7 +3,7 @@ import { tgApi } from './tgApi';
 import type { TgAttachment } from './tgApi';
 
 /**
- * Файлы к записке. Один блок на все три формы.
+ * Файлы к записке. Один блок на все формы.
  *
  * Файл уходит на сервер **сразу при выборе**, а не при отправке записки: так
  * человек видит, что он принят, и может убрать лишний до отправки. Записка в
@@ -14,10 +14,22 @@ export default function AttachmentsField({
   files,
   onChanged,
   max,
+  memoId,
 }: {
   files: TgAttachment[];
   onChanged: (files: TgAttachment[]) => void;
   max: number;
+  /**
+   * Записка, если файл прикладывают к уже существующей — то есть при
+   * доработке.
+   *
+   * Без неё файл уходит во временное хранилище черновика и переезжает в
+   * записку при её создании. При доработке записка уже создана, переезду
+   * взяться негде — повторная отправка черновик не читает, — и файл **молча
+   * пропадал**: человек видел его в списке, а в записке его не было. Поэтому
+   * здесь другие адреса, сразу по записке.
+   */
+  memoId?: string;
 }) {
   const input = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,7 +44,9 @@ export default function AttachmentsField({
       // По одному, а не разом: предел проверяет сервер, и при отказе на
       // третьем файле первые два должны остаться приложенными.
       for (const file of Array.from(chosen)) {
-        const saved = await tgApi.addAttachment(file);
+        const saved = memoId
+          ? await tgApi.addMemoFile(memoId, file)
+          : await tgApi.addAttachment(file);
         added = [...added, saved];
         onChanged(added);
       }
@@ -50,7 +64,8 @@ export default function AttachmentsField({
     setBusy(true);
     setError(null);
     try {
-      await tgApi.removeAttachment(id);
+      if (memoId) await tgApi.removeMemoFile(memoId, id);
+      else await tgApi.removeAttachment(id);
       onChanged(files.filter((f) => f.id !== id));
     } catch (e) {
       setError((e as Error).message);
