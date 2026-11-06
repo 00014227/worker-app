@@ -206,7 +206,9 @@ export function extraExpenseProblem(
   // Ответ на замечание проверяем первым: человек пришёл сюда именно из-за
   // него, и жаловаться на номер перевозки раньше было бы странно.
   if (opts.editing && reply.trim().length < 5) {
-    return 'Напишите, что изменили по замечанию';
+    // Называем поле и минимум: человек, описавший изменения в «Причине
+    // перерасхода», иначе читает это как ложь — он ведь написал.
+    return 'Заполните поле «Ответ на замечание» — не короче пяти символов';
   }
   if (!values.orderNumber.trim()) return 'Укажите номер перевозки';
   if (!values.transportationTypeId) return 'Выберите тип перевозки';
@@ -257,15 +259,25 @@ export default function ExtraExpenseForm({
    * громоздкая часть приложения, и два её набора разошлись бы при первой же
    * правке полей.
    */
-  edit?: { memoId: string; note: ReturnNote | null };
+  edit?: {
+    memoId: string;
+    note: ReturnNote | null;
+    /** Ответ из черновика: приложение могло перезагрузиться на полуслове. */
+    savedReply?: string;
+  };
 }) {
   const [values, setValues] = useState<ExtraExpenseValues>(
     () => initial ?? emptyExtraExpense(form.options.currencies[0] ?? 'UZS'),
   );
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  /** Ответ на замечание. Обязателен при повторной подаче. */
-  const [reply, setReply] = useState('');
+  /**
+   * Ответ на замечание. Обязателен при повторной подаче.
+   *
+   * Начальное значение берём из черновика: Telegram закрывает и открывает
+   * webview сам, и набранный ответ не должен пропадать.
+   */
+  const [reply, setReply] = useState(edit?.savedReply ?? '');
 
   const set = (patch: Partial<ExtraExpenseValues>) =>
     setValues((v) => ({ ...v, ...patch }));
@@ -297,12 +309,15 @@ export default function ExtraExpenseForm({
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       // Сбой сохранения черновика не должен мешать заполнению.
-      void tgApi.saveDraft(toDraft(values)).catch(() => undefined);
+      void tgApi.saveDraft(toDraft(values, reply)).catch(() => undefined);
     }, SAVE_DELAY_MS);
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [values]);
+    // Ответ в зависимостях обязателен: иначе его правка не запускала бы
+    // сохранение, и в черновик он попадал бы только вместе со следующей
+    // правкой любого другого поля.
+  }, [values, reply]);
 
   // ── Итоги по ходу заполнения ──
   const totals = useMemo(() => {
@@ -423,7 +438,11 @@ export default function ExtraExpenseForm({
         <Field
           label="Ответ на замечание"
           required
-          hint="Что именно изменили — это прочитает тот, кто вернул записку"
+          hint={
+            reply.trim().length >= 5
+              ? 'Это прочитает тот, кто вернул записку'
+              : '⚠️ Без этого поля отправить нельзя. Опишите здесь, что изменили, — правки в «Причине перерасхода» сюда не переносятся'
+          }
         >
           <textarea
             className="tg-input min-h-[80px]"
@@ -742,9 +761,13 @@ export default function ExtraExpenseForm({
 }
 
 /** Строка черновика: ключ строки наружу не уходит, он нужен только React. */
-function toDraft(values: ExtraExpenseValues) {
+function toDraft(values: ExtraExpenseValues, reply = '') {
   return {
     memoType: 'extra_expenses',
+    // Ответ на замечание — такое же введённое, как остальное. Без него
+    // перезагрузка приложения стирала именно ответ, а форма продолжала его
+    // требовать: человек видел «напишите» после того, как уже написал.
+    reply,
     orderNumber: values.orderNumber,
     transportationTypeId: values.transportationTypeId,
     currency: values.currency,
