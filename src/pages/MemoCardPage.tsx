@@ -15,7 +15,12 @@ import {
   X,
 } from 'lucide-react';
 import { memoApi } from '@/lib/api';
-import type { MemoHistoryEntry, MemoCard, MemoDecisionKind, MemoMeta } from '@/lib/api';
+import type {
+  MemoHistoryEntry,
+  MemoCard,
+  MemoDecisionKind,
+  MemoMeta,
+} from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -49,7 +54,10 @@ export default function MemoCardPage() {
     try {
       // Историю обновляем вместе с карточкой: после решения в ней появилась
       // запись, и оставить прежнюю ленту значило бы показать вчерашний день.
-      const [card, log] = await Promise.all([memoApi.byId(id), memoApi.history(id)]);
+      const [card, log] = await Promise.all([
+        memoApi.byId(id),
+        memoApi.history(id),
+      ]);
       setMemo(card);
       setHistory(log);
       // Чего не хватает для отправки — спрашиваем сервер, чтобы правила

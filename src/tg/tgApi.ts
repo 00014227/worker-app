@@ -16,10 +16,7 @@ export interface TgFieldDef {
 
 /** Какие формы умеет приложение. Больше одной — с тех пор как типов два. */
 export type TgMemoType =
-  | 'absence'
-  | 'extra_expenses'
-  | 'expedited_invoice'
-  | 'other';
+  'absence' | 'extra_expenses' | 'expedited_invoice' | 'other';
 
 /** Строка расходов в черновике — строками, как её держат поля ввода. */
 export interface TgDraftLine {
@@ -321,7 +318,10 @@ export const tgApi = {
   },
 
   /** Заменить таблицу расходов целиком. */
-  replaceExpenses(id: string, input: TgExtraExpenseBody): Promise<{ title: string }> {
+  replaceExpenses(
+    id: string,
+    input: TgExtraExpenseBody,
+  ): Promise<{ title: string }> {
     return request(`/memo-tg/memos/${id}/extra-expenses`, {
       method: 'PUT',
       body: JSON.stringify(input),
@@ -342,7 +342,7 @@ export const tgApi = {
    * Своим `fetch`, как и у файлов черновика: общий `request` ставит заголовок
    * JSON, и multipart с ним не уходит.
    */
-  async addMemoFile(id: string, file: File): Promise<{ id: string; name: string }> {
+  async addMemoFile(id: string, file: File): Promise<TgAttachment> {
     const body = new FormData();
     body.append('file', file);
     const res = await fetch(`/api/memo-tg/memos/${id}/attachments`, {
@@ -351,14 +351,18 @@ export const tgApi = {
       body,
     });
     if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as { message?: string } | null;
+      const data = (await res.json().catch(() => null)) as {
+        message?: string;
+      } | null;
       throw new Error(data?.message ?? 'Не удалось приложить файл');
     }
-    return (await res.json()) as { id: string; name: string };
+    return (await res.json()) as TgAttachment;
   },
 
   removeMemoFile(id: string, attachmentId: string): Promise<unknown> {
-    return request(`/memo-tg/memos/${id}/attachments/${attachmentId}`, { method: 'DELETE' });
+    return request(`/memo-tg/memos/${id}/attachments/${attachmentId}`, {
+      method: 'DELETE',
+    });
   },
 
   /**

@@ -16,10 +16,7 @@ import ExtraExpenseForm, {
   extraValuesFromDraft,
 } from './ExtraExpenseForm';
 import type { ExtraExpenseValues } from './ExtraExpenseForm';
-import OtherForm, {
-  otherHasAnything,
-  otherValuesFromDraft,
-} from './OtherForm';
+import OtherForm, { otherHasAnything, otherValuesFromDraft } from './OtherForm';
 import type { OtherValues } from './OtherForm';
 import MemoCardScreen from './MemoCardScreen';
 import { extraValuesFromCard } from './ExtraExpenseForm';
@@ -70,12 +67,20 @@ type Stage =
       initial: Values;
       memoId: string;
       note: ReturnNote | null;
-      /** Ответ на замечание из черновика, если его успели набрать. */
-      savedReply: string;
     }
   | { kind: 'sent'; number: string; title: string }
   /** Решение принято — показываем итог и закрываем. */
   | { kind: 'decided'; outcome: string };
+
+/**
+ * Экраны, где нижняя кнопка Telegram принадлежит форме.
+ *
+ * Список, а не сравнение с `'form'`: правка вернувшейся записки — тоже форма,
+ * и при сравнении с одним значением страница прятала кнопку, которую форма
+ * только что показала. Детские эффекты в React выполняются раньше
+ * родительских, поэтому кнопки «Отправить повторно» не было вообще никогда.
+ */
+const FORM_STAGES = new Set<Stage['kind']>(['form', 'edit']);
 
 /**
  * Подписи типов. Живут здесь, а не приходят с сервера: формулировку меняют
@@ -148,9 +153,14 @@ export default function MiniAppPage() {
         tgApi.form(memo.memoType as TgMemoType),
         tgApi.history(memo.id),
       ]);
-      setFiles(form.attachments);
+      // Файлы берём из записки, а не из черновика: к документу уже приложено
+      // своё, а черновик — это отдельная, незаконченная записка. Показать
+      // здесь его файлы значило бы предложить автору убрать не то.
+      setFiles(memo.attachments);
 
-      const returned = [...history].reverse().find((h) => h.kind === 'returned');
+      const returned = [...history]
+        .reverse()
+        .find((h) => h.kind === 'returned');
       const note: ReturnNote | null = returned?.comment
         ? {
             text: returned.comment,
@@ -163,23 +173,21 @@ export default function MiniAppPage() {
       if (memo.memoType !== 'extra_expenses') {
         // Правка остальных типов живёт в кабинете: своей формы правки у них в
         // приложении нет, и делать её ради трёх полей пока не просили.
-        setStage({ kind: 'error', message: 'Эту записку правят в личном кабинете.' });
+        setStage({
+          kind: 'error',
+          message: 'Эту записку правят в личном кабинете.',
+        });
         return;
       }
 
-      // Ответ из черновика: приложение могло перезагрузиться на полуслове, и
-      // набранный ответ пропадать не должен. Значения самой записки берём из
-      // карточки, а не из черновика — они уже сохранены в документе.
-      const savedReply =
-        typeof form.draft?.data.reply === 'string' ? form.draft.data.reply : '';
-
+      // Значения берём из карточки, а не из черновика: они уже сохранены в
+      // документе. Набранный ответ на замечание форма хранит сама.
       setStage({
         kind: 'edit',
         form,
         initial: { kind: 'extra_expenses', values: extraValuesFromCard(memo) },
         memoId: memo.id,
         note,
-        savedReply,
       });
     } catch (e) {
       setStage({ kind: 'error', message: (e as Error).message });
@@ -258,7 +266,7 @@ export default function MiniAppPage() {
 
   // Нижняя кнопка принадлежит форме — на остальных экранах её скрываем.
   useEffect(() => {
-    if (stage.kind !== 'form') mainButton()?.hide();
+    if (!FORM_STAGES.has(stage.kind)) mainButton()?.hide();
   }, [stage.kind]);
 
   const heading =
@@ -396,7 +404,9 @@ export default function MiniAppPage() {
           files={files}
           onFilesChanged={setFiles}
           maxFiles={stage.form.options.maxAttachments}
-          initial={stage.initial?.kind === 'other' ? stage.initial.values : null}
+          initial={
+            stage.initial?.kind === 'other' ? stage.initial.values : null
+          }
           onSent={(memo) => setStage({ kind: 'sent', ...memo })}
         />
       )}
@@ -422,11 +432,7 @@ export default function MiniAppPage() {
           onFilesChanged={setFiles}
           maxFiles={stage.form.options.maxAttachments}
           initial={stage.initial.values}
-          edit={{
-            memoId: stage.memoId,
-            note: stage.note,
-            savedReply: stage.savedReply,
-          }}
+          edit={{ memoId: stage.memoId, note: stage.note }}
           onSent={(memo) => setStage({ kind: 'sent', ...memo })}
         />
       )}

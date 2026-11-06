@@ -2094,15 +2094,15 @@ export const memoApi = {
     );
   },
 
-    /**
-     * Вся история записки одной лентой.
-     *
-     * Отдельным адресом, а не полем карточки: карточку открывают на каждый
-     * чих, а историю листают редко, и тащить её в каждый ответ незачем.
-     */
-    history(id: string): Promise<MemoHistoryEntry[]> {
-      return req(`/worker/memos/${id}/history`);
-    },
+  /**
+   * Вся история записки одной лентой.
+   *
+   * Отдельным адресом, а не полем карточки: карточку открывают на каждый
+   * чих, а историю листают редко, и тащить её в каждый ответ незачем.
+   */
+  history(id: string): Promise<MemoHistoryEntry[]> {
+    return req(`/worker/memos/${id}/history`);
+  },
   create(input: MemoInput): Promise<{ id: string; status: MemoStatus }> {
     return req<{ id: string; status: MemoStatus }>('/worker/memos', {
       method: 'POST',

@@ -20,7 +20,11 @@ type Decision = 'approve' | 'reject' | 'return';
 
 const BUTTONS: { kind: Decision; label: string; className: string }[] = [
   { kind: 'approve', label: '✅ Согласовать', className: 'tg-button' },
-  { kind: 'return', label: '✏️ На доработку', className: 'tg-button-secondary' },
+  {
+    kind: 'return',
+    label: '✏️ На доработку',
+    className: 'tg-button-secondary',
+  },
   { kind: 'reject', label: '❌ Отклонить', className: 'tg-button-secondary' },
 ];
 
@@ -61,7 +65,10 @@ export default function MemoCardScreen({
     try {
       // Двумя запросами параллельно: история нужна сразу, а не по нажатию —
       // последний согласующий открывает карточку именно ради неё.
-      const [card, log] = await Promise.all([tgApi.memo(memoId), tgApi.history(memoId)]);
+      const [card, log] = await Promise.all([
+        tgApi.memo(memoId),
+        tgApi.history(memoId),
+      ]);
       setMemo(card);
       setHistory(log);
     } catch (e) {
@@ -126,7 +133,9 @@ export default function MemoCardScreen({
         {/* У доп. расходов тип перевозки уже стоит в блоке таблицы, рядом с
             номером перевозки; второй раз его показывать незачем. */}
         {memo.transportationType && !extra && (
-          <p className="tg-hint-text">перевозка: {memo.transportationType.name}</p>
+          <p className="tg-hint-text">
+            перевозка: {memo.transportationType.name}
+          </p>
         )}
         <p className="tg-hint-text">создана {fmtDateTime(memo.createdAt)}</p>
       </div>
@@ -140,14 +149,20 @@ export default function MemoCardScreen({
             />
           )}
           {filled.map((f) => (
-            <Line key={f.key} label={f.label} value={fieldValue(f, memo.payload[f.key])} />
+            <Line
+              key={f.key}
+              label={f.label}
+              value={fieldValue(f, memo.payload[f.key])}
+            />
           ))}
           {memo.justification && (
             <div className="space-y-0.5">
               <p className="tg-hint-text">
                 {extra ? 'Причина перерасхода' : 'Обоснование'}
               </p>
-              <p className="text-sm whitespace-pre-wrap break-words">{memo.justification}</p>
+              <p className="text-sm whitespace-pre-wrap break-words">
+                {memo.justification}
+              </p>
             </div>
           )}
         </div>
@@ -161,7 +176,10 @@ export default function MemoCardScreen({
           )}
           <div className="space-y-1.5">
             {extra.lines.map((l, i) => (
-              <div key={i} className="text-xs border-t pt-1.5 first:border-0 first:pt-0">
+              <div
+                key={i}
+                className="text-xs border-t pt-1.5 first:border-0 first:pt-0"
+              >
                 <div className="flex items-start gap-2">
                   <span className="flex-1 min-w-0">{l.expenseType}</span>
                   <span className="tabular-nums shrink-0">
@@ -184,13 +202,27 @@ export default function MemoCardScreen({
               label="Доход план / факт"
               value={`${fmtMoney(extra.incomePlanned, null)} / ${fmtMoney(extra.incomeActual, extra.currency)}`}
             />
-            <Line label="Клиенту" value={REBILLED_LABEL[extra.rebilled] ?? extra.rebilled} />
+            <Line
+              label="Клиенту"
+              value={REBILLED_LABEL[extra.rebilled] ?? extra.rebilled}
+            />
             {extra.expenseBearer && (
-              <Line label="Расход несёт" value={EXPENSE_BEARER_LABEL[extra.expenseBearer] ?? extra.expenseBearer} />
+              <Line
+                label="Расход несёт"
+                value={
+                  EXPENSE_BEARER_LABEL[extra.expenseBearer] ??
+                  extra.expenseBearer
+                }
+              />
             )}
-            {extra.contractorClaim && <Line label="Основание претензии" value={extra.contractorClaim} />}
+            {extra.contractorClaim && (
+              <Line label="Основание претензии" value={extra.contractorClaim} />
+            )}
             {extra.responsibleDepartment && (
-              <Line label="Отдел ответственного" value={extra.responsibleDepartment.name} />
+              <Line
+                label="Отдел ответственного"
+                value={extra.responsibleDepartment.name}
+              />
             )}
             {extra.responsiblePerson && (
               <Line label="Ответственный" value={extra.responsiblePerson} />
@@ -259,10 +291,16 @@ export default function MemoCardScreen({
                   }
                 />
               )}
-              <button className="tg-button" disabled={busy || tooShort} onClick={() => void decide()}>
+              <button
+                className="tg-button"
+                disabled={busy || tooShort}
+                onClick={() => void decide()}
+              >
                 {DECISION[kind]?.label ?? 'Подтвердить'}
               </button>
-              {tooShort && <p className="tg-hint-text">Без причины отправить нельзя.</p>}
+              {tooShort && (
+                <p className="tg-hint-text">Без причины отправить нельзя.</p>
+              )}
             </div>
           )}
         </div>
