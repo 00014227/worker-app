@@ -769,6 +769,30 @@ export interface EmployeeAdminRow {
   bitrixWebhookMasked: string | null;
   /** Слать ли ежедневный Excel по активным перевозкам этого сотрудника. */
   reportsEnabled: boolean;
+  /** Рабочий ящик для писем подрядчикам. `null` — не привязан. */
+  mailbox: EmployeeMailbox | null;
+}
+
+/**
+ * Рабочий ящик сотрудника: письма по его тендерам уходят с него, и ответы
+ * подрядчиков читаются из него же.
+ *
+ * Пароля здесь нет и не приходит: доступ идёт через сервисный аккаунт Google,
+ * разрешённый администратором домена, — секретов в этой схеме не существует.
+ */
+export interface EmployeeMailbox {
+  address: string;
+  /** ok — работает; error — последняя попытка не удалась; paused — отключён. */
+  status: 'ok' | 'error' | 'paused';
+  verifiedAt: string | null;
+  /** Последний успешный опрос. Молчит давно — ответы подрядчиков теряются. */
+  lastSuccessAt: string | null;
+  /** Текст провайдера дословно: перефразировать его — потерять подсказку. */
+  lastError: string | null;
+  /** Писем за сутки. У Google предел около 2000 на пользователя. */
+  sentToday: number;
+  /** Писем, которые не удалось привязать к тендеру. */
+  unmatchedCount: number;
 }
 
 export interface CreateEmployeeInput {
@@ -1008,6 +1032,37 @@ export const employeeApi = {
     return req<EmployeeAdminRow>(`/worker/admin/employees/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    });
+  },
+
+  /**
+   * Привязать рабочий ящик. Тела нет: адрес берётся из карточки сотрудника —
+   * именно он проверяется и именно он станет обратным адресом писем.
+   */
+  bindMailbox(id: string): Promise<EmployeeMailbox> {
+    return req<EmployeeMailbox>(`/worker/admin/employees/${id}/mailbox`, {
+      method: 'POST',
+    });
+  },
+
+  /** Перепроверить доступ. Пробного письма не посылает. */
+  checkMailbox(id: string): Promise<EmployeeMailbox> {
+    return req<EmployeeMailbox>(`/worker/admin/employees/${id}/mailbox/check`, {
+      method: 'POST',
+    });
+  },
+
+  /** Временно отключить: письма пойдут с общего ящика, курсор сохранится. */
+  pauseMailbox(id: string): Promise<EmployeeMailbox> {
+    return req<EmployeeMailbox>(`/worker/admin/employees/${id}/mailbox/pause`, {
+      method: 'POST',
+    });
+  },
+
+  /** Снять привязку. Переписка в карточках тендеров остаётся. */
+  unbindMailbox(id: string): Promise<{ ok: true }> {
+    return req<{ ok: true }>(`/worker/admin/employees/${id}/mailbox`, {
+      method: 'DELETE',
     });
   },
 };
