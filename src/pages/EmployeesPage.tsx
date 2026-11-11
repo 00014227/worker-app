@@ -14,10 +14,14 @@ import {
   Phone,
   Pencil,
   Save,
+  SendHorizonal,
+  AlertTriangle,
+  PauseCircle,
 } from 'lucide-react';
 import {
   employeeApi,
   EmployeeAdminRow,
+  EmployeeMailbox,
   CreateEmployeeInput,
   DepartmentRow,
 } from '../lib/api';
@@ -27,6 +31,40 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+
+/** «11.11 14:22» — в карточке важен день и час, год и секунды только мешают. */
+function fmtWhen(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Как выглядит состояние ящика. Цвет несёт смысл, а не украшение. */
+const MAILBOX_LOOK: Record<
+  EmployeeMailbox['status'],
+  { label: string; box: string; text: string }
+> = {
+  ok: {
+    label: 'Подключён',
+    box: 'bg-green-50/60 border-green-200',
+    text: 'text-green-700',
+  },
+  error: {
+    label: 'Ошибка доступа',
+    box: 'bg-red-50/60 border-red-200',
+    text: 'text-red-700',
+  },
+  paused: {
+    label: 'Отключён',
+    box: 'bg-amber-50/60 border-amber-200',
+    text: 'text-amber-700',
+  },
+};
 
 /**
  * Пароль показывается ОДИН раз — на сервере хранится только его хеш, и «посмотреть
@@ -239,6 +277,33 @@ export default function EmployeesPage() {
                             <ShieldCheck size={9} /> админ
                           </span>
                         )}
+                        {/* Состояние ящика видно без открывания карточки:
+                            молчащий ящик теряет ответы подрядчиков. */}
+                        {e.mailbox && (
+                          <span
+                            className={cn(
+                              'px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1',
+                              e.mailbox.status === 'ok' &&
+                                'bg-green-100 text-green-700',
+                              e.mailbox.status === 'error' &&
+                                'bg-red-100 text-red-700',
+                              e.mailbox.status === 'paused' &&
+                                'bg-amber-100 text-amber-700',
+                            )}
+                            title={`Письма подрядчикам уходят с ${e.mailbox.address}`}
+                          >
+                            {e.mailbox.status === 'ok' && (
+                              <SendHorizonal size={9} />
+                            )}
+                            {e.mailbox.status === 'error' && (
+                              <AlertTriangle size={9} />
+                            )}
+                            {e.mailbox.status === 'paused' && (
+                              <PauseCircle size={9} />
+                            )}
+                            свой ящик
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
                         {e.email && (
@@ -308,6 +373,13 @@ export default function EmployeesPage() {
             upsertRow(row);
             setSelected(null);
           }}
+          // Действия с рабочим ящиком карточку НЕ закрывают: нажав
+          // «Проверить», администратор должен увидеть результат, а не
+          // захлопнувшуюся карточку.
+          onRowUpdated={(row) => {
+            upsertRow(row);
+            setSelected(row);
+          }}
         />
       )}
 
@@ -335,12 +407,15 @@ function EmployeePanel({
   isSelf,
   onClose,
   onSaved,
+  onRowUpdated,
 }: {
   employee: EmployeeAdminRow;
   departments: DepartmentRow[];
   isSelf: boolean;
   onClose: () => void;
   onSaved: (row: EmployeeAdminRow) => void;
+  /** Обновить строку, оставив карточку открытой. */
+  onRowUpdated: (row: EmployeeAdminRow) => void;
 }) {
   // ── Данные сотрудника ──
   const [name, setName] = useState(employee.name);
@@ -383,6 +458,25 @@ function EmployeePanel({
     await navigator.clipboard.writeText(`Логин: ${login}\nПароль: ${password}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  };
+
+  // ── Рабочий ящик ──
+  const [mailboxBusy, setMailboxBusy] = useState(false);
+
+  /**
+   * Любое действие с ящиком. Строку сотрудника обновляем на месте: эндпоинты
+   * ящика возвращают только его состояние, а не всю карточку.
+   */
+  const mailboxAction = async (run: () => Promise<EmployeeMailbox | null>) => {
+    setMailboxBusy(true);
+    setError(null);
+    try {
+      onRowUpdated({ ...employee, mailbox: await run() });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setMailboxBusy(false);
+    }
   };
 
   /** Снятие ссылки отдельным действием: случайно стереть её сохранением нельзя. */
@@ -554,6 +648,128 @@ function EmployeePanel({
               Автором сделки в Битриксе становится владелец токена. Без личного
               вебхука сделки создаются от общего аккаунта. Ссылка проверяется
               при сохранении: чужую система не примет.
+            </p>
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Рабочий ящик для писем подрядчикам</Label>
+            {employee.mailbox ? (
+              <div
+                className={cn(
+                  'rounded-lg border px-2.5 py-2 space-y-1.5 text-xs',
+                  MAILBOX_LOOK[employee.mailbox.status].box,
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'font-medium',
+                      MAILBOX_LOOK[employee.mailbox.status].text,
+                    )}
+                  >
+                    {MAILBOX_LOOK[employee.mailbox.status].label}
+                  </span>
+                  <span className="text-muted-foreground truncate">
+                    {employee.mailbox.address}
+                  </span>
+                </div>
+
+                <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span>проверен {fmtWhen(employee.mailbox.verifiedAt)}</span>
+                  {/* Разошлось с проверкой — ящик молчит, и ответы подрядчиков
+                      в это время теряются. Главный сигнал на экране. */}
+                  <span>
+                    последний опрос {fmtWhen(employee.mailbox.lastSuccessAt)}
+                  </span>
+                  <span>писем за сутки {employee.mailbox.sentToday}</span>
+                  {employee.mailbox.unmatchedCount > 0 && (
+                    <span title="Письма подрядчиков, которые не удалось привязать к тендеру">
+                      не привязано {employee.mailbox.unmatchedCount}
+                    </span>
+                  )}
+                </div>
+
+                {/* Текст провайдера дословно: перефразировать его — потерять
+                    единственную подсказку о причине. */}
+                {employee.mailbox.lastError && (
+                  <p className="text-red-700 break-words">
+                    {employee.mailbox.lastError}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-3 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void mailboxAction(() =>
+                        employeeApi.checkMailbox(employee.id),
+                      )
+                    }
+                    disabled={mailboxBusy}
+                    className="text-muted-foreground hover:text-foreground"
+                    title="Перепроверить доступ. Эта же кнопка возвращает ящик в работу"
+                  >
+                    Проверить
+                  </button>
+                  {employee.mailbox.status !== 'paused' && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void mailboxAction(() =>
+                          employeeApi.pauseMailbox(employee.id),
+                        )
+                      }
+                      disabled={mailboxBusy}
+                      className="text-muted-foreground hover:text-amber-700"
+                      title="Письма пойдут с общего ящика, настройки сохранятся"
+                    >
+                      Отключить
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void mailboxAction(async () => {
+                        await employeeApi.unbindMailbox(employee.id);
+                        return null;
+                      })
+                    }
+                    disabled={mailboxBusy}
+                    className="ml-auto text-muted-foreground hover:text-red-600"
+                    title="Снять привязку. Переписка в карточках тендеров останется"
+                  >
+                    Снять
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  void mailboxAction(() => employeeApi.bindMailbox(employee.id))
+                }
+                disabled={
+                  mailboxBusy ||
+                  !email.trim() ||
+                  email.trim() !== (employee.email ?? '')
+                }
+                className="w-full rounded-lg border border-dashed px-2.5 py-2 text-xs text-muted-foreground hover:bg-muted/40 disabled:opacity-50"
+              >
+                {mailboxBusy
+                  ? 'Проверяем доступ…'
+                  : !employee.email
+                    ? 'Сначала укажите Email сотрудника'
+                    : email.trim() !== employee.email
+                      ? 'Сначала сохраните правку Email'
+                      : `Привязать ящик ${employee.email}`}
+              </button>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Письма подрядчикам по его тендерам уходят с этого адреса, и ответы
+              читаются из него же. Без ящика письма идут с общего адреса. Доступ
+              проверяется до сохранения: на ящик придёт пробное письмо, а ящик,
+              из которого нельзя читать, система не примет. Адрес берётся из
+              поля «Email» — сначала сохраните его правку.
             </p>
           </div>
 
