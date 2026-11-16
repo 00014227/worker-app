@@ -664,6 +664,15 @@ export interface TenderBidRow {
   receivedAt: string;
 }
 
+/** Файл, приложенный к запросу ставок: спецификация, схема погрузки и т. п. */
+export interface TenderAttachment {
+  id: string;
+  name: string;
+  size: number;
+  mime: string | null;
+  createdAt: string;
+}
+
 export interface TenderDetail {
   id: string;
   orderId: string | null;
@@ -703,6 +712,8 @@ export interface TenderDetail {
   /** Непусто = раунд улучшения уже проводился (он один). */
   improvementRequestedAt: string | null;
   improvementDeadline: string | null;
+  /** Файлы с деталями перевозки — уходят каждому подрядчику с приглашением. */
+  attachments?: TenderAttachment[];
   createdAt: string;
   updatedAt: string;
   invites: TenderInviteRow[];
@@ -1723,6 +1734,49 @@ export const tenderApi = {
         );
       }
       return res.json();
+    },
+    /**
+     * Приложить к запросу файл с деталями перевозки. Уйдёт каждому подрядчику
+     * вместе с приглашением.
+     */
+    async addAttachment(
+      tenderId: string,
+      file: File,
+    ): Promise<TenderAttachment> {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/worker/tenders/${tenderId}/attachments`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: form,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const raw = body?.message ?? body?.error;
+        throw new Error(
+          Array.isArray(raw)
+            ? raw.join('; ')
+            : typeof raw === 'string'
+              ? raw
+              : 'Не удалось приложить файл',
+        );
+      }
+      return res.json();
+    },
+    attachments(tenderId: string): Promise<TenderAttachment[]> {
+      return req<TenderAttachment[]>(`/worker/tenders/${tenderId}/attachments`);
+    },
+    removeAttachment(
+      tenderId: string,
+      attachmentId: string,
+    ): Promise<{ ok: boolean }> {
+      return req(`/worker/tenders/${tenderId}/attachments/${attachmentId}`, {
+        method: 'DELETE',
+      });
+    },
+    /** Ссылка на скачивание приложенного файла. */
+    attachmentUrl(attachmentId: string): string {
+      return `/api/worker/tenders/attachments/${attachmentId}/file`;
     },
     /** Логист пишет подрядчику вручную. Возвращает обновлённую переписку. */
     sendSupplierMessage(

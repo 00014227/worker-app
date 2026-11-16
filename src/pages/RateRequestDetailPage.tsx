@@ -17,6 +17,7 @@ import {
   ChevronRight,
   TrendingDown,
   BarChart3,
+  Paperclip,
 } from 'lucide-react';
 import {
   tenderApi,
@@ -230,6 +231,7 @@ export default function RateRequestDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   /** Ответ, у которого раскрыт исходный текст сообщения. */
   const [openRawId, setOpenRawId] = useState<string | null>(null);
@@ -250,6 +252,14 @@ export default function RateRequestDetailPage() {
   /** Из уведомления пришли «в переписку с подрядчиком» — открываем её сразу. */
   const requestedChatId = (location.state as { openChatWith?: string } | null)
     ?.openChatWith;
+  /**
+   * Запрос создан, но часть файлов не приложилась. Сам запрос при этом целый,
+   * поэтому мастер не стал его отменять и передал список сюда — здесь файл
+   * можно приложить заново, не создавая второй такой же запрос.
+   */
+  const attachmentsFailed = (
+    location.state as { attachmentsFailed?: string[] } | null
+  )?.attachmentsFailed;
 
   const load = useCallback(() => {
     if (!id) return;
@@ -383,6 +393,37 @@ export default function RateRequestDetailPage() {
     }
   };
 
+  /** Приложить файлы к запросу. Каждый уходит независимо — один сбой не рвёт остальные. */
+  const addAttachments = async (picked: File[]) => {
+    if (!id || !picked.length) return;
+    setUploading(true);
+    setError(null);
+    const failed: string[] = [];
+    for (const f of picked) {
+      try {
+        await tenderApi.tenders.addAttachment(id, f);
+      } catch (e) {
+        failed.push(`${f.name} (${(e as Error).message})`);
+      }
+    }
+    if (failed.length) setError(`Не приложились: ${failed.join('; ')}`);
+    // load() намеренно не ждём: он объявлен без возврата промиса, потому что
+    // подаётся в useEffect, а эффект не вправе возвращать ничего, кроме уборки.
+    load();
+    setUploading(false);
+  };
+
+  const removeAttachment = async (attachmentId: string) => {
+    if (!id) return;
+    setError(null);
+    try {
+      await tenderApi.tenders.removeAttachment(id, attachmentId);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const send = async () => {
     if (!id) return;
     // Счётчик считаем здесь, а не берём pendingCount ниже: тот объявлен после
@@ -485,6 +526,12 @@ export default function RateRequestDetailPage() {
   // растёт сам по событиям из сокета.
   const sendingInBackground = queuedCount > 0 && sentCount > 0;
   const decided = tender.status === 'decided';
+  /**
+   * Файлы правятся только до рассылки. После неё часть подрядчиков уже получила
+   * один комплект, и правка развела бы запрос в двух версиях — незаметно для
+   * логиста. Отдельному подрядчику файл можно дослать из чата с ним.
+   */
+  const isSent = tender.status !== 'draft';
   const awardPending = tender.status === 'award_pending';
   // Торг возможен один раз и только пока есть с чем работать.
   const pricedCount = tender.replies.filter(
@@ -515,6 +562,17 @@ export default function RateRequestDetailPage() {
           {error}
         </div>
       )}
+
+      {/* Считаем прямо из состояния навигации, а не кладём в useState через
+          эффект: лишнее состояние здесь дало бы каскадный рендер и ничего не
+          добавило — текст целиком выводится из того, с чем сюда пришли. */}
+      {attachmentsFailed?.length ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Запрос создан, но не приложились файлы:{' '}
+          <b>{attachmentsFailed.join(', ')}</b>. Приложите их здесь — повторная
+          отправка формы создала бы второй такой же запрос.
+        </div>
+      ) : null}
 
       {/* Header card */}
       <Card>
@@ -620,6 +678,56 @@ export default function RateRequestDetailPage() {
                   </span>
                 )}
               </div>
+
+              {/* Файлы с деталями перевозки — уходят каждому подрядчику */}
+              {(tender.attachments?.length || !isSent) && (
+                <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                  {tender.attachments?.map((a) => (
+                    <span
+                      key={a.id}
+                      className="inline-flex items-center gap-1.5 text-xs border rounded-lg pl-2 pr-1 py-1"
+                    >
+                      <Paperclip size={11} className="text-muted-foreground" />
+                      <a
+                        href={tenderApi.tenders.attachmentUrl(a.id)}
+                        className="hover:underline max-w-[220px] truncate"
+                        title={a.name}
+                      >
+                        {a.name}
+                      </a>
+                      {!isSent && (
+                        <button
+                          onClick={() => removeAttachment(a.id)}
+                          className="text-muted-foreground hover:text-foreground px-0.5"
+                          title="Убрать файл"
+                        >
+                          <X size={11} />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {!isSent && (
+                    <label className="inline-flex items-center gap-1.5 text-xs border rounded-lg px-2 py-1 cursor-pointer hover:bg-muted/50 transition-colors">
+                      {uploading ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <Paperclip size={11} />
+                      )}
+                      Прикрепить файл
+                      <input
+                        type="file"
+                        multiple
+                        className="hidden"
+                        disabled={uploading}
+                        onChange={(e) => {
+                          addAttachments([...(e.target.files ?? [])]);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {sendingInBackground && (
