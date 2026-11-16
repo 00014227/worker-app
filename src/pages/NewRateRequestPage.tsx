@@ -11,6 +11,7 @@ import {
   Wand2,
   BarChart3,
   Download,
+  Paperclip,
   X,
 } from 'lucide-react';
 import { matchSuppliers } from '../lib/contractor-matcher';
@@ -40,6 +41,15 @@ const MODES: TenderMode[] = ['auto', 'rail', 'air', 'sea'];
 const CURRENCIES = ['USD', 'EUR', 'RUB', 'UZS', 'KZT', 'CNY'];
 /** Repeat calculations should not start from scratch — remember the last input. */
 const DRAFT_KEY = 'transasia.tender.draft';
+
+/** Столько же пропускает бэкенд (MAX_MEDIA_BYTES) — больше мессенджер не примет. */
+const MAX_FILE_MB = 20;
+const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
+
+const fmtSize = (bytes: number): string =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} МБ`
+    : `${Math.max(1, Math.round(bytes / 1024))} КБ`;
 
 type FormState = Omit<
   CreateTenderInput,
@@ -114,6 +124,11 @@ export default function NewRateRequestPage() {
   const autoPicked = useRef<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  /**
+   * Файлы живут в состоянии до создания запроса: приложить их можно только к
+   * существующему запросу, а он создаётся в самом конце мастера.
+   */
+  const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   /** Шаг 1 — параметры запроса, шаг 2 — подбор подрядчиков. */
@@ -421,7 +436,21 @@ export default function NewRateRequestPage() {
         supplierIds: selected.size ? [...selected] : undefined,
       };
       const tender = await tenderApi.tenders.create(payload);
-      navigate(`/rate-requests/${tender.id}`);
+      // Файлы грузим после создания: приложить их можно только к существующему
+      // запросу. Сбой на файле не отменяет сам запрос — иначе повторная отправка
+      // формы создала бы второй такой же. Поэтому ведём на карточку запроса и
+      // там говорим, что именно не приложилось: оттуда это чинится одной кнопкой.
+      const failedFiles: string[] = [];
+      for (const f of files) {
+        try {
+          await tenderApi.tenders.addAttachment(tender.id, f);
+        } catch {
+          failedFiles.push(f.name);
+        }
+      }
+      navigate(`/rate-requests/${tender.id}`, {
+        state: failedFiles.length ? { attachmentsFailed: failedFiles } : undefined,
+      });
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
@@ -447,6 +476,7 @@ export default function NewRateRequestPage() {
         <button
           onClick={() => {
             setForm(emptyForm);
+            setFiles([]);
             setSelected(new Set());
             setDismissed(new Set());
             autoPicked.current = new Set();
@@ -894,6 +924,83 @@ export default function NewRateRequestPage() {
                     min={0}
                   />
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Файлы с деталями перевозки */}
+          <Card>
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-sm">Файлы</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-1 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Детали перевозки, которые не укладываются в текст: спецификация
+                груза, схема погрузки, список мест. Уйдут каждому подрядчику
+                вместе с запросом — в письмо вложением, в Telegram документом.
+              </p>
+
+              {files.length > 0 && (
+                <ul className="space-y-1.5">
+                  {files.map((f, i) => (
+                    <li
+                      key={`${f.name}-${i}`}
+                      className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2"
+                    >
+                      <Paperclip
+                        size={14}
+                        className="text-muted-foreground shrink-0"
+                      />
+                      <span className="truncate flex-1">{f.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {fmtSize(f.size)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFiles((prev) => prev.filter((_, j) => j !== i))
+                        }
+                        className="text-muted-foreground hover:text-foreground shrink-0"
+                        title="Убрать файл"
+                      >
+                        <X size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer hover:bg-muted/50 transition-colors">
+                  <Paperclip size={14} />
+                  Прикрепить файл
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = [...(e.target.files ?? [])];
+                      const tooBig = picked.filter((f) => f.size > MAX_FILE_BYTES);
+                      if (tooBig.length) {
+                        setError(
+                          `Больше ${MAX_FILE_MB} МБ мессенджер не примет: ${tooBig
+                            .map((f) => f.name)
+                            .join(', ')}`,
+                        );
+                      }
+                      setFiles((prev) => [
+                        ...prev,
+                        ...picked.filter((f) => f.size <= MAX_FILE_BYTES),
+                      ]);
+                      // Сбрасываем input: иначе повторный выбор того же файла
+                      // не вызовет onChange, и он просто не приложится.
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                <span className="text-xs text-muted-foreground">
+                  До {MAX_FILE_MB} МБ на файл
+                </span>
               </div>
             </CardContent>
           </Card>
