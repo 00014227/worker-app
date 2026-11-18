@@ -1429,7 +1429,10 @@ export interface DebtorDocument {
   contractNumber: string | null;
   /** YYYY-MM-DD; null — в 1С нет акта или срока, письмом не отправляется. */
   docDate: string | null;
-  /** Срок по договору. */
+  /** От какого дня считается срок оплаты (YYYY-MM-DD). */
+  termStart: string | null;
+  termStartSource: DebtTermStartSource | null;
+  /** Срок по договору — от termStart. null — срока нет или клиент отказался подписать акт. */
   dueDate: string | null;
   /** Действующий срок: после отсрочки — новый. */
   deadline: string | null;
@@ -1445,9 +1448,27 @@ export interface DebtorDocument {
   /** В каких днях срок: банковские и рабочие считаются по рабочим дням. */
   termUnit: 'calendar' | 'working' | 'banking' | null;
   dueDateSource: 'contract' | 'payment_term' | 'none' | null;
+  /** Акт в Didox; null — не проверяли (Didox не настроен). */
+  didoxStatus: DidoxActStatus | null;
+  /** Номер в Didox — свой, не как в 1С. */
+  didoxNumber: string | null;
+  /** Когда акт отправили клиенту в Didox, YYYY-MM-DD. */
+  didoxSentOn: string | null;
+  /** Когда клиент подписал акт в Didox, YYYY-MM-DD. */
+  acceptedOn: string | null;
   /** Письма, уже ушедшие по этому акту (номера этапов). */
   stagesDone: number[];
 }
+
+/**
+ * От чего считается срок оплаты: signed — от подписи клиента в Didox, deemed — акт
+ * не подписан, считается принятым на 10-й день после отправки, act_date — от даты акта.
+ */
+export type DebtTermStartSource = 'signed' | 'deemed' | 'act_date';
+
+/** unmatched — в Didox нашлось несколько похожих актов, автоматически не связали. */
+export type DidoxActStatus =
+  'signed' | 'pending' | 'rejected' | 'not_found' | 'unmatched';
 
 export interface DebtorLetter {
   id: string;
@@ -1484,7 +1505,8 @@ export interface DebtHoliday {
 }
 
 /** Почему письмо не ушло. */
-export type DebtStopReason = 'no_email' | 'dispute' | 'claim' | 'no_term';
+export type DebtStopReason =
+  'no_email' | 'dispute' | 'claim' | 'no_term' | 'didox_rejected';
 
 export interface DunningRunResult {
   mode: DebtMailMode;
