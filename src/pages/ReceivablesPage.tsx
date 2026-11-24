@@ -5,6 +5,7 @@ import {
   type DebtStopReason,
   type DebtorRow,
   type DunningRunResult,
+  type DunningRunState,
 } from '../lib/api';
 import { getUser } from '../lib/auth';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,7 @@ import {
 import { DebtorsTable } from '@/components/receivables/DebtorsTable';
 import { DebtorPanel } from '@/components/receivables/DebtorPanel';
 import { HolidaysPanel } from '@/components/receivables/HolidaysPanel';
+import { useManualRun } from '@/components/receivables/useManualRun';
 
 type ReceivablesList = Awaited<ReturnType<typeof receivablesApi.list>>;
 
@@ -43,6 +45,19 @@ function describeRun(result: DunningRunResult): string {
   if (result.failed)
     parts.push(`не ушло: ${result.failed} — причина в карточке клиента`);
   return parts.join(' · ');
+}
+
+/** Итог прогона по кнопке — для плашки над таблицей. */
+function runNotice(
+  finished: Extract<DunningRunState, { status: 'done' | 'failed' }>,
+) {
+  if (finished.status === 'failed') {
+    return { isOk: false, text: `Прогон не удался: ${finished.error}` };
+  }
+  return {
+    isOk: finished.result.failed === 0,
+    text: describeRun(finished.result),
+  };
 }
 
 const chipClass = (isActive: boolean) =>
@@ -67,12 +82,7 @@ export default function ReceivablesPage() {
   /** Этап из сводки; 0 — «писем ещё не было», null — все. */
   const [stageFilter, setStageFilter] = useState<number | null>(null);
   const [selected, setSelected] = useState<DebtorRow | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
   const [showHolidays, setShowHolidays] = useState(false);
-  const [runResult, setRunResult] = useState<{
-    isOk: boolean;
-    text: string;
-  } | null>(null);
 
   // Состояние меняем только в колбэках запроса — эффект при открытии
   // страницы не должен синхронно дёргать setState (лишний рендер).
@@ -96,6 +106,10 @@ export default function ReceivablesPage() {
     setIsLoading(true);
     fetchList();
   };
+
+  // Прогон идёт на сервере в фоне; закончился — обновляем таблицу.
+  const manualRun = useManualRun({ canRun: canAct, onFinished: reload });
+  const runResult = manualRun.finished ? runNotice(manualRun.finished) : null;
 
   const allRows = useMemo(() => data?.rows ?? [], [data]);
   const rows = useMemo(() => {
@@ -125,23 +139,12 @@ export default function ReceivablesPage() {
     setStageFilter(null);
   };
 
-  const runNow = async () => {
+  const runNow = () => {
     if (!data) return;
     const isConfirmed = window.confirm(
-      `Прогнать рассылку сейчас, не дожидаясь расписания?\n\nСначала подтянем свежие долги из 1С — это до минуты. Новые письма ${RUN_DESTINATION[data.mode]}.`,
+      `Прогнать рассылку сейчас, не дожидаясь расписания?\n\nСначала подтянем свежие долги из 1С и статусы Didox — около минуты. Новые письма ${RUN_DESTINATION[data.mode]}.`,
     );
-    if (!isConfirmed) return;
-    setIsRunning(true);
-    setRunResult(null);
-    try {
-      const result = await receivablesApi.run();
-      setRunResult({ isOk: result.failed === 0, text: describeRun(result) });
-      reload();
-    } catch (runError) {
-      setRunResult({ isOk: false, text: (runError as Error).message });
-    } finally {
-      setIsRunning(false);
-    }
+    if (isConfirmed) manualRun.start();
   };
 
   const emptyText = isLoading
@@ -183,15 +186,15 @@ export default function ReceivablesPage() {
             <button
               type="button"
               onClick={runNow}
-              disabled={isRunning || !data}
+              disabled={manualRun.isRunning || !data}
               className={buttonClass.primary}
             >
-              {isRunning ? (
+              {manualRun.isRunning ? (
                 <Loader2 size={15} className="animate-spin" />
               ) : (
                 <Play size={15} />
               )}
-              Прогнать сейчас
+              {manualRun.isRunning ? 'Прогон идёт…' : 'Прогнать сейчас'}
             </button>
           )}
         </div>
@@ -212,11 +215,18 @@ export default function ReceivablesPage() {
           (боевой режим) письма не уйдут; тестовые и режим проверки работают.
         </Notice>
       )}
+      {manualRun.isRunning && (
+        <Notice tone="blue">
+          Прогон идёт: 1С, Didox, затем письма — около минуты. Страницу можно
+          закрыть: прогон дойдёт до конца на сервере.
+        </Notice>
+      )}
       {runResult && (
         <Notice tone={runResult.isOk ? 'green' : 'red'}>
           {runResult.text}
         </Notice>
       )}
+      {manualRun.error && <Notice tone="red">{manualRun.error}</Notice>}
       {error && <Notice tone="red">{error}</Notice>}
 
       {data && allRows.length > 0 && (
