@@ -951,6 +951,14 @@ export interface ConversationMessage {
   direction: 'outgoing' | 'incoming';
   text: string;
   subject: string | null;
+  /**
+   * Адрес, с которого пришло письмо. У Telegram его нет.
+   *
+   * У подрядчика пишет то один сотрудник, то другой, и по тексту это не
+   * всегда понятно: 24.11.2026 ставку YFH Freight прислала Celine с третьего
+   * адреса, которого не было в карточке.
+   */
+  fromAddr: string | null;
   status: string | null;
   createdAt: string;
   /** voice | photo | document — пусто у обычного текстового сообщения. */
