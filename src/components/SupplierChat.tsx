@@ -123,12 +123,16 @@ export default function SupplierChat({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/30 flex justify-end"
+      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-6"
       onClick={onClose}
     >
       <div
         className={cn(
-          'w-full max-w-md h-full bg-background shadow-xl flex flex-col relative',
+          // Окно по центру и широкое: логисты читают здесь письма целиком, с
+          // цитатами и таблицами ставок, а в прежней боковой шторке на 448px
+          // такой текст рвался на узкие столбики.
+          'w-full max-w-4xl h-[92vh] sm:h-[85vh] rounded-xl bg-background shadow-xl',
+          'flex flex-col relative overflow-hidden',
           dragOver && 'ring-2 ring-primary ring-inset',
         )}
         onClick={(e) => e.stopPropagation()}
@@ -190,14 +194,37 @@ export default function SupplierChat({
                     : 'bg-muted',
                 )}
               >
-                <div className="flex items-center gap-1.5 mb-1">
+                <div className="flex items-center gap-1.5 mb-1 min-w-0">
                   {m.channel === 'email' ? (
-                    <Mail size={11} className="text-muted-foreground" />
+                    <Mail
+                      size={11}
+                      className="text-muted-foreground shrink-0"
+                    />
                   ) : (
-                    <Send size={11} className="text-muted-foreground" />
+                    <Send
+                      size={11}
+                      className="text-muted-foreground shrink-0"
+                    />
+                  )}
+                  {/*
+                    Адрес отправителя у входящих. У подрядчика пишет то один
+                    сотрудник, то другой, и по тексту это не всегда видно:
+                    24.11.2026 ставку YFH Freight прислала Celine с третьего
+                    адреса, которого не было в карточке, и понять это было негде.
+                  */}
+                  {m.direction === 'incoming' && m.fromAddr && (
+                    <span
+                      className="text-[11px] font-medium truncate max-w-[60%] shrink-0"
+                      title={m.fromAddr}
+                    >
+                      {m.fromAddr}
+                    </span>
                   )}
                   {m.subject && (
-                    <span className="text-[10px] text-muted-foreground truncate">
+                    <span
+                      className="text-[10px] text-muted-foreground truncate"
+                      title={m.subject}
+                    >
                       {m.subject}
                     </span>
                   )}
