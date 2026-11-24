@@ -1525,6 +1525,18 @@ export interface DunningRunResult {
   }[];
 }
 
+/** Прогон по кнопке идёт на сервере в фоне (около минуты): статус опрашиваем. */
+export type DunningRunState =
+  | { status: 'idle' }
+  | { status: 'running'; startedAt: string }
+  | {
+      status: 'done';
+      startedAt: string;
+      finishedAt: string;
+      result: DunningRunResult;
+    }
+  | { status: 'failed'; startedAt: string; finishedAt: string; error: string };
+
 /**
  * Дебиторка: смотреть и ставить отсрочку — всем; прогонять и ставить стопы —
  * юристам и админам.
@@ -1565,8 +1577,12 @@ export const receivablesApi = {
       method: 'POST',
     });
   },
-  run(): Promise<DunningRunResult> {
+  /** Запустить прогон: сервер отвечает сразу, итог — через runState(). */
+  run(): Promise<DunningRunState> {
     return req('/worker/receivables/run', { method: 'POST' });
+  },
+  runState(): Promise<DunningRunState> {
+    return req('/worker/receivables/run');
   },
   stop(
     customerId: string,
