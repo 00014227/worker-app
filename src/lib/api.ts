@@ -1375,6 +1375,8 @@ export interface DebtorRow {
   overdue: MoneyByCurrency[];
   /** Долг без срока: в 1С нет акта или срока оплаты — письмом не отправляется. */
   undated: MoneyByCurrency[];
+  /** Долг по актам без счёта-фактуры в Didox или с отказом — письмом не отправляется. */
+  noInvoice: MoneyByCurrency[];
   /** Наши юрлица, которым должен клиент; от каждого — своё письмо. */
   organizations: string[];
   lastLetter: {
@@ -1391,17 +1393,21 @@ export interface DebtorRow {
 }
 
 /** Стоп для писем клиенту. */
-export type DebtStopKind = 'dispute' | 'claim';
+/** Стоп для писем: спор, претензия или пауза рассылки (бессрочно или до даты). */
+export type DebtStopKind = 'dispute' | 'claim' | 'pause';
 
 export const STOP_KIND_LABELS: Record<DebtStopKind, string> = {
   dispute: 'Спор по сумме',
   claim: 'Претензия направлена',
+  pause: 'Пауза рассылки',
 };
 
 export interface DebtorStop {
   id: string;
   kind: DebtStopKind;
   comment: string | null;
+  /** Пауза — до какого дня включительно (YYYY-MM-DD); null — бессрочно. */
+  until: string | null;
   createdAt: string;
   createdBy: string | null;
   cancelledAt: string | null;
@@ -1474,9 +1480,12 @@ export interface DebtorDocument {
  */
 export type DebtTermStartSource = 'signed' | 'deemed' | 'act_date';
 
-/** unmatched — в Didox нашлось несколько похожих актов, автоматически не связали. */
+/**
+ * Счёт-фактура в Didox (с 25.11 — по ней, а не по акту). unmatched — нашлось несколько
+ * похожих, автоматически не связали; no_inn — в 1С у клиента нет верного ИНН.
+ */
 export type DidoxActStatus =
-  'signed' | 'pending' | 'rejected' | 'not_found' | 'unmatched';
+  'signed' | 'pending' | 'rejected' | 'not_found' | 'unmatched' | 'no_inn';
 
 export interface DebtorLetter {
   id: string;
@@ -1514,7 +1523,13 @@ export interface DebtHoliday {
 
 /** Почему письмо не ушло. */
 export type DebtStopReason =
-  'no_email' | 'dispute' | 'claim' | 'no_term' | 'didox_rejected';
+  | 'no_email'
+  | 'dispute'
+  | 'claim'
+  | 'paused'
+  | 'no_term'
+  | 'didox_rejected'
+  | 'no_invoice';
 
 export interface DunningRunResult {
   mode: DebtMailMode;
@@ -1594,7 +1609,7 @@ export const receivablesApi = {
   },
   stop(
     customerId: string,
-    input: { kind: DebtStopKind; comment?: string },
+    input: { kind: DebtStopKind; comment?: string; until?: string },
   ): Promise<{ id: string }> {
     return req(`/worker/receivables/${customerId}/stops`, {
       method: 'POST',
