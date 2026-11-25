@@ -117,7 +117,11 @@ function DebtorTableRow({
               </Pill>
             )}
             {row.stops.map((kind) => (
-              <Pill key={kind} tone="red" title="Автоматических писем нет">
+              <Pill
+                key={kind}
+                tone={kind === 'pause' ? 'amber' : 'red'}
+                title="Автоматических писем нет"
+              >
                 <Ban size={12} /> {STOP_KIND_LABELS[kind].toLowerCase()}
               </Pill>
             ))}
@@ -153,6 +157,14 @@ function DebtorTableRow({
             title="В 1С нет акта или срока оплаты: срок не угадываем, письмом не отправляется"
           >
             без срока {formatMoneyList(row.undated)}
+          </div>
+        )}
+        {row.noInvoice.length > 0 && (
+          <div
+            className="text-[12px] text-red-700"
+            title="По этим актам нет счёта-фактуры в Didox или клиент отказался её подписать: письмом не отправляется, случай в ежедневном отчёте"
+          >
+            без с/ф в Didox {formatMoneyList(row.noInvoice)}
           </div>
         )}
       </td>

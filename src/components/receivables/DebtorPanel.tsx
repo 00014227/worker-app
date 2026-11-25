@@ -8,6 +8,7 @@ import {
   type DebtStage,
   type DebtorDeferral,
   type DebtorDocument,
+  type DidoxActStatus,
   type DebtorLetter,
   type DebtorRow,
   type DebtorStop,
@@ -154,10 +155,22 @@ export function DebtorPanel({
   );
 }
 
+/** Статусы Didox, при которых срок не считаем и письмо по акту не шлём. */
+const DIDOX_BLOCKING: DidoxActStatus[] = [
+  'rejected',
+  'not_found',
+  'unmatched',
+  'no_inn',
+];
+
 function ActCard({ document }: { document: DebtorDocument }) {
   const didox = didoxBadge(document);
-  const isRejected = document.didoxStatus === 'rejected' && !document.dueDate;
   const { dueDate, deadline, daysOverdue } = document;
+  // Срока нет из-за Didox (отказ или нет счёта-фактуры) — причину уже объясняет метка выше.
+  const isBlockedByDidox =
+    dueDate === null &&
+    document.didoxStatus !== null &&
+    DIDOX_BLOCKING.includes(document.didoxStatus);
   const hasTerm = dueDate !== null && deadline !== null && daysOverdue !== null;
 
   return (
@@ -229,7 +242,7 @@ function ActCard({ document }: { document: DebtorDocument }) {
           </span>
         </div>
       ) : (
-        !isRejected && (
+        !isBlockedByDidox && (
           <div
             className="rounded-[10px] bg-[#F4F6FA] px-3 py-2 text-[13px] text-muted-foreground"
             title="Письмом не отправляется, случай — в ежедневном отчёте."
