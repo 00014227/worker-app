@@ -69,7 +69,9 @@ export const STOP_REASON_LABELS: Record<DebtStopReason, string> = {
   dispute: 'спор по сумме',
   claim: 'претензия направлена',
   no_term: 'в 1С нет срока или даты АВР',
-  didox_rejected: 'клиент отказался подписать акт в Didox',
+  paused: 'рассылка на паузе',
+  didox_rejected: 'клиент отказался подписать счёт-фактуру в Didox',
+  no_invoice: 'нет счёта-фактуры в Didox',
 };
 
 export const formatMoney = (money: MoneyByCurrency) =>
@@ -179,7 +181,7 @@ export function termLabel(document: DebtorDocument): string {
 }
 
 /**
- * Что с актом в Didox — одной меткой и пояснением. null — Didox не проверяли
+ * Что со счётом-фактурой в Didox — одной меткой и пояснением. null — Didox не проверяли
  * (не настроен): срок, как и раньше, от даты акта, метку не показываем.
  */
 export function didoxBadge(
@@ -188,24 +190,26 @@ export function didoxBadge(
   const status: DidoxActStatus | null = document.didoxStatus;
   if (!status) return null;
   const sent = document.didoxSentOn
-    ? `отправлен ${formatDate(document.didoxSentOn)}`
+    ? `отправлена ${formatDate(document.didoxSentOn)}`
     : '';
+  const noLetter =
+    'срок не считаем, письмом не отправляется, случай в ежедневном отчёте';
   switch (status) {
     case 'signed':
       return {
         label: document.acceptedOn
-          ? `Подписан ${formatShortDate(document.acceptedOn)}`
-          : 'Подписан',
+          ? `С/ф подписана ${formatShortDate(document.acceptedOn)}`
+          : 'С/ф подписана',
         hint: [sent, 'срок оплаты — от дня подписи'].filter(Boolean).join(', '),
         tone: 'green',
       };
     case 'pending':
       return {
-        label: 'Ждёт подписи',
+        label: 'С/ф ждёт подписи',
         hint: [
           sent,
           document.termStart &&
-            `не подпишет — считается принятым ${formatDate(document.termStart)}`,
+            `не подпишет — считается принятой ${formatDate(document.termStart)}`,
         ]
           .filter(Boolean)
           .join(', '),
@@ -213,21 +217,31 @@ export function didoxBadge(
       };
     case 'rejected':
       return {
-        label: 'Отказ в Didox',
-        hint: 'клиент отказался подписать — это спор: письмом не отправляется, случай в ежедневном отчёте',
+        label: 'Отказ по с/ф',
+        hint: 'клиент отказался подписать счёт-фактуру — это спор: письмом не отправляется, случай в ежедневном отчёте',
         tone: 'red',
       };
     case 'not_found':
       return {
-        label: 'Нет в Didox',
-        hint: 'акт не нашли в Didox — срок от даты акта',
-        tone: 'neutral',
+        label: 'Нет с/ф в Didox',
+        hint: `счёт-фактуру к акту в Didox не нашли — ${noLetter}`,
+        tone: 'red',
       };
     case 'unmatched':
       return {
-        label: 'Не сопоставлен',
-        hint: 'в Didox несколько похожих актов, автоматически не связали — срок от даты акта',
-        tone: 'neutral',
+        label: 'С/ф не сопоставлена',
+        hint: `в Didox несколько похожих счетов-фактур, автоматически не связали — ${noLetter}`,
+        tone: 'red',
+      };
+    case 'no_inn':
+      return {
+        label: 'Нет ИНН для Didox',
+        hint: `в 1С у клиента нет верного ИНН, счёт-фактуру не найти — ${noLetter}`,
+        tone: 'red',
       };
   }
 }
+
+/** Пауза рассылки: «до 15.12.2026» или «бессрочно». */
+export const pauseLabel = (until: string | null) =>
+  until ? `до ${formatDate(until)}` : 'бессрочно';

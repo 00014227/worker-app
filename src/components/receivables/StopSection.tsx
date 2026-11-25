@@ -8,15 +8,34 @@ import {
 } from '@/lib/api';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { formatDateTime } from './receivables-meta';
+import {
+  addDaysYmd,
+  formatDateTime,
+  pauseLabel,
+  todayYmd,
+} from './receivables-meta';
 import { Panel, SectionTitle, buttonClass } from './receivables-ui';
 import { HistoryList } from './HistoryList';
 
 /**
- * Стоп для писем клиенту: спор по сумме или претензия уже направлена. Пока стоп
- * стоит, автоматических писем нет, случай попадает в ежедневный отчёт. Ставят и
- * снимают юристы и админы; история остаётся.
+ * Стоп для писем клиенту: спор по сумме, претензия направлена или пауза рассылки
+ * (клиент всегда платит с задержкой — бессрочно или до даты). Пока стоп стоит,
+ * автоматических писем нет, случай попадает в ежедневный отчёт. Ставят и снимают
+ * юристы и админы; история остаётся.
  */
+
+/** Быстрый выбор срока паузы: дней от сегодня. */
+const PAUSE_PRESETS = [
+  { label: '1 мес.', days: 30 },
+  { label: '3 мес.', days: 90 },
+];
+
+const COMMENT_PLACEHOLDER: Record<DebtStopKind, string> = {
+  dispute: 'Что оспаривает клиент: «не согласен с актом TL-00000440»',
+  claim: 'Когда и кем направлена претензия',
+  pause:
+    'Почему не пишем: «всегда платит в конце месяца, договорились с КАМом»',
+};
 export function StopSection({
   customerId,
   stops,
@@ -32,6 +51,8 @@ export function StopSection({
   const past = stops.filter((stop) => !stop.active);
   const [kind, setKind] = useState<DebtStopKind | null>(null);
   const [comment, setComment] = useState('');
+  /** Пауза до этого дня включительно; пусто — бессрочно. */
+  const [pauseUntil, setPauseUntil] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const freeKinds = (Object.keys(STOP_KIND_LABELS) as DebtStopKind[]).filter(
@@ -46,9 +67,11 @@ export function StopSection({
       await receivablesApi.stop(customerId, {
         kind,
         comment: comment.trim() || undefined,
+        until: kind === 'pause' && pauseUntil ? pauseUntil : undefined,
       });
       setKind(null);
       setComment('');
+      setPauseUntil('');
       onChanged();
     } catch (saveError) {
       setError((saveError as Error).message);
@@ -60,7 +83,9 @@ export function StopSection({
   const cancelStop = async (stop: DebtorStop) => {
     if (
       !window.confirm(
-        `Снять «${STOP_KIND_LABELS[stop.kind]}»? Письма 3–5 догонят при следующем прогоне.`,
+        stop.kind === 'pause'
+          ? 'Снять паузу? Со следующего прогона всё пересчитается по свежим данным 1С и Didox, клиенту уйдёт одно письмо текущего этапа.'
+          : `Снять «${STOP_KIND_LABELS[stop.kind]}»? Письма 3–5 догонят при следующем прогоне.`,
       )
     )
       return;
@@ -82,11 +107,18 @@ export function StopSection({
       {active.map((stop) => (
         <Panel
           key={stop.id}
-          className="space-y-1.5 border-red-200 bg-red-50/60 text-[13px]"
+          className={
+            stop.kind === 'pause'
+              ? 'space-y-1.5 border-amber-200 bg-amber-50/60 text-[13px]'
+              : 'space-y-1.5 border-red-200 bg-red-50/60 text-[13px]'
+          }
         >
-          <div className="flex items-center gap-1.5 font-semibold text-red-900">
-            <Ban size={15} /> {STOP_KIND_LABELS[stop.kind]} — автоматических
-            писем нет
+          <div
+            className={`flex items-center gap-1.5 font-semibold ${stop.kind === 'pause' ? 'text-amber-900' : 'text-red-900'}`}
+          >
+            <Ban size={15} /> {STOP_KIND_LABELS[stop.kind]}
+            {stop.kind === 'pause' && ` ${pauseLabel(stop.until)}`} —
+            автоматических писем нет
           </div>
           {stop.comment && (
             <div className="whitespace-pre-wrap">{stop.comment}</div>
@@ -127,6 +159,48 @@ export function StopSection({
       {kind && (
         <Panel className="space-y-3 text-[13px]">
           <div className="font-semibold">{STOP_KIND_LABELS[kind]}</div>
+          {kind === 'pause' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="pause-until" className="text-[13px]">
+                До какого дня (включительно)
+              </Label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input
+                  id="pause-until"
+                  type="date"
+                  value={pauseUntil}
+                  min={addDaysYmd(todayYmd(), 1)}
+                  onChange={(event) => setPauseUntil(event.target.value)}
+                  className="h-9 rounded-[9px] border border-border bg-card px-2.5 text-[14px]"
+                />
+                {PAUSE_PRESETS.map((preset) => (
+                  <button
+                    type="button"
+                    key={preset.days}
+                    onClick={() =>
+                      setPauseUntil(addDaysYmd(todayYmd(), preset.days))
+                    }
+                    className="h-8 rounded-full bg-[#E8ECF3] px-3 text-slate-700 hover:bg-[#DDE3EE]"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPauseUntil('')}
+                  aria-pressed={!pauseUntil}
+                  className={`h-8 rounded-full px-3 ${pauseUntil ? 'bg-[#E8ECF3] text-slate-700 hover:bg-[#DDE3EE]' : 'bg-primary text-primary-foreground'}`}
+                >
+                  Бессрочно
+                </button>
+              </div>
+              <div className="text-[12px] text-muted-foreground">
+                Пауза {pauseLabel(pauseUntil || null)}. Сняли или дата прошла —
+                всё пересчитается по свежим данным 1С и Didox, клиенту уйдёт
+                одно письмо текущего этапа.
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="stop-comment" className="text-[13px]">
               Комментарий
@@ -136,11 +210,7 @@ export function StopSection({
               value={comment}
               onChange={(event) => setComment(event.target.value)}
               maxLength={1000}
-              placeholder={
-                kind === 'dispute'
-                  ? 'Что оспаривает клиент: «не согласен с актом TL-00000440»'
-                  : 'Когда и кем направлена претензия'
-              }
+              placeholder={COMMENT_PLACEHOLDER[kind]}
               className="text-[13px] md:text-[13px]"
             />
           </div>
@@ -153,12 +223,13 @@ export function StopSection({
               className={buttonClass.primary}
             >
               {isSaving && <Loader2 size={14} className="animate-spin" />}
-              Поставить стоп
+              {kind === 'pause' ? 'Поставить паузу' : 'Поставить стоп'}
             </button>
             <button
               type="button"
               onClick={() => {
                 setKind(null);
+                setPauseUntil('');
                 setError(null);
               }}
               className={buttonClass.outline}
@@ -177,7 +248,7 @@ export function StopSection({
         title="снятые стопы"
         items={past.map((stop) => ({
           ...stop,
-          text: `${STOP_KIND_LABELS[stop.kind]}${stop.comment ? ` — ${stop.comment}` : ''}`,
+          text: `${STOP_KIND_LABELS[stop.kind]}${stop.kind === 'pause' ? ` ${pauseLabel(stop.until)}` : ''}${stop.comment ? ` — ${stop.comment}` : ''}`,
         }))}
       />
     </section>
