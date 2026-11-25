@@ -159,12 +159,13 @@ function DebtorTableRow({
             без срока {formatMoneyList(row.undated)}
           </div>
         )}
-        {row.noInvoice.length > 0 && (
+        {/* `?? []`: страница может выйти раньше сервера, у старого поля нет. */}
+        {(row.noInvoice ?? []).length > 0 && (
           <div
             className="text-[12px] text-red-700"
             title="По этим актам нет счёта-фактуры в Didox или клиент отказался её подписать: письмом не отправляется, случай в ежедневном отчёте"
           >
-            без с/ф в Didox {formatMoneyList(row.noInvoice)}
+            без с/ф в Didox {formatMoneyList(row.noInvoice ?? [])}
           </div>
         )}
       </td>
