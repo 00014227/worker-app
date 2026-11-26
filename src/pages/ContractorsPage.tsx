@@ -15,6 +15,7 @@ import {
   PhoneCall,
   AlertTriangle,
   Trash2,
+  EyeOff,
   X,
 } from 'lucide-react';
 import {
@@ -535,6 +536,14 @@ export default function ContractorsPage() {
   const [search, setSearch] = useState('');
   /** Отбор по офису. Пусто — показываем всех: разделение мягкое. */
   const [office, setOffice] = useState('');
+  /**
+   * Показывать ли скрытых из работы.
+   *
+   * По умолчанию нет: их 148 из 194, и в общем списке они утопили бы тех, с
+   * кем работают. Галочка нужна, чтобы вернуть подрядчика — иначе он не виден
+   * нигде и вернуть его нечем.
+   */
+  const [withArchived, setWithArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SupplierRow | null>(null);
   const [creating, setCreating] = useState(false);
@@ -550,10 +559,10 @@ export default function ContractorsPage() {
   /** Только что добавленный — держим наверху, иначе он тонет среди сотни. */
   const [justAdded, setJustAdded] = useState<string | null>(null);
 
-  const load = () => {
+  const load = (includeArchived = withArchived) => {
     setLoading(true);
     tenderApi.suppliers
-      .list()
+      .list(undefined, includeArchived)
       .then(setRows)
       .finally(() => setLoading(false));
   };
@@ -746,7 +755,7 @@ export default function ContractorsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={load}
+            onClick={() => load()}
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
@@ -838,6 +847,19 @@ export default function ContractorsPage() {
           </select>
         )}
 
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={withArchived}
+            onChange={(e) => {
+              setWithArchived(e.target.checked);
+              load(e.target.checked);
+            }}
+            className="accent-primary"
+          />
+          Показать скрытых
+        </label>
+
         <select
           value={office}
           onChange={(e) => setOffice(e.target.value)}
@@ -903,6 +925,13 @@ export default function ContractorsPage() {
                       {justAdded === c.id && (
                         <span className="ml-1.5 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-medium align-middle">
                           новый
+                        </span>
+                      )}
+                      {/* Скрытые видны только с галочкой, и их надо отличать
+                          с первого взгляда: в подбор они не попадают. */}
+                      {c.archived && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 text-[10px] font-medium align-middle">
+                          скрыт
                         </span>
                       )}
                     </div>
@@ -1414,6 +1443,8 @@ function BindPanel({
   // Удаление необратимо, поэтому подтверждается вторым нажатием: отдельная
   // модалка ради одной кнопки избыточна, но снести подрядчика одним кликом нельзя.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** Скрытие обратимо, поэтому без подтверждения — в отличие от удаления. */
+  const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   /** Похожие подрядчики, найденные сервером — ждут подтверждения логиста. */
   const [duplicates, setDuplicates] = useState<DuplicateSupplierMatch[] | null>(
@@ -1698,6 +1729,43 @@ function BindPanel({
               Сохранить
             </button>
           )}
+
+          {/*
+            Скрыть из работы — обратимое действие, поэтому без подтверждения:
+            подрядчик пропадает из подбора и перестаёт получать сообщения, но
+            переписка, приглашения и ставки остаются на месте.
+          */}
+          <div className="pt-3 mt-1 border-t">
+            <button
+              type="button"
+              disabled={archiving}
+              onClick={async () => {
+                setArchiving(true);
+                try {
+                  const next = !supplier.archived;
+                  await tenderApi.suppliers.setArchived(supplier.id, next);
+                  onSaved({ id: supplier.id, archived: next });
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setArchiving(false);
+                }
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 disabled:opacity-40"
+            >
+              {archiving ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <EyeOff size={13} />
+              )}
+              {supplier.archived ? 'Вернуть в работу' : 'Скрыть из работы'}
+            </button>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {supplier.archived
+                ? 'Сейчас скрыт: не виден в подборе и не получает сообщений.'
+                : 'Пропадёт из подбора и перестанет получать сообщения. Переписка и ставки останутся.'}
+            </p>
+          </div>
 
           <div className="pt-3 mt-1 border-t">
             {confirmDelete ? (
