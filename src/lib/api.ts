@@ -534,6 +534,11 @@ export interface SupplierRow {
    */
   offices: SupplierOffice[];
   contacts: SupplierContact[];
+  /**
+   * Скрыт из работы: не виден в подборе под заявку и не получает сообщений.
+   * Переписка, приглашения и ставки остаются — это признак, а не удаление.
+   */
+  archived?: boolean;
   country: string | null;
   email: string | null;
   phone: string | null;
@@ -1669,9 +1674,19 @@ export const receivablesApi = {
 
 export const tenderApi = {
   suppliers: {
-    list(search?: string): Promise<SupplierRow[]> {
-      const q = search ? `?search=${encodeURIComponent(search)}` : '';
-      return req<SupplierRow[]>(`/worker/suppliers${q}`);
+    list(search?: string, includeArchived = false): Promise<SupplierRow[]> {
+      const p = new URLSearchParams();
+      if (search) p.set('search', search);
+      if (includeArchived) p.set('includeArchived', 'true');
+      const q = p.toString();
+      return req<SupplierRow[]>(`/worker/suppliers${q ? `?${q}` : ''}`);
+    },
+    /** Скрыть подрядчика из работы или вернуть обратно. */
+    setArchived(id: string, archived: boolean): Promise<{ archived: boolean }> {
+      return req(`/worker/suppliers/${id}/archived`, {
+        method: 'POST',
+        body: JSON.stringify({ archived }),
+      });
     },
     /** Справочник офисов для метки и фильтра. */
     offices(): Promise<SupplierOffice[]> {
