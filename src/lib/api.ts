@@ -509,7 +509,10 @@ export const CONTACT_LANGUAGE_LABELS: Record<ContactLanguage, string> = {
  */
 export interface SupplierContact {
   id: string;
-  email: string;
+  /** email | telegram | whatsapp — канал, в котором действует адрес. */
+  channel: string;
+  /** Почта, имя пользователя Telegram или его числовой идентификатор. */
+  address: string;
   name: string | null;
 }
 
@@ -622,8 +625,8 @@ export interface CreateSupplierInput {
   code?: string;
   /** Офисы, которые работают с подрядчиком. Пустой массив — снять все. */
   officeIds?: string[];
-  /** Контакты: первый получает письмо, остальные — копию. */
-  contacts?: { email: string; name?: string | null }[];
+  /** Контакты: порядок внутри канала задаёт роль, первый получает обращение. */
+  contacts?: { channel?: string; address: string; name?: string | null }[];
   /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
   force?: boolean;
 }
@@ -1700,8 +1703,12 @@ export const tenderApi = {
         vehicleTypes?: string[];
         /** Офисы, которые работают с подрядчиком. Пустой массив — снять все. */
         officeIds?: string[];
-        /** Контакты: первый получает письмо, остальные — копию. */
-        contacts?: { email: string; name?: string | null }[];
+        /** Контакты: порядок внутри канала задаёт роль, первый получает обращение. */
+        contacts?: {
+          channel?: string;
+          address: string;
+          name?: string | null;
+        }[];
         /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
         force?: boolean;
       },
