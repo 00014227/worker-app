@@ -501,9 +501,23 @@ export const CONTACT_LANGUAGE_LABELS: Record<ContactLanguage, string> = {
   UZ: 'Oʻzbekcha',
 };
 
+/** Офис компании, работающий с подрядчиком. */
+export interface SupplierOffice {
+  id: string;
+  name: string;
+}
+
 export interface SupplierRow {
   id: string;
   name: string;
+  /**
+   * Офисы, которые работают с подрядчиком (26.11.2026).
+   *
+   * Метка и фильтр, ничего не скрывают: пустой список значит «офис не
+   * проставлен», а не «ничей». Офисов может быть несколько — китайский
+   * экспедитор возит и для Ташкента, и для Москвы.
+   */
+  offices: SupplierOffice[];
   country: string | null;
   email: string | null;
   phone: string | null;
@@ -593,6 +607,8 @@ export interface CreateSupplierInput {
   email?: string;
   inn?: string;
   code?: string;
+  /** Офисы, которые работают с подрядчиком. Пустой массив — снять все. */
+  officeIds?: string[];
   /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
   force?: boolean;
 }
@@ -1639,6 +1655,10 @@ export const tenderApi = {
       const q = search ? `?search=${encodeURIComponent(search)}` : '';
       return req<SupplierRow[]>(`/worker/suppliers${q}`);
     },
+    /** Справочник офисов для метки и фильтра. */
+    offices(): Promise<SupplierOffice[]> {
+      return req<SupplierOffice[]>('/worker/suppliers/offices');
+    },
     create(
       input: CreateSupplierInput,
     ): Promise<
@@ -1663,6 +1683,8 @@ export const tenderApi = {
         directions?: string[];
         transportModes?: string[];
         vehicleTypes?: string[];
+        /** Офисы, которые работают с подрядчиком. Пустой массив — снять все. */
+        officeIds?: string[];
         /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
         force?: boolean;
       },

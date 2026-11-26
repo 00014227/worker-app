@@ -20,6 +20,7 @@ import {
 import {
   tenderApi,
   SupplierRow,
+  SupplierOffice,
   TelegramAccountRow,
   CreateSupplierInput,
   ContactChannel,
@@ -53,6 +54,24 @@ const VEHICLE_OPTIONS: { value: string; label: string }[] = [
   ...VEHICLE_TYPES,
   REF_VEHICLE_TYPE,
 ].map((v) => ({ value: v, label: v }));
+
+/**
+ * Справочник офисов для выбора в карточке подрядчика.
+ *
+ * Запрашивается обеими формами отдельно: список крошечный (десятки строк), а
+ * тянуть его на страницу и прокидывать пропами через два уровня ради этого
+ * незачем. Сбой молчит — без офисов форма остаётся рабочей, поле просто пустое.
+ */
+function useOffices(): SupplierOffice[] {
+  const [offices, setOffices] = useState<SupplierOffice[]>([]);
+  useEffect(() => {
+    tenderApi.suppliers
+      .offices()
+      .then(setOffices)
+      .catch(() => {});
+  }, []);
+  return offices;
+}
 
 function TogglePicker({
   options,
@@ -431,6 +450,8 @@ export default function ContractorsPage() {
   const [rows, setRows] = useState<SupplierRow[]>([]);
   const [accounts, setAccounts] = useState<TelegramAccountRow[]>([]);
   const [search, setSearch] = useState('');
+  /** Отбор по офису. Пусто — показываем всех: разделение мягкое. */
+  const [office, setOffice] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SupplierRow | null>(null);
   const [creating, setCreating] = useState(false);
@@ -489,6 +510,18 @@ export default function ContractorsPage() {
     return [...set].sort((a, b) => a.localeCompare(b, 'ru'));
   }, [rows]);
 
+  /**
+   * Офисы для фильтра берём из самих карточек, а не из справочника: офисов в
+   * 1С больше тридцати, и выбирать среди пустых незачем. Пункт «без офиса»
+   * нужен отдельно — именно он показывает, кому офис ещё не проставили.
+   */
+  const allOffices = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const c of rows)
+      for (const o of c.offices ?? []) byId.set(o.id, o.name);
+    return [...byId].sort((a, b) => a[1].localeCompare(b[1], 'ru'));
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     // Телефон логист помнит цифрами, а записан он с плюсом и скобками —
@@ -516,6 +549,10 @@ export default function ContractorsPage() {
     }
 
     if (dir) out = out.filter((c) => c.directions.includes(dir));
+    if (office === 'none')
+      out = out.filter((c) => (c.offices ?? []).length === 0);
+    else if (office)
+      out = out.filter((c) => (c.offices ?? []).some((o) => o.id === office));
     if (tab === 'ready') out = out.filter((c) => !hasNoContact(c));
     if (tab === 'nocontact') out = out.filter(hasNoContact);
     if (tab === 'nodir') out = out.filter((c) => c.directions.length === 0);
@@ -527,11 +564,11 @@ export default function ContractorsPage() {
       if (i > 0) out = [out[i], ...out.slice(0, i), ...out.slice(i + 1)];
     }
     return out;
-  }, [rows, search, dir, tab, justAdded]);
+  }, [rows, search, dir, office, tab, justAdded]);
 
   const { visible: visibleSuppliers, ref } = useInfiniteScroll(
     filtered,
-    `${search}|${tab}|${dir}`,
+    `${search}|${tab}|${dir}|${office}`,
   );
 
   const noContact = rows.filter(hasNoContact).length;
@@ -718,11 +755,26 @@ export default function ContractorsPage() {
           </select>
         )}
 
-        {(search || dir || tab !== 'all') && (
+        <select
+          value={office}
+          onChange={(e) => setOffice(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none"
+        >
+          <option value="">Любой офис</option>
+          {allOffices.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+          <option value="none">Без офиса</option>
+        </select>
+
+        {(search || dir || office || tab !== 'all') && (
           <button
             onClick={() => {
               setSearch('');
               setDir('');
+              setOffice('');
               setTab('all');
             }}
             className="text-xs text-muted-foreground hover:text-foreground"
@@ -774,6 +826,25 @@ export default function ContractorsPage() {
                     <div className="text-xs text-muted-foreground">
                       {c.country ?? '—'}
                     </div>
+                    {/*
+                      Офисы, работающие с подрядчиком. Метка, а не ограничение:
+                      пустой список значит «офис не проставлен», и такие видны
+                      всем. Показываем только когда есть что показать — пустая
+                      строка у 194 карточек из 194 не значила бы ничего.
+                    */}
+                    {(c.offices ?? []).length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {(c.offices ?? []).map((o) => (
+                          <span
+                            key={o.id}
+                            className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium"
+                            title={`Офис: ${o.name}`}
+                          >
+                            {o.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="shrink-0 flex flex-col items-end gap-1">
                     <span className="px-1.5 py-0.5 rounded bg-muted text-xs text-muted-foreground">
@@ -957,6 +1028,8 @@ function CreateSupplierPanel({
   const [directions, setDirections] = useState<string[]>([]);
   const [modes, setModes] = useState<string[]>([]);
   const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
+  const offices = useOffices();
+  const [officeIds, setOfficeIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Похожие подрядчики, найденные сервером — ждут подтверждения логиста. */
@@ -980,6 +1053,7 @@ function CreateSupplierPanel({
         directions,
         transportModes: modes,
         vehicleTypes,
+        officeIds,
         force,
       };
       (
@@ -1089,6 +1163,19 @@ function CreateSupplierPanel({
             <p className="text-xs text-muted-foreground">
               По ним запрос отбирает подрядчиков под нужный кузов. Пусто —
               подрядчик остаётся в списке, просто не отфильтруется.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Офисы</Label>
+            <TogglePicker
+              options={offices.map((o) => ({ value: o.id, label: o.name }))}
+              value={officeIds}
+              onChange={setOfficeIds}
+            />
+            <p className="text-xs text-muted-foreground">
+              Метка и фильтр: подрядчик остаётся виден всем, но его можно
+              отобрать по офису. Офисов можно выбрать несколько.
             </p>
           </div>
 
@@ -1220,6 +1307,10 @@ function BindPanel({
     supplier.vehicleTypes ?? [],
   );
   const [accountId, setAccountId] = useState(supplier.telegramAccountId ?? '');
+  const offices = useOffices();
+  const [officeIds, setOfficeIds] = useState<string[]>(
+    (supplier.offices ?? []).map((o) => o.id),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Удаление необратимо, поэтому подтверждается вторым нажатием: отдельная
@@ -1258,6 +1349,7 @@ function BindPanel({
         directions: dirs,
         transportModes: modes,
         vehicleTypes,
+        officeIds,
         telegramAccountId: accountId || undefined,
         force,
       });
@@ -1276,6 +1368,7 @@ function BindPanel({
         directions: dirs,
         transportModes: modes,
         vehicleTypes,
+        offices: offices.filter((o) => officeIds.includes(o.id)),
         telegramAccountId: accountId || null,
       });
     } catch (e) {
@@ -1412,6 +1505,19 @@ function BindPanel({
             <p className="text-xs text-muted-foreground">
               По ним запрос отбирает подрядчиков под нужный кузов. Пусто —
               подрядчик остаётся в списке, просто не отфильтруется.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Офисы</Label>
+            <TogglePicker
+              options={offices.map((o) => ({ value: o.id, label: o.name }))}
+              value={officeIds}
+              onChange={setOfficeIds}
+            />
+            <p className="text-xs text-muted-foreground">
+              Метка и фильтр: подрядчик остаётся виден всем, но его можно
+              отобрать по офису. Офисов можно выбрать несколько.
             </p>
           </div>
 
