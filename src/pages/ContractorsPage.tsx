@@ -73,6 +73,71 @@ function useOffices(): SupplierOffice[] {
   return offices;
 }
 
+/**
+ * Контакты подрядчика: адрес и имя того, к кому обращаемся.
+ *
+ * Раньше адреса вписывали в одно поле через точку с запятой, и у 14 карточек
+ * из 37 там лежало до пяти адресов. Имени не было вовсе, поэтому письмо
+ * нельзя было начать с обращения, а ответ с неуказанного адреса не доходил.
+ *
+ * Порядок строк и есть роль: первая — основной получатель, к нему обращение
+ * в тексте, остальные уходят в копию.
+ */
+function ContactsEditor({
+  value,
+  onChange,
+}: {
+  value: { email: string; name?: string | null }[];
+  onChange: (v: { email: string; name?: string | null }[]) => void;
+}) {
+  const patch = (i: number, p: Partial<{ email: string; name: string }>) =>
+    onChange(value.map((c, j) => (j === i ? { ...c, ...p } : c)));
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Контакты</Label>
+      <div className="space-y-2">
+        {value.map((c, i) => (
+          <div key={i} className="flex gap-2 items-center">
+            <Input
+              value={c.email}
+              onChange={(e) => patch(i, { email: e.target.value })}
+              placeholder="mail@company.com"
+              className="flex-1"
+            />
+            <Input
+              value={c.name ?? ''}
+              onChange={(e) => patch(i, { name: e.target.value })}
+              placeholder="Имя"
+              className="w-36"
+            />
+            <button
+              type="button"
+              onClick={() => onChange(value.filter((_, j) => j !== i))}
+              className="text-muted-foreground hover:text-foreground shrink-0 px-1"
+              title="Убрать контакт"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange([...value, { email: '', name: '' }])}
+        className="text-xs text-primary hover:underline"
+      >
+        + добавить контакт
+      </button>
+      <p className="text-xs text-muted-foreground">
+        Письмо уходит первому в списке, он же получает обращение по имени;
+        остальные стоят в копии. Имя можно не заполнять — тогда здороваемся без
+        него.
+      </p>
+    </div>
+  );
+}
+
 function TogglePicker({
   options,
   value,
@@ -1220,12 +1285,11 @@ function CreateSupplierPanel({
                 placeholder="+7…"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input
-                value={form.email ?? ''}
-                onChange={(e) => set({ email: e.target.value })}
-                placeholder="mail@…"
+            {/* Контакты занимают всю ширину: в них две колонки своих. */}
+            <div className="col-span-2">
+              <ContactsEditor
+                value={form.contacts ?? []}
+                onChange={(contacts) => set({ contacts })}
               />
             </div>
             <div className="space-y-1.5">
@@ -1291,7 +1355,21 @@ function BindPanel({
   onDeleted: (id: string) => void;
 }) {
   const [username, setUsername] = useState(supplier.telegramUsername ?? '');
-  const [email, setEmail] = useState(supplier.email ?? '');
+  /**
+   * Контакты. Для карточек, заведённых до их появления, разбираем старое поле
+   * почты по «;» — иначе логист увидел бы пустой список там, где адреса есть.
+   */
+  const [contacts, setContacts] = useState<
+    { email: string; name?: string | null }[]
+  >(
+    supplier.contacts?.length
+      ? supplier.contacts.map((c) => ({ email: c.email, name: c.name }))
+      : (supplier.email ?? '')
+          .split(/[;,]/)
+          .map((e) => e.trim())
+          .filter((e) => e.includes('@'))
+          .map((email) => ({ email, name: '' })),
+  );
   const [phone, setPhone] = useState(supplier.phone ?? '');
   const [channel, setChannel] = useState<ContactChannel>(
     supplier.contactChannel ?? 'telegram',
@@ -1342,7 +1420,7 @@ function BindPanel({
       const dirs = directions;
       const res = await tenderApi.suppliers.update(supplier.id, {
         telegramUsername: username.trim() || undefined,
-        email: email.trim() || undefined,
+        contacts,
         phone,
         contactChannel: channel,
         preferredLanguage: language,
@@ -1361,7 +1439,12 @@ function BindPanel({
       onSaved({
         id: supplier.id,
         telegramUsername: username.trim().replace('@', '') || null,
-        email: email.trim() || null,
+        email: contacts.map((c) => c.email).join(' ; ') || null,
+        contacts: contacts.map((c, i) => ({
+          id: String(i),
+          email: c.email,
+          name: c.name ?? null,
+        })),
         phone: phone.trim() || null,
         contactChannel: channel,
         preferredLanguage: language,
@@ -1534,14 +1617,7 @@ function BindPanel({
             </p>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Email</Label>
-            <Input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="mail@company.com"
-            />
-          </div>
+          <ContactsEditor value={contacts} onChange={setContacts} />
 
           <div className="space-y-1.5">
             <Label>Телефон</Label>
