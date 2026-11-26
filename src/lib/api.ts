@@ -501,6 +501,18 @@ export const CONTACT_LANGUAGE_LABELS: Record<ContactLanguage, string> = {
   UZ: 'Oʻzbekcha',
 };
 
+/**
+ * Контакт подрядчика: адрес и имя того, к кому обращаемся.
+ *
+ * Порядок задаёт роль: первый получает письмо и обращение по имени,
+ * остальные уходят в копию (решение заказчика 26.11.2026).
+ */
+export interface SupplierContact {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
 /** Офис компании, работающий с подрядчиком. */
 export interface SupplierOffice {
   id: string;
@@ -518,6 +530,7 @@ export interface SupplierRow {
    * экспедитор возит и для Ташкента, и для Москвы.
    */
   offices: SupplierOffice[];
+  contacts: SupplierContact[];
   country: string | null;
   email: string | null;
   phone: string | null;
@@ -609,6 +622,8 @@ export interface CreateSupplierInput {
   code?: string;
   /** Офисы, которые работают с подрядчиком. Пустой массив — снять все. */
   officeIds?: string[];
+  /** Контакты: первый получает письмо, остальные — копию. */
+  contacts?: { email: string; name?: string | null }[];
   /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
   force?: boolean;
 }
@@ -1685,6 +1700,8 @@ export const tenderApi = {
         vehicleTypes?: string[];
         /** Офисы, которые работают с подрядчиком. Пустой массив — снять все. */
         officeIds?: string[];
+        /** Контакты: первый получает письмо, остальные — копию. */
+        contacts?: { email: string; name?: string | null }[];
         /** Похожие подрядчики уже показаны логисту, и он подтвердил — сохранить всё равно. */
         force?: boolean;
       },
