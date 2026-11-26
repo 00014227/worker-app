@@ -73,8 +73,11 @@ function useOffices(): SupplierOffice[] {
   return offices;
 }
 
+/** Строка формы: канал, адрес и имя. */
+type ContactDraft = { channel?: string; address: string; name?: string | null };
+
 /**
- * Контакты подрядчика: адрес и имя того, к кому обращаемся.
+ * Контакты подрядчика: канал, адрес и имя того, к кому обращаемся.
  *
  * Раньше адреса вписывали в одно поле через точку с запятой, и у 14 карточек
  * из 37 там лежало до пяти адресов. Имени не было вовсе, поэтому письмо
@@ -87,10 +90,10 @@ function ContactsEditor({
   value,
   onChange,
 }: {
-  value: { email: string; name?: string | null }[];
-  onChange: (v: { email: string; name?: string | null }[]) => void;
+  value: ContactDraft[];
+  onChange: (v: ContactDraft[]) => void;
 }) {
-  const patch = (i: number, p: Partial<{ email: string; name: string }>) =>
+  const patch = (i: number, p: Partial<ContactDraft>) =>
     onChange(value.map((c, j) => (j === i ? { ...c, ...p } : c)));
 
   return (
@@ -99,10 +102,23 @@ function ContactsEditor({
       <div className="space-y-2">
         {value.map((c, i) => (
           <div key={i} className="flex gap-2 items-center">
+            <select
+              value={c.channel ?? 'email'}
+              onChange={(e) => patch(i, { channel: e.target.value })}
+              className="h-9 w-28 shrink-0 rounded-md border border-border bg-background px-2 text-sm outline-none"
+            >
+              <option value="email">Почта</option>
+              <option value="telegram">Telegram</option>
+              <option value="whatsapp">WhatsApp</option>
+            </select>
             <Input
-              value={c.email}
-              onChange={(e) => patch(i, { email: e.target.value })}
-              placeholder="mail@company.com"
+              value={c.address}
+              onChange={(e) => patch(i, { address: e.target.value })}
+              placeholder={
+                (c.channel ?? 'email') === 'email'
+                  ? 'mail@company.com'
+                  : '@username'
+              }
               className="flex-1"
             />
             <Input
@@ -124,7 +140,9 @@ function ContactsEditor({
       </div>
       <button
         type="button"
-        onClick={() => onChange([...value, { email: '', name: '' }])}
+        onClick={() =>
+          onChange([...value, { channel: 'email', address: '', name: '' }])
+        }
         className="text-xs text-primary hover:underline"
       >
         + добавить контакт
@@ -1359,16 +1377,18 @@ function BindPanel({
    * Контакты. Для карточек, заведённых до их появления, разбираем старое поле
    * почты по «;» — иначе логист увидел бы пустой список там, где адреса есть.
    */
-  const [contacts, setContacts] = useState<
-    { email: string; name?: string | null }[]
-  >(
+  const [contacts, setContacts] = useState<ContactDraft[]>(
     supplier.contacts?.length
-      ? supplier.contacts.map((c) => ({ email: c.email, name: c.name }))
+      ? supplier.contacts.map((c) => ({
+          channel: c.channel,
+          address: c.address,
+          name: c.name,
+        }))
       : (supplier.email ?? '')
           .split(/[;,]/)
           .map((e) => e.trim())
           .filter((e) => e.includes('@'))
-          .map((email) => ({ email, name: '' })),
+          .map((address) => ({ channel: 'email', address, name: '' })),
   );
   const [phone, setPhone] = useState(supplier.phone ?? '');
   const [channel, setChannel] = useState<ContactChannel>(
@@ -1439,10 +1459,15 @@ function BindPanel({
       onSaved({
         id: supplier.id,
         telegramUsername: username.trim().replace('@', '') || null,
-        email: contacts.map((c) => c.email).join(' ; ') || null,
+        email:
+          contacts
+            .filter((c) => (c.channel ?? 'email') === 'email')
+            .map((c) => c.address)
+            .join(' ; ') || null,
         contacts: contacts.map((c, i) => ({
           id: String(i),
-          email: c.email,
+          channel: c.channel ?? 'email',
+          address: c.address,
           name: c.name ?? null,
         })),
         phone: phone.trim() || null,
