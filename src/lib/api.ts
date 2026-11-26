@@ -1472,6 +1472,45 @@ export interface DebtorDocument {
   acceptedOn: string | null;
   /** Письма, уже ушедшие по этому акту (номера этапов). */
   stagesDone: number[];
+  /** Последняя связь со с/ф, которую подтвердил человек (действующая или снятая). */
+  didoxLink: DebtorDidoxLink | null;
+}
+
+/**
+ * Связь «акт ↔ счёт-фактура Didox», подтверждённая юристом или админом: сверка не смогла
+ * доказать её сама. Сверка каждый день её перепроверяет и снимает, если с/ф удалили,
+ * переотправили или поменялись суммы.
+ */
+export interface DebtorDidoxLink {
+  id: string;
+  /** invoice — указана с/ф; none — подтвердили, что с/ф к акту нет. */
+  kind: 'invoice' | 'none';
+  didoxNumber: string | null;
+  /** YYYY-MM-DD. */
+  didoxDate: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  /** Снята; cancelledBy null — сняла сверка, причина в cancelReason. */
+  cancelledAt: string | null;
+  cancelledBy: string | null;
+  cancelReason: string | null;
+}
+
+/** Счёт-фактура клиента в Didox, которую можно указать для акта. */
+export interface DidoxInvoiceCandidate {
+  /** Номер без «/1»: «1391» — это пара «1391» и «1391/1». */
+  number: string;
+  /** YYYY-MM-DD. */
+  date: string;
+  sum: string;
+  status: 'signed' | 'pending' | 'rejected';
+  sentOn: string | null;
+  contractNumber: string | null;
+  isSameContract: boolean;
+  /** Акты с долгом, к которым эта с/ф уже привязана. */
+  linkedActs: string[];
+  /** Строки с/ф: услуга, маршрут, машина или контейнер — чтобы отличить одинаковые суммы. */
+  lines: string[];
 }
 
 /**
@@ -1536,7 +1575,8 @@ export type DebtStopReason =
   | 'no_term'
   | 'didox_rejected'
   | 'no_invoice'
-  | 'invoice_not_sent';
+  | 'invoice_not_sent'
+  | 'invoice_unconfirmed';
 
 export interface DunningRunResult {
   mode: DebtMailMode;
@@ -1625,6 +1665,24 @@ export const receivablesApi = {
   },
   cancelStop(id: string): Promise<{ id: string }> {
     return req(`/worker/receivables/stops/${id}/cancel`, { method: 'POST' });
+  },
+  /** С/ф клиента в Didox рядом с датой акта — для подтверждения связи (юрист, админ). */
+  didoxInvoices(documentId: string): Promise<DidoxInvoiceCandidate[]> {
+    return req(`/worker/receivables/documents/${documentId}/didox-invoices`);
+  },
+  linkDidox(
+    documentId: string,
+    input: { kind: 'invoice'; number: string; date: string } | { kind: 'none' },
+  ): Promise<{ id: string }> {
+    return req(`/worker/receivables/documents/${documentId}/didox-link`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  unlinkDidox(linkId: string): Promise<{ id: string }> {
+    return req(`/worker/receivables/didox-links/${linkId}/cancel`, {
+      method: 'POST',
+    });
   },
   holidays(): Promise<DebtHoliday[]> {
     return req('/worker/receivables/holidays');

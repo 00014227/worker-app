@@ -73,6 +73,7 @@ export const STOP_REASON_LABELS: Record<DebtStopReason, string> = {
   didox_rejected: 'клиент отказался подписать счёт-фактуру в Didox',
   no_invoice: 'нет счёта-фактуры в Didox',
   invoice_not_sent: 'счёт-фактура ещё не выставлена в Didox',
+  invoice_unconfirmed: 'нужно указать счёт-фактуру к акту',
 };
 
 export const formatMoney = (money: MoneyByCurrency) =>
@@ -236,8 +237,8 @@ export function didoxBadge(
       };
     case 'unmatched':
       return {
-        label: 'С/ф не сопоставлена',
-        hint: `в Didox несколько похожих счетов-фактур, автоматически не связали — ${noLetter}`,
+        label: 'Нужно указать с/ф',
+        hint: 'сверка не смогла доказать, какой счёт-фактурой выставлен акт (суммы расходятся или одинаковы) — до подтверждения писем нет',
         tone: 'red',
       };
     case 'no_inn':

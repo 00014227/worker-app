@@ -28,6 +28,7 @@ import {
 } from './receivables-meta';
 import { Drawer, Notice, Panel, Pill, SectionTitle } from './receivables-ui';
 import { DeferralSection } from './DeferralSection';
+import { DidoxLinkSection } from './DidoxLinkSection';
 import { StopSection } from './StopSection';
 
 interface DebtorDetails {
@@ -126,7 +127,12 @@ export function DebtorPanel({
               Неоплаченные акты · {details.documents.length}
             </SectionTitle>
             {details.documents.map((document) => (
-              <ActCard key={document.id} document={document} />
+              <ActCard
+                key={document.id}
+                document={document}
+                canAct={canAct}
+                onChanged={handleChanged}
+              />
             ))}
           </section>
 
@@ -164,7 +170,15 @@ const DIDOX_BLOCKING: DidoxActStatus[] = [
   'no_inn',
 ];
 
-function ActCard({ document }: { document: DebtorDocument }) {
+function ActCard({
+  document,
+  canAct,
+  onChanged,
+}: {
+  document: DebtorDocument;
+  canAct: boolean;
+  onChanged: () => void;
+}) {
   const didox = didoxBadge(document);
   const { dueDate, deadline, daysOverdue } = document;
   // Срока нет из-за Didox (отказ или нет счёта-фактуры) — причину уже объясняет метка выше.
@@ -223,6 +237,12 @@ function ActCard({ document }: { document: DebtorDocument }) {
             )}
         </div>
       )}
+
+      <DidoxLinkSection
+        document={document}
+        canAct={canAct}
+        onChanged={onChanged}
+      />
 
       {hasTerm ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] bg-[#F4F6FA] px-3 py-2 text-[13px]">
