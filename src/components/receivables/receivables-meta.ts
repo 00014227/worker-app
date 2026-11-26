@@ -72,6 +72,7 @@ export const STOP_REASON_LABELS: Record<DebtStopReason, string> = {
   paused: 'рассылка на паузе',
   didox_rejected: 'клиент отказался подписать счёт-фактуру в Didox',
   no_invoice: 'нет счёта-фактуры в Didox',
+  invoice_not_sent: 'счёт-фактура ещё не выставлена в Didox',
 };
 
 export const formatMoney = (money: MoneyByCurrency) =>
@@ -227,6 +228,12 @@ export function didoxBadge(
         hint: `счёт-фактуру к акту в Didox не нашли — ${noLetter}`,
         tone: 'red',
       };
+    case 'not_sent':
+      return {
+        label: 'С/ф ещё не выставлена',
+        hint: 'акт свежий, счёт-фактуру в Didox ещё не выставили — срок посчитаем, когда она появится; писем пока нет',
+        tone: 'amber',
+      };
     case 'unmatched':
       return {
         label: 'С/ф не сопоставлена',
@@ -238,6 +245,13 @@ export function didoxBadge(
         label: 'Нет ИНН для Didox',
         hint: `в 1С у клиента нет верного ИНН, счёт-фактуру не найти — ${noLetter}`,
         tone: 'red',
+      };
+    default:
+      // Сервер новее страницы и прислал статус, которого она не знает, — не прячем молча.
+      return {
+        label: `Didox: ${status}`,
+        hint: 'статус Didox, неизвестный этой версии страницы — обновите страницу',
+        tone: 'neutral',
       };
   }
 }

@@ -36,7 +36,10 @@ function describeRun(result: DunningRunResult): string {
   }
   if (reasons.size) {
     const reasonList = [...reasons]
-      .map(([reason, count]) => `${STOP_REASON_LABELS[reason]} — ${count}`)
+      .map(
+        ([reason, count]) =>
+          `${STOP_REASON_LABELS[reason] ?? reason} — ${count}`,
+      )
       .join(', ');
     parts.push(`не отправлено: ${reasonList}`);
   }

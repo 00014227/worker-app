@@ -1485,7 +1485,13 @@ export type DebtTermStartSource = 'signed' | 'deemed' | 'act_date';
  * похожих, автоматически не связали; no_inn — в 1С у клиента нет верного ИНН.
  */
 export type DidoxActStatus =
-  'signed' | 'pending' | 'rejected' | 'not_found' | 'unmatched' | 'no_inn';
+  | 'signed'
+  | 'pending'
+  | 'rejected'
+  | 'not_found'
+  | 'not_sent'
+  | 'unmatched'
+  | 'no_inn';
 
 export interface DebtorLetter {
   id: string;
@@ -1529,7 +1535,8 @@ export type DebtStopReason =
   | 'paused'
   | 'no_term'
   | 'didox_rejected'
-  | 'no_invoice';
+  | 'no_invoice'
+  | 'invoice_not_sent';
 
 export interface DunningRunResult {
   mode: DebtMailMode;

@@ -159,6 +159,7 @@ export function DebtorPanel({
 const DIDOX_BLOCKING: DidoxActStatus[] = [
   'rejected',
   'not_found',
+  'not_sent',
   'unmatched',
   'no_inn',
 ];
