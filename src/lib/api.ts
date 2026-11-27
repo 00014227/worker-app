@@ -1794,6 +1794,22 @@ export const tenderApi = {
         body: JSON.stringify(supplierIds ? { supplierIds } : {}),
       });
     },
+    /**
+     * Стереть запрос насовсем. Только админ.
+     *
+     * Необратимо: каскадом уходят приглашения, ставки и вложения (файлы — и с
+     * диска). Переписка остаётся в чате подрядчика, но от запроса
+     * отвязывается. В ответе — что именно ушло.
+     */
+    remove(id: string): Promise<{
+      ok: boolean;
+      attachments: number;
+      mail: number;
+      telegram: number;
+      notifications: number;
+    }> {
+      return req(`/worker/tenders/${id}`, { method: 'DELETE' });
+    },
     /** Закрыть запрос: напоминания по нему прекращаются. */
     close(id: string): Promise<TenderDetail> {
       return req<TenderDetail>(`/worker/tenders/${id}/close`, {

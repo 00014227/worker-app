@@ -18,6 +18,7 @@ import {
   TrendingDown,
   BarChart3,
   Paperclip,
+  Trash2,
 } from 'lucide-react';
 import {
   tenderApi,
@@ -39,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { subscribeToTender, getSocket } from '@/lib/socket';
 import SupplierChat from '@/components/SupplierChat';
 import { confirmOnStand } from '../lib/env';
+import { getUser } from '../lib/auth';
 
 const STATUS: Record<TenderStatus, { label: string; cls: string }> = {
   draft: {
@@ -231,6 +233,7 @@ export default function RateRequestDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   /** Ответ, у которого раскрыт исходный текст сообщения. */
@@ -390,6 +393,41 @@ export default function RateRequestDetailPage() {
       setError((e as Error).message);
     } finally {
       setClosing(false);
+    }
+  };
+
+  /**
+   * Стереть запрос насовсем. Только у админа (решение заказчика 27.11.2026).
+   *
+   * Спрашиваем ВСЕГДА, в том числе на проде: confirmOnStand тут не годится —
+   * он молчит на боевой сборке, а это единственное действие в карточке, которое
+   * нечем отменить. В вопросе перечисляем, что именно уйдёт, иначе «Удалить»
+   * читается как «убрать из списка».
+   */
+  const removeTender = async () => {
+    if (!id || !tender) return;
+    const counts = [
+      tender.invites.length ? `приглашений: ${tender.invites.length}` : null,
+      tender.replies.length ? `ответов: ${tender.replies.length}` : null,
+      tender.attachments?.length ? `файлов: ${tender.attachments.length}` : null,
+    ].filter(Boolean);
+    if (
+      !window.confirm(
+        `Стереть запрос ${tender.origin} → ${tender.destination} насовсем?\n\n` +
+          `Уйдёт безвозвратно${counts.length ? ` — ${counts.join(', ')}` : ''}.\n` +
+          'Переписка с подрядчиками останется в их чатах.\n\n' +
+          'Восстановить будет нечем.',
+      )
+    )
+      return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await tenderApi.tenders.remove(id);
+      navigate('/rate-requests', { replace: true });
+    } catch (e) {
+      setError((e as Error).message);
+      setDeleting(false);
     }
   };
 
@@ -735,6 +773,21 @@ export default function RateRequestDetailPage() {
                   <Loader2 size={12} className="animate-spin" />
                   отправлено {sentCount} из {tender.invites.length}
                 </span>
+              )}
+              {getUser()?.isAdmin && (
+                <button
+                  onClick={removeTender}
+                  disabled={deleting}
+                  title="Стереть запрос насовсем — вместе с приглашениями, ставками и файлами"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs hover:bg-red-50 disabled:opacity-40 transition-colors"
+                >
+                  {deleting ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={13} />
+                  )}
+                  Удалить
+                </button>
               )}
               {!isClosed && !decided && (
                 <button
