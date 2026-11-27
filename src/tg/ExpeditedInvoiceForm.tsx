@@ -10,6 +10,16 @@ const SAVE_DELAY_MS = 1500;
 /** Деньги вводят и с запятой, и с пробелами — принимаем оба написания. */
 const MONEY = /^\d{0,15}([.,]\d{0,2})?$/;
 
+/**
+ * Пробелы в разрядах: «1 000 000». Их ставит и человек, и 1С, и Excel, откуда
+ * суммы копируют. Перевод в копейки их снимает всегда, а сверка отвергала
+ * такую запись сообщением «вводятся числами», и причину приходилось угадывать
+ * (замечено 27.11.2026). Неразрывный пробел `\s` покрывает — именно он
+ * приезжает из Excel.
+ */
+const noSpaces = (v: string) => v.replace(/\s/g, '');
+
+
 export interface InvoiceValues {
   orderNumber: string;
   /** Тип перевозки: от него зависит, кому записка уйдёт на согласование. */
@@ -129,7 +139,7 @@ export default function ExpeditedInvoiceForm({
     if (!values.transportationTypeId) return 'Выберите тип перевозки';
     if (values.counterpartyName.trim().length < 2)
       return 'Укажите имя контрагента';
-    if (!MONEY.test(values.amount)) return 'Сумма вводится числом';
+    if (!MONEY.test(noSpaces(values.amount))) return 'Сумма вводится числом';
     if (!values.amount.trim() || toNumber(values.amount) <= 0)
       return 'Укажите выставляемую сумму';
     if (values.reason.trim().length < 5)
