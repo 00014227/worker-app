@@ -45,6 +45,27 @@ export interface ExtraExpenseValues {
 
 /** Деньги вводят и с запятой, и с пробелами — принимаем оба написания. */
 const MONEY = /^\d{0,15}([.,]\d{0,2})?$/;
+/**
+ * Фактический доход — со знаком: перевозка закрывается и с убытком (скидка
+ * клиенту, невыставленная часть, отмена рейса после начала расходов). Решение
+ * заказчика 27.11.2026.
+ *
+ * Цифра обязательна: одинокий «−» иначе проходил бы проверку и уходил на
+ * сервер нулём — согласующий видел бы не тот размер убытка.
+ *
+ * Планируемый доход остаётся без знака: с убытком не планируют.
+ */
+const SIGNED_MONEY = /^-?\d{1,15}([.,]\d{0,2})?$/;
+
+/**
+ * Пробелы в разрядах: «1 000 000». Их ставит и человек, и 1С, и Excel, откуда
+ * суммы копируют. Перевод в копейки их снимает всегда, а сверка отвергала
+ * такую запись сообщением «вводятся числами», и причину приходилось угадывать
+ * (замечено 27.11.2026). Неразрывный пробел `\s` покрывает — именно он
+ * приезжает из Excel.
+ */
+const noSpaces = (v: string) => v.replace(/\s/g, '');
+
 
 let rowSeq = 0;
 const newRow = (): ExpenseRow => ({
@@ -215,12 +236,18 @@ export function extraExpenseProblem(
   if (!filled.length) return 'Добавьте хотя бы одну строку расходов';
   if (filled.some((l) => l.expenseType.trim().length < 2))
     return 'Укажите вид расхода в каждой строке';
-  if (values.lines.some((l) => !MONEY.test(l.planned) || !MONEY.test(l.actual)))
+  if (
+    values.lines.some(
+      (l) => !MONEY.test(noSpaces(l.planned)) || !MONEY.test(noSpaces(l.actual)),
+    )
+  )
     return 'Суммы расходов вводятся числами';
-  if (!MONEY.test(values.incomePlanned) || !MONEY.test(values.incomeActual))
-    return 'Суммы дохода вводятся числами';
   if (!values.incomePlanned.trim() || !values.incomeActual.trim())
     return 'Укажите планируемый и фактический доход';
+  if (!MONEY.test(noSpaces(values.incomePlanned)))
+    return 'Планируемый доход вводится числом';
+  if (!SIGNED_MONEY.test(noSpaces(values.incomeActual)))
+    return 'Фактический доход вводится числом; минус допустим';
   if (values.reason.trim().length < 5) return 'Опишите причину перерасхода';
   if (!values.rebilled) return 'Ответьте, перевыставлен ли расход клиенту';
   if (needsBearer && !values.expenseBearer) return 'Ответьте, кто несёт расход';
@@ -631,10 +658,12 @@ export default function ExtraExpenseForm({
             placeholder="0"
           />
         </Field>
-        <Field label="Фактический доход" required>
+        <Field label="Фактический доход" required hint="С минусом, если убыток">
           <input
             className="tg-input"
-            inputMode="decimal"
+            // text, а не decimal: на телефоне цифровая клавиатура Telegram
+            // показывает минус не всегда, а с убытком его надо набрать.
+            inputMode="text"
             value={values.incomeActual}
             onChange={(e) => set({ incomeActual: e.target.value })}
             placeholder="0"
