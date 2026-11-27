@@ -126,7 +126,10 @@ export default function MemoExtraExpenseBlock({
             value={fmtMoney(extra.incomeActual, currency)}
           />
           <Row
-            label="Разница"
+            // Убыток и отклонение от плана — разные величины, и подпись у них
+            // тоже разная: «Разница: −2 422» при плане 200 и факте −2 222
+            // читалась как «потеряли 2 422», хотя потеряли 2 222.
+            label={extra.incomeDiffKind === 'loss' ? 'Убыток' : 'Разница'}
             value={`${signed(extra.incomeDiff)} ${currency ?? ''}`.trim()}
             // У дохода рост — это хорошо, поэтому цвет считается наоборот.
             className={diffClass(extra.incomeDiff, true)}
