@@ -2110,7 +2110,13 @@ export interface MemoExtraExpenseView {
   expenseOverrun: string;
   incomePlanned: string;
   incomeActual: string;
+  /**
+   * Факт неотрицательный — отклонение от плана. Факт отрицательный — сам
+   * убыток, без вычитания плана (решение заказчика 27.11.2026).
+   */
   incomeDiff: string;
+  /** Как подписать строку: убыток или отклонение от плана. */
+  incomeDiffKind: 'loss' | 'deviation';
   rebilled: string;
   /** contractor | own. Пусто, когда расход перевыставлен клиенту. */
   expenseBearer: string | null;

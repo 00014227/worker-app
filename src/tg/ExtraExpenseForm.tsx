@@ -379,8 +379,14 @@ export default function ExtraExpenseForm({
     return { planned, actual, overrun: actual - planned };
   }, [values.lines]);
 
-  const incomeDiff =
-    toCents(values.incomeActual) - toCents(values.incomePlanned);
+  // Факт отрицательный — показываем сам убыток, план не вычитаем: план просто
+  // не случился, и складывать его с потерянными деньгами незачем (решение
+  // заказчика 27.11.2026). Правило то же, что в карточке записки.
+  const incomeFactCents = toCents(values.incomeActual);
+  const incomeLoss = incomeFactCents < 0;
+  const incomeDiff = incomeLoss
+    ? incomeFactCents
+    : incomeFactCents - toCents(values.incomePlanned);
   // Кто несёт расход спрашиваем и при «частично»: часть расхода осталась на
   // нас, и на неё вопрос осмыслен.
   const needsBearer = values.rebilled === 'no' || values.rebilled === 'partial';
@@ -671,7 +677,7 @@ export default function ExtraExpenseForm({
         </Field>
       </div>
       <p className="tg-hint-text -mt-2">
-        Разница по доходу:{' '}
+        {incomeLoss ? 'Убыток:' : 'Разница по доходу:'}{' '}
         <span className={diffClass(incomeDiff, true)}>
           {signed(incomeDiff)}
         </span>{' '}
